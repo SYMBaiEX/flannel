@@ -257,7 +257,8 @@ struct ContentView: View {
             hasKnowledgeSources: !store.knowledgeSources.isEmpty,
             hasQueuedKnowledgeSources: store.knowledgeSources.contains { source in
                 source.status == .queued || source.status == .stale || source.status == .notIndexed
-            }
+            },
+            providerRoutingPolicy: store.preferences.providerRoutingPolicy
         )
     }
 
@@ -314,6 +315,12 @@ struct ContentView: View {
         guard command.isEnabled else { return }
         closeCommandPalette()
 
+        if let routingPolicy = command.id.routingPolicy {
+            store.preferences.providerRoutingPolicy = routingPolicy
+            persistQuietly()
+            return
+        }
+
         switch command.id {
         case .newChat:
             newChat()
@@ -334,6 +341,9 @@ struct ContentView: View {
         case .toggleLocalOnly:
             store.preferences.localOnlyMode = !(store.preferences.localOnlyMode ?? true)
             persistQuietly()
+        case .setRoutingSelectedProvider, .setRoutingLocalFirst, .setRoutingBestAvailable,
+             .setRoutingCheapest, .setRoutingFastest:
+            break
         case .openChat:
             openConversationShell()
         case .openHistory:

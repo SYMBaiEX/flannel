@@ -178,6 +178,37 @@ struct CommandPaletteTests {
         #expect(disabledTitle == "Enable Local-Only Mode")
     }
 
+    @Test("Routing policy commands are searchable and reflect active policy")
+    func routingPolicyCommandsReflectActivePolicy() throws {
+        let context = FlannelCommandContext(
+            hasCurrentThread: true,
+            canSendMessage: false,
+            isStreaming: false,
+            isDiscoveringModels: false,
+            canCompareCurrentPrompt: false,
+            canRunComparison: false,
+            localOnlyMode: true,
+            inspectorVisible: true,
+            providerRoutingPolicy: .fastest
+        )
+        let commands = FlannelCommand.defaultCommands(context: context)
+
+        let fastest = try #require(commands.first { $0.id == .setRoutingFastest })
+        let localFirst = try #require(commands.first { $0.id == .setRoutingLocalFirst })
+        let bestAvailable = try #require(commands.first { $0.id == .setRoutingBestAvailable })
+
+        #expect(fastest.isEnabled == false)
+        #expect(fastest.systemImage == "checkmark.circle")
+        #expect(fastest.subtitle.contains("active"))
+        #expect(localFirst.isEnabled)
+        #expect(localFirst.matches("local first routing"))
+        #expect(bestAvailable.matches("best model policy"))
+
+        for policy in ProviderRoutingPolicy.allCases {
+            #expect(FlannelCommandID.routingCommandID(for: policy).routingPolicy == policy)
+        }
+    }
+
     @Test("Native menu commands are represented in the shared command catalog")
     func nativeMenuCommandsUseSharedCommandCatalog() throws {
         let visibleInspectorContext = FlannelCommandContext(

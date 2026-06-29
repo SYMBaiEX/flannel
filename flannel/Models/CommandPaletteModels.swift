@@ -18,6 +18,11 @@ enum FlannelCommandID: String, CaseIterable, Identifiable, Sendable {
     case runComparison
     case discoverModels
     case toggleLocalOnly
+    case setRoutingSelectedProvider
+    case setRoutingLocalFirst
+    case setRoutingBestAvailable
+    case setRoutingCheapest
+    case setRoutingFastest
     case openChat
     case openHistory
     case openCompare
@@ -39,6 +44,44 @@ enum FlannelCommandID: String, CaseIterable, Identifiable, Sendable {
     case importWorkspaceSnapshot
 
     var id: String { rawValue }
+
+    var routingPolicy: ProviderRoutingPolicy? {
+        switch self {
+        case .setRoutingSelectedProvider:
+            .selectedProvider
+        case .setRoutingLocalFirst:
+            .localFirst
+        case .setRoutingBestAvailable:
+            .bestAvailable
+        case .setRoutingCheapest:
+            .cheapest
+        case .setRoutingFastest:
+            .fastest
+        case .newChat, .importChat, .openCommandPalette, .sendMessage, .stopStreaming,
+             .comparePrompt, .runComparison, .discoverModels, .toggleLocalOnly,
+             .openChat, .openHistory, .openCompare, .openModels, .openKnowledge,
+             .rebuildQueuedKnowledge, .rebuildAllKnowledge, .openTools, .openAgents,
+             .openPrompts, .openSettings, .focusChat, .showInspector, .exportMarkdown,
+             .exportJSON, .exportHTML, .exportPDF, .exportWorkspaceSnapshot,
+             .importWorkspaceSnapshot:
+            nil
+        }
+    }
+
+    static func routingCommandID(for policy: ProviderRoutingPolicy) -> FlannelCommandID {
+        switch policy {
+        case .selectedProvider:
+            .setRoutingSelectedProvider
+        case .localFirst:
+            .setRoutingLocalFirst
+        case .bestAvailable:
+            .setRoutingBestAvailable
+        case .cheapest:
+            .setRoutingCheapest
+        case .fastest:
+            .setRoutingFastest
+        }
+    }
 }
 
 struct FlannelCommandContext: Hashable, Sendable {
@@ -52,6 +95,7 @@ struct FlannelCommandContext: Hashable, Sendable {
     var inspectorVisible: Bool
     var hasKnowledgeSources: Bool
     var hasQueuedKnowledgeSources: Bool
+    var providerRoutingPolicy: ProviderRoutingPolicy
 
     init(
         hasCurrentThread: Bool,
@@ -63,7 +107,8 @@ struct FlannelCommandContext: Hashable, Sendable {
         localOnlyMode: Bool,
         inspectorVisible: Bool,
         hasKnowledgeSources: Bool = false,
-        hasQueuedKnowledgeSources: Bool = false
+        hasQueuedKnowledgeSources: Bool = false,
+        providerRoutingPolicy: ProviderRoutingPolicy = .selectedProvider
     ) {
         self.hasCurrentThread = hasCurrentThread
         self.canSendMessage = canSendMessage
@@ -75,6 +120,7 @@ struct FlannelCommandContext: Hashable, Sendable {
         self.inspectorVisible = inspectorVisible
         self.hasKnowledgeSources = hasKnowledgeSources
         self.hasQueuedKnowledgeSources = hasQueuedKnowledgeSources
+        self.providerRoutingPolicy = providerRoutingPolicy
     }
 
     static let menuFallback = FlannelCommandContext(
@@ -87,7 +133,8 @@ struct FlannelCommandContext: Hashable, Sendable {
         localOnlyMode: true,
         inspectorVisible: true,
         hasKnowledgeSources: false,
-        hasQueuedKnowledgeSources: false
+        hasQueuedKnowledgeSources: false,
+        providerRoutingPolicy: .selectedProvider
     )
 }
 
@@ -220,6 +267,11 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
                 systemImage: context.localOnlyMode ? "lock.open" : "lock",
                 keywords: ["privacy", "cloud", "network", "provider"]
             ),
+            FlannelCommand.routingPolicyCommand(.selectedProvider, context: context),
+            FlannelCommand.routingPolicyCommand(.localFirst, context: context),
+            FlannelCommand.routingPolicyCommand(.bestAvailable, context: context),
+            FlannelCommand.routingPolicyCommand(.cheapest, context: context),
+            FlannelCommand.routingPolicyCommand(.fastest, context: context),
             FlannelCommand(
                 id: .openChat,
                 title: "Open Chat",
@@ -390,6 +442,22 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
         context: FlannelCommandContext
     ) -> FlannelCommand? {
         defaultCommands(context: context).first { $0.id == id }
+    }
+
+    private static func routingPolicyCommand(
+        _ policy: ProviderRoutingPolicy,
+        context: FlannelCommandContext
+    ) -> FlannelCommand {
+        let isActive = context.providerRoutingPolicy == policy
+        return FlannelCommand(
+            id: FlannelCommandID.routingCommandID(for: policy),
+            title: "Use \(policy.title) Routing",
+            subtitle: isActive ? "\(policy.detail) This routing policy is active." : policy.detail,
+            category: "Routing",
+            systemImage: isActive ? "checkmark.circle" : policy.icon,
+            keywords: ["provider", "model", "routing", "route", "policy", policy.rawValue, policy.title],
+            isEnabled: !isActive
+        )
     }
 }
 
