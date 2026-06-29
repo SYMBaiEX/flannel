@@ -10,11 +10,6 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-private enum FlannelSidebarSurface: String, Hashable {
-    case conversation
-    case settings
-}
-
 private struct ChatProviderStreamAttempt {
     var provider: ProviderConfiguration
     var history: [AssistantMessage]
@@ -101,7 +96,9 @@ struct ContentView: View {
     }
 
     private var sidebarColumn: some View {
-        AppSidebar(
+        let width = sidebarSurface.columnWidth
+
+        return AppSidebar(
             store: store,
             sidebarSurface: sidebarSurface,
             selectedSettingsTab: selectedSettingsTabBinding,
@@ -111,7 +108,7 @@ struct ContentView: View {
             exitSettings: exitSettingsMode,
             persist: persistQuietly
         )
-        .navigationSplitViewColumnWidth(min: 248, ideal: 280, max: 328)
+        .navigationSplitViewColumnWidth(min: width.min, ideal: width.ideal, max: width.max)
     }
 
     private var contentColumn: some View {
@@ -153,11 +150,11 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detailColumn: some View {
-        if sidebarSurface == .settings {
+        if sidebarSurface.showsInspectorColumn {
+            inspectorColumn
+        } else {
             Color.clear
                 .navigationSplitViewColumnWidth(min: 0, ideal: 0, max: 0)
-        } else {
-            inspectorColumn
         }
     }
 
@@ -1914,17 +1911,22 @@ private struct AppSidebar: View {
                     selectedTab: $selectedSettingsTab,
                     exitSettings: exitSettings
                 )
+                .transition(.opacity)
             } else {
                 conversationSidebar
+                    .transition(.opacity)
             }
 
-            SidebarFooter(
-                provider: store.activeProvider,
-                localOnlyMode: store.preferences.localOnlyMode ?? true,
-                allowCloudProviders: store.preferences.allowCloudProviders ?? false,
-                openSettings: { enterSettings(.general) },
-                openModels: { enterSettings(.models) }
-            )
+            if sidebarSurface.showsConversationFooter {
+                SidebarFooter(
+                    provider: store.activeProvider,
+                    localOnlyMode: store.preferences.localOnlyMode ?? true,
+                    allowCloudProviders: store.preferences.allowCloudProviders ?? false,
+                    openSettings: { enterSettings(.general) },
+                    openModels: { enterSettings(.models) }
+                )
+                .transition(.opacity)
+            }
         }
         .onChange(of: searchFocusRequest) {
             guard sidebarSurface == .conversation else { return }
@@ -2460,17 +2462,27 @@ private struct SettingsSidebar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Button(action: exitSettings) {
-                Label("Exit Settings", systemImage: "chevron.left")
-                    .font(.callout.weight(.medium))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 10) {
+                Button(action: exitSettings) {
+                    Label("Exit Settings", systemImage: "chevron.left")
+                        .font(.callout.weight(.medium))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .controlSize(.small)
+                .accessibilityLabel("Exit Settings")
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Settings")
+                        .font(.headline)
+                    Text("Routes, providers, privacy")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .buttonStyle(.plain)
-            .controlSize(.small)
             .padding(.horizontal, 14)
             .padding(.top, 14)
-            .padding(.bottom, 10)
-            .accessibilityLabel("Exit Settings")
+            .padding(.bottom, 12)
 
             List(selection: selection) {
                 Section("Workspace") {
