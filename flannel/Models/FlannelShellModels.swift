@@ -77,7 +77,7 @@ nonisolated enum FlannelInspectorSection: String, CaseIterable, Hashable, Identi
     var title: String {
         switch self {
         case .chatDetail:
-            "Chat Detail"
+            "Details"
         case .sources:
             "Sources"
         case .compare:
@@ -122,7 +122,7 @@ nonisolated enum FlannelInspectorSection: String, CaseIterable, Hashable, Identi
         hasSourceArtifacts: Bool,
         hasToolArtifacts: Bool
     ) -> [FlannelInspectorSection] {
-        var sections: [FlannelInspectorSection] = [.chatDetail]
+        var sections: [FlannelInspectorSection] = []
         if hasSourceArtifacts {
             sections.append(.sources)
         }
@@ -132,6 +132,7 @@ nonisolated enum FlannelInspectorSection: String, CaseIterable, Hashable, Identi
         if hasToolArtifacts {
             sections.append(.tools)
         }
+        sections.append(.chatDetail)
         return sections
     }
 }

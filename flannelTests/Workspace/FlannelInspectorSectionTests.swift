@@ -37,17 +37,22 @@ struct FlannelInspectorSectionTests {
         ) == .chatDetail)
     }
 
-    @Test("Available inspector sections keep chat detail first and include only present artifacts")
+    @Test("Available inspector sections put contextual artifacts before details")
     func availableSectionsFollowRailOrder() {
         #expect(FlannelInspectorSection.availableSections(
             hasCompareArtifacts: false,
             hasSourceArtifacts: true,
             hasToolArtifacts: true
-        ) == [.chatDetail, .sources, .tools])
+        ) == [.sources, .tools, .chatDetail])
         #expect(FlannelInspectorSection.availableSections(
             hasCompareArtifacts: true,
             hasSourceArtifacts: false,
             hasToolArtifacts: false
-        ) == [.chatDetail, .compare])
+        ) == [.compare, .chatDetail])
+        #expect(FlannelInspectorSection.availableSections(
+            hasCompareArtifacts: false,
+            hasSourceArtifacts: false,
+            hasToolArtifacts: false
+        ) == [.chatDetail])
     }
 }
