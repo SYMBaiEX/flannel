@@ -3326,25 +3326,27 @@ private struct ChatSurface: View {
                 }
                 .scrollContentBackground(.hidden)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    Composer(
-                        provider: store.activeProvider,
-                        localOnlyMode: store.preferences.localOnlyMode ?? true,
-                        contextBudget: composerContextBudget,
-                        text: $composerText,
-                        attachments: $composerAttachments,
-                        isStreamingResponse: isStreamingResponse,
-                        focusNonce: composerFocusNonce,
-                        send: sendMessage,
-                        cancel: cancelStreaming,
-                        compare: compareCurrentPrompt
-                    )
-                    .padding(10)
-                    .frame(maxWidth: 820)
-                    .flannelGlassSurface(.regular, interactive: true, cornerRadius: 18)
-                    .padding(.horizontal, 28)
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
-                    .frame(maxWidth: .infinity)
+                    VStack(spacing: 0) {
+                        FlannelSeparator(opacity: 0.45)
+
+                        Composer(
+                            provider: store.activeProvider,
+                            localOnlyMode: store.preferences.localOnlyMode ?? true,
+                            contextBudget: composerContextBudget,
+                            text: $composerText,
+                            attachments: $composerAttachments,
+                            isStreamingResponse: isStreamingResponse,
+                            focusNonce: composerFocusNonce,
+                            send: sendMessage,
+                            cancel: cancelStreaming,
+                            compare: compareCurrentPrompt
+                        )
+                        .frame(maxWidth: 860)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity)
+                    }
+                    .background(.regularMaterial)
                 }
                 .onChange(of: visibleMessages.count) { _, _ in
                     if transcriptSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -4603,7 +4605,14 @@ private struct Composer: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
+            if !attachments.isEmpty {
+                AttachmentChipGrid(
+                    attachments: attachments,
+                    remove: removeAttachment
+                )
+            }
+
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $text)
                     .font(.body)
@@ -4612,9 +4621,13 @@ private struct Composer: View {
                     .padding(.horizontal, 11)
                     .padding(.vertical, 9)
                     .focused($isEditorFocused)
+                    .background(.quaternary.opacity(0.24), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(isDropTargeted ? Color.accentColor.opacity(0.8) : Color.clear, lineWidth: isDropTargeted ? 2 : 1)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(
+                                isDropTargeted ? Color.accentColor.opacity(0.8) : FlannelSystemColor.quietStroke,
+                                lineWidth: isDropTargeted ? 2 : FlannelSpacing.hairline
+                            )
                     }
                     .accessibilityLabel("Message composer")
                     .dropDestination(for: URL.self) { urls, _ in
@@ -4632,13 +4645,6 @@ private struct Composer: View {
                         .padding(.vertical, 17)
                         .allowsHitTesting(false)
                 }
-            }
-
-            if !attachments.isEmpty {
-                AttachmentChipGrid(
-                    attachments: attachments,
-                    remove: removeAttachment
-                )
             }
 
             if let attachmentImportError {
@@ -4660,15 +4666,17 @@ private struct Composer: View {
                 .accessibilityAddTraits(.isStaticText)
             }
 
-            ComposerStatusStrip(
-                provider: provider,
-                localOnlyMode: localOnlyMode,
-                contextBudget: contextBudget,
-                attachmentCount: attachments.count,
-                isStreamingResponse: isStreamingResponse
-            )
+            HStack(alignment: .center, spacing: 8) {
+                ComposerStatusStrip(
+                    provider: provider,
+                    localOnlyMode: localOnlyMode,
+                    contextBudget: contextBudget,
+                    attachmentCount: attachments.count,
+                    isStreamingResponse: isStreamingResponse
+                )
 
-            HStack(spacing: 8) {
+                Spacer(minLength: 12)
+
                 Button {
                     isFileImporterPresented = true
                 } label: {
@@ -4689,8 +4697,6 @@ private struct Composer: View {
                     .controlSize(.regular)
                     .disabled(!canComparePrompt)
                 }
-
-                Spacer()
 
                 if isStreamingResponse {
                     Button {
@@ -4713,6 +4719,12 @@ private struct Composer: View {
                 .keyboardShortcut(.return, modifiers: [.command])
                 .disabled(isStreamingResponse || !canSubmit)
             }
+        }
+        .dropDestination(for: URL.self) { urls, _ in
+            importAttachments(from: urls)
+            return true
+        } isTargeted: { isTargeted in
+            isDropTargeted = isTargeted
         }
         .onAppear {
             isEditorFocused = true
