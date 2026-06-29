@@ -285,6 +285,20 @@ struct AIChatProviderRegistryTests {
         #expect(chatGPTCLI.providerModeSelectionDetail.contains("does not read an OpenAI Platform key"))
         #expect(openAIAPI.providerModeBoundaryBadge == "API key")
         #expect(chatGPTCLI.providerModeBoundaryBadge == "Subscription CLI")
+        #expect(openAIAPI.providerPickerRouteSummary.contains("API key"))
+        #expect(openAIAPI.providerPickerRouteSummary.contains("External API"))
+        #expect(chatGPTCLI.providerPickerRouteSummary.contains("Subscription CLI"))
+        #expect(chatGPTCLI.providerPickerRouteSummary.contains("Local CLI"))
+        #expect(openAIAPI.providerPickerStatusLine(
+            readinessText: "Ready",
+            routingPolicy: .selectedProvider
+        ).hasPrefix("API key"))
+        #expect(chatGPTCLI.providerPickerStatusLine(
+            readinessText: "Ready",
+            routingPolicy: .localFirst
+        ).contains("Local First • Subscription CLI"))
+        #expect(openAIAPI.providerPickerAccessibilityLabel.contains("OpenAI API, API key"))
+        #expect(chatGPTCLI.providerPickerAccessibilityLabel.contains("ChatGPT/Codex subscription, Subscription CLI"))
 
         #expect(anthropicAPI.modeFamily == .anthropicClaude)
         #expect(claudeCLI.modeFamily == .anthropicClaude)
@@ -296,6 +310,8 @@ struct AIChatProviderRegistryTests {
         #expect(claudeCLI.providerModeSelectionDetail.contains("does not read an Anthropic Console key"))
         #expect(anthropicAPI.providerModeBoundaryBadge == "API key")
         #expect(claudeCLI.providerModeBoundaryBadge == "Subscription CLI")
+        #expect(anthropicAPI.providerPickerAccessibilityLabel.contains("Anthropic API, API key"))
+        #expect(claudeCLI.providerPickerAccessibilityLabel.contains("Claude Code subscription, Subscription CLI"))
 
         #expect(ollama.modeFamily == .localModels)
         #expect(ProviderModeFamily.openAIChatGPT.detail.contains("API keys"))

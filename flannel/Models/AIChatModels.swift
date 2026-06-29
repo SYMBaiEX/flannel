@@ -303,6 +303,27 @@ extension ProviderConfiguration {
         return "\(accessMode.title) • \(privacyScope.title) • \(modelText)"
     }
 
+    var providerPickerRouteSummary: String {
+        let model = modelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        let modelText = model.isEmpty ? "No model" : model
+        return "\(providerModeBoundaryBadge) • \(privacyScope.title) • \(modelText)"
+    }
+
+    func providerPickerStatusLine(
+        readinessText: String,
+        routingPolicy: ProviderRoutingPolicy
+    ) -> String {
+        let routeSummary = providerPickerRouteSummary
+        guard routingPolicy != .selectedProvider else {
+            return "\(routeSummary) • \(readinessText)"
+        }
+        return "\(routingPolicy.title) • \(routeSummary) • \(readinessText)"
+    }
+
+    var providerPickerAccessibilityLabel: String {
+        "\(providerModeChoiceTitle), \(providerPickerRouteSummary)"
+    }
+
     var providerModeSelectionTitle: String {
         switch kind {
         case .openAI:

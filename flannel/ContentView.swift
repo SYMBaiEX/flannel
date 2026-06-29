@@ -9137,6 +9137,7 @@ private struct ProviderRoutingPickerLabel: View {
                 .foregroundStyle(.secondary)
         }
         .help(selectedProvider?.modeBoundaryDetail ?? "Choose a provider route for chat.")
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var statusText: String {
@@ -9152,10 +9153,18 @@ private struct ProviderRoutingPickerLabel: View {
 
     private var labelDetail: String {
         let readinessText = readiness?.text ?? statusText
-        guard routingPolicy != .selectedProvider else {
-            return readinessText
+        guard let selectedProvider else { return readinessText }
+        return selectedProvider.providerPickerStatusLine(
+            readinessText: readinessText,
+            routingPolicy: routingPolicy
+        )
+    }
+
+    private var accessibilityLabel: String {
+        guard let selectedProvider else {
+            return "Choose provider"
         }
-        return "\(routingPolicy.title) - \(readinessText)"
+        return "\(selectedProvider.providerPickerAccessibilityLabel), \(readiness?.text ?? statusText)"
     }
 
     private var statusTint: Color {
@@ -9195,6 +9204,10 @@ private struct ProviderRoutingMenuRow: View {
                 }
                 Text(provider.providerModeSelectionDetail)
                     .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text(provider.providerPickerRouteSummary)
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Label(readiness.text, systemImage: readiness.icon)
