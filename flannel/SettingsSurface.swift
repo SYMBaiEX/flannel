@@ -615,7 +615,10 @@ struct SettingsSurface: View {
             if let providerReadinessBatchMessage {
                 SettingsInlineNotice(
                     message: providerReadinessBatchMessage,
-                    tone: settingsNoticeTone(for: providerReadinessBatchMessage, isLoading: isCheckingAllProviderReadiness)
+                    tone: settingsProviderReadinessNoticeTone(
+                        for: providerReadinessBatchMessage,
+                        isLoading: isCheckingAllProviderReadiness
+                    )
                 )
             }
         }
@@ -2159,6 +2162,18 @@ private func settingsNoticeTone(for message: String, isLoading: Bool = false) ->
     return .info
 }
 
+private func settingsProviderReadinessNoticeTone(for message: String, isLoading: Bool = false) -> SettingsNoticeTone {
+    if isLoading {
+        return .loading
+    }
+
+    let normalizedMessage = message.lowercased()
+    if normalizedMessage.hasPrefix("checked ") && normalizedMessage.contains("0 need attention") {
+        return .success
+    }
+    return settingsNoticeTone(for: message)
+}
+
 private struct SettingsInlineNotice: View {
     var message: String
     var tone: SettingsNoticeTone
@@ -2222,7 +2237,7 @@ private struct SettingsRouteHeader: View {
                     tone: .info,
                     prominence: .subtle
                 )
-                .accessibilityHidden(true)
+                .accessibilityLabel("Settings search is active")
             }
         }
         .padding(14)
@@ -5479,6 +5494,7 @@ private struct EmptySettingsRow: View {
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.secondary)
                 .frame(width: 28, height: 28)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
