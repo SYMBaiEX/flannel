@@ -10,23 +10,145 @@ import SwiftData
 
 @main
 struct flannelApp: App {
-    var sharedModelContainer: ModelContainer = {
+    @State private var store: WorkspaceStore
+    private let sharedModelContainer: ModelContainer
+
+    init() {
+        let bootstrap = Self.makeModelContainer()
+        _store = State(initialValue: WorkspaceStore(initialPersistenceIssue: bootstrap.issue))
+        sharedModelContainer = bootstrap.container
+    }
+
+    private static func makeModelContainer() -> (container: ModelContainer, issue: WorkspacePersistenceIssue?) {
         let schema = Schema([
             Item.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return (try ModelContainer(for: schema, configurations: [modelConfiguration]), nil)
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            let issue = WorkspacePersistenceIssue(
+                operation: .containerSetup,
+                error: error,
+                recoverySuggestion: "Flannel is running with temporary in-memory storage. Export anything important before quitting, then check disk space and app data permissions."
+            )
+            let fallbackConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            do {
+                return (try ModelContainer(for: schema, configurations: [fallbackConfiguration]), issue)
+            } catch {
+                preconditionFailure("Could not create a SwiftData container, including the in-memory fallback: \(error)")
+            }
         }
-    }()
+    }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(store: store)
         }
         .modelContainer(sharedModelContainer)
+        .commands {
+            FlannelAppCommands()
+        }
+    }
+}
+
+private struct FlannelAppCommands: Commands {
+    @FocusedValue(\.flannelCommandRunner) private var runFocusedCommand
+    @FocusedValue(\.flannelCommandContext) private var focusedCommandContext
+
+    private var context: FlannelCommandContext {
+        focusedCommandContext ?? .menuFallback
+    }
+
+    var body: some Commands {
+        CommandMenu("Chat") {
+            commandButton(.newChat)
+                .keyboardShortcut("n", modifiers: [.command])
+
+            commandButton(.importChat)
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+
+            commandButton(.openCommandPalette)
+                .keyboardShortcut("k", modifiers: [.command])
+
+            Divider()
+
+            commandButton(.openChat)
+            commandButton(.openHistory)
+
+            Divider()
+
+            commandButton(.openSettings)
+        }
+
+        CommandMenu("Models") {
+            commandButton(.discoverModels)
+            commandButton(.comparePrompt)
+            commandButton(.runComparison)
+
+            Divider()
+
+            commandButton(.openCompare)
+            commandButton(.openModels)
+        }
+
+        CommandMenu("Knowledge") {
+            commandButton(.openKnowledge)
+
+            Divider()
+
+            commandButton(.rebuildQueuedKnowledge)
+            commandButton(.rebuildAllKnowledge)
+        }
+
+        CommandMenu("Privacy") {
+            commandButton(.toggleLocalOnly)
+        }
+
+        CommandMenu("Artifacts") {
+            if context.inspectorVisible {
+                commandButton(.focusChat)
+                    .keyboardShortcut("/", modifiers: [.command])
+            } else {
+                commandButton(.showInspector)
+                    .keyboardShortcut("/", modifiers: [.command])
+            }
+        }
+
+        CommandMenu("Export") {
+            commandButton(.exportMarkdown)
+            commandButton(.exportJSON)
+            commandButton(.exportHTML)
+            commandButton(.exportPDF)
+
+            Divider()
+
+            commandButton(.exportWorkspaceSnapshot)
+            commandButton(.importWorkspaceSnapshot)
+        }
+    }
+
+    private func commandButton(_ id: FlannelCommandID) -> some View {
+        let command = FlannelCommand.defaultCommand(id, context: context)
+
+        return Button(command?.title ?? fallbackTitle(for: id)) {
+            run(id)
+        }
+        .disabled(runFocusedCommand == nil || command?.isEnabled != true)
+    }
+
+    private func run(_ id: FlannelCommandID) {
+        guard let command = FlannelCommand.defaultCommand(id, context: context),
+              command.isEnabled else {
+            return
+        }
+        runFocusedCommand?(id)
+    }
+
+    private func fallbackTitle(for id: FlannelCommandID) -> String {
+        id.rawValue
+            .replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2", options: .regularExpression)
+            .capitalized
     }
 }
