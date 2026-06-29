@@ -4799,11 +4799,14 @@ private struct Composer: View {
                     .padding(.horizontal, 11)
                     .padding(.vertical, 9)
                     .focused($isEditorFocused)
-                    .background(.quaternary.opacity(0.24), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(
+                        FlannelSystemColor.separator.opacity(isEditorFocused ? 0.08 : 0.045),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
                     .overlay {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(
-                                isDropTargeted ? Color.accentColor.opacity(0.8) : FlannelSystemColor.quietStroke,
+                                composerEditorStrokeColor,
                                 lineWidth: isDropTargeted ? 2 : FlannelSpacing.hairline
                             )
                     }
@@ -4922,6 +4925,16 @@ private struct Composer: View {
                 attachmentImportError = error.localizedDescription
             }
         }
+    }
+
+    private var composerEditorStrokeColor: Color {
+        if isDropTargeted {
+            return Color.accentColor.opacity(0.8)
+        }
+        if isEditorFocused {
+            return Color.accentColor.opacity(0.28)
+        }
+        return FlannelSystemColor.quietStroke.opacity(0.72)
     }
 
     private func importAttachments(from urls: [URL]) {
@@ -5100,7 +5113,7 @@ private struct AttachmentChipGrid: View {
                 .padding(.vertical, 6)
                 .padding(.leading, 9)
                 .padding(.trailing, 6)
-                .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                .flannelPaneSurface(.subtle, cornerRadius: FlannelRadius.md)
             }
         }
     }
