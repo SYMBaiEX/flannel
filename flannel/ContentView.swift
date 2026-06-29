@@ -1866,6 +1866,13 @@ private struct AppSidebar: View {
         ].filter { $0 }.count
     }
 
+    private var activeSidebarRefinementCount: Int {
+        activeAdvancedFilterCount
+            + (scope == .archived ? 1 : 0)
+            + (selectedFolderTitle == nil ? 0 : 1)
+            + (selectedTagTitle == nil ? 0 : 1)
+    }
+
     private var activeAdvancedFilterSummary: String {
         if activeAdvancedFilterCount == 0 {
             return "Filters"
@@ -1889,6 +1896,46 @@ private struct AppSidebar: View {
         }
 
         return selectedDateFilter.title
+    }
+
+    private var selectedFolderTitle: String? {
+        guard let selectedFolderID,
+              selectedFolderIsAvailable else {
+            return nil
+        }
+        return store.chatFolders.first(where: { $0.id == selectedFolderID })?.title
+    }
+
+    private var selectedTagTitle: String? {
+        guard let selectedTagName,
+              selectedTagIsAvailable else {
+            return nil
+        }
+        return selectedTagName
+    }
+
+    private var sidebarRefinementSummary: String {
+        if activeSidebarRefinementCount == 0 {
+            return "All active chats"
+        }
+
+        if activeSidebarRefinementCount > 1 {
+            return "\(activeSidebarRefinementCount) refinements"
+        }
+
+        if scope == .archived {
+            return "Archived"
+        }
+
+        if let selectedFolderTitle {
+            return selectedFolderTitle
+        }
+
+        if let selectedTagTitle {
+            return selectedTagTitle
+        }
+
+        return activeAdvancedFilterSummary
     }
 
     private var folderRows: [(folder: ChatFolder, depth: Int)] {
@@ -1988,21 +2035,9 @@ private struct AppSidebar: View {
                 .padding(.horizontal, 14)
                 .padding(.bottom, 10)
 
-            advancedFilterSection
+            sidebarRefinementControl
                 .padding(.horizontal, 14)
                 .padding(.bottom, 10)
-
-            if !store.chatFolders.isEmpty {
-                folderFilterSection
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 10)
-            }
-
-            if !store.tags.isEmpty {
-                tagFilterSection
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 10)
-            }
 
             List(selection: selectedThreadListBinding) {
                 if query.isEmpty {
@@ -2144,9 +2179,19 @@ private struct AppSidebar: View {
         }
     }
 
-    private var advancedFilterSection: some View {
+    private var sidebarRefinementControl: some View {
         HStack(spacing: 8) {
             Menu {
+                Section("History") {
+                    ForEach(ChatHistoryScope.allCases) { option in
+                        Button {
+                            scope = option
+                        } label: {
+                            Label(option.rawValue, systemImage: scope == option ? "checkmark" : option.icon)
+                        }
+                    }
+                }
+
                 Section("Provider") {
                     Button {
                         selectedProviderDisplayName = nil
@@ -2204,21 +2249,76 @@ private struct AppSidebar: View {
                         }
                     }
                 }
+
+                if !folderRows.isEmpty {
+                    Section("Folders") {
+                        Button {
+                            selectedFolderID = nil
+                        } label: {
+                            Label("All Folders", systemImage: selectedFolderID == nil || !selectedFolderIsAvailable ? "checkmark" : "tray.full")
+                        }
+
+                        ForEach(folderRows, id: \.folder.id) { row in
+                            Button {
+                                selectedFolderID = row.folder.id
+                            } label: {
+                                Label(
+                                    row.folder.title,
+                                    systemImage: selectedFolderID == row.folder.id ? "checkmark" : row.folder.symbolName
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if !store.tags.isEmpty {
+                    Section("Tags") {
+                        Button {
+                            selectedTagName = nil
+                        } label: {
+                            Label("All Tags", systemImage: selectedTagName == nil || !selectedTagIsAvailable ? "checkmark" : "tag")
+                        }
+
+                        ForEach(store.tags) { tag in
+                            Button {
+                                selectedTagName = tag.name
+                            } label: {
+                                Label(tag.name, systemImage: selectedTagName == tag.name ? "checkmark" : "tag")
+                            }
+                        }
+                    }
+                }
+
+                if activeSidebarRefinementCount > 0 {
+                    Divider()
+
+                    Button {
+                        clearSidebarRefinements()
+                    } label: {
+                        Label("Clear Refinements", systemImage: "xmark.circle")
+                    }
+                }
             } label: {
-                Label(activeAdvancedFilterSummary, systemImage: "line.3.horizontal.decrease.circle")
+                Label("Refine", systemImage: "line.3.horizontal.decrease.circle")
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
             .menuStyle(.borderlessButton)
             .controlSize(.small)
-            .help("Filter chats by provider, model, project, or date")
-            .accessibilityLabel("Chat filters: \(activeAdvancedFilterSummary)")
+            .help("Refine chat history by archive state, folder, tag, provider, model, project, or date")
+            .accessibilityLabel("Refine chats: \(sidebarRefinementSummary)")
 
             Spacer(minLength: 6)
 
-            if activeAdvancedFilterCount > 0 {
+            Text(sidebarRefinementSummary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            if activeSidebarRefinementCount > 0 {
                 Button {
-                    clearAdvancedFilters()
+                    clearSidebarRefinements()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .symbolRenderingMode(.hierarchical)
@@ -2226,8 +2326,8 @@ private struct AppSidebar: View {
                 .buttonStyle(.borderless)
                 .controlSize(.small)
                 .foregroundStyle(.secondary)
-                .help("Clear chat filters")
-                .accessibilityLabel("Clear chat filters")
+                .help("Clear chat refinements")
+                .accessibilityLabel("Clear chat refinements")
             }
         }
         .font(.caption)
@@ -2262,78 +2362,6 @@ private struct AppSidebar: View {
             }
         )
         .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
-    }
-
-    @ViewBuilder
-    private var folderFilterSection: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text("Folders")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            FolderFilterButton(
-                title: "All Chats",
-                icon: "tray.full",
-                count: scopedThreadsWithoutFolderFilter.count,
-                depth: 0,
-                isSelected: selectedFolderID == nil || !selectedFolderIsAvailable
-            ) {
-                selectedFolderID = nil
-            }
-
-            ForEach(folderRows, id: \.folder.id) { row in
-                FolderFilterButton(
-                    title: row.folder.title,
-                    icon: row.folder.symbolName,
-                    count: scopedThreadsWithoutFolderFilter.filter { $0.folderID == row.folder.id }.count,
-                    depth: row.depth,
-                    isSelected: selectedFolderID == row.folder.id
-                ) {
-                    selectedFolderID = row.folder.id
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var tagFilterSection: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text("Tags")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            FolderFilterButton(
-                title: "All Tags",
-                icon: "tag",
-                count: scopedThreadsWithoutTagFilter.count,
-                depth: 0,
-                isSelected: selectedTagName == nil || !selectedTagIsAvailable
-            ) {
-                selectedTagName = nil
-            }
-
-            ForEach(store.tags.prefix(8)) { tag in
-                FolderFilterButton(
-                    title: tag.name,
-                    icon: "tag",
-                    count: scopedThreadsWithoutTagFilter.filter { thread in
-                        thread.tagNames.contains(tag.name)
-                    }.count,
-                    depth: 0,
-                    isSelected: selectedTagName == tag.name
-                ) {
-                    selectedTagName = tag.name
-                }
-            }
-        }
-    }
-
-    private var scopedThreadsWithoutFolderFilter: [AssistantThread] {
-        filterBySelectedTag(baseScopedThreads)
-    }
-
-    private var scopedThreadsWithoutTagFilter: [AssistantThread] {
-        filterBySelectedFolder(baseScopedThreads)
     }
 
     private var emptyThreadTitle: String {
@@ -2394,6 +2422,13 @@ private struct AppSidebar: View {
         selectedModelIdentifier = nil
         selectedProjectFilterID = nil
         selectedDateFilter = .all
+    }
+
+    private func clearSidebarRefinements() {
+        scope = .active
+        selectedFolderID = nil
+        selectedTagName = nil
+        clearAdvancedFilters()
     }
 
     private func isThreadPinned(_ thread: AssistantThread) -> Bool {
@@ -2936,43 +2971,6 @@ private struct SidebarThreadQuickAction: View {
         .foregroundStyle(.secondary)
         .help(title)
         .accessibilityLabel(title)
-    }
-}
-
-private struct FolderFilterButton: View {
-    var title: String
-    var icon: String
-    var count: Int
-    var depth: Int
-    var isSelected: Bool
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .frame(width: 16)
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.secondary)
-                Text(title)
-                    .lineLimit(1)
-                Spacer()
-                Text("\(count)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .font(.caption)
-            .padding(.leading, CGFloat(depth * 12))
-            .padding(.horizontal, 7)
-            .padding(.vertical, 5)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                isSelected ? AnyShapeStyle(.selection.opacity(0.22)) : AnyShapeStyle(.clear),
-                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(title), \(count) chats")
     }
 }
 
