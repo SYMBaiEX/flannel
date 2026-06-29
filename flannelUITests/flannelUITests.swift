@@ -9,6 +9,18 @@ import XCTest
 
 final class flannelUITests: XCTestCase {
     private var app: XCUIApplication!
+    private let settingsRouteLabels = [
+        "General",
+        "Models & Providers",
+        "Knowledge",
+        "Memory",
+        "Prompts",
+        "Tools",
+        "Agents",
+        "Privacy",
+        "Storage",
+        "Advanced"
+    ]
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -41,7 +53,7 @@ final class flannelUITests: XCTestCase {
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 5))
 
-        openSettingsRoute("Models")
+        openSettingsRoute("Models & Providers")
 
         XCTAssertTrue(findElement("Models and providers").waitForExistence(timeout: 5))
         XCTAssertTrue(findElement("LM Studio").waitForExistence(timeout: 5))
@@ -65,13 +77,18 @@ final class flannelUITests: XCTestCase {
     }
 
     @MainActor
-    func testSettingsFooterButtonIsAccessible() throws {
+    func testSettingsFooterButtonEntersSettingsMode() throws {
         app.launch()
 
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 5))
 
-        XCTAssertTrue(findElement("Settings").waitForExistence(timeout: 5))
+        let settingsFooter = findElement("Settings")
+        XCTAssertTrue(settingsFooter.waitForExistence(timeout: 5))
+        settingsFooter.tap()
+
+        XCTAssertTrue(findElement("Exit Settings").waitForExistence(timeout: 5))
+        assertSettingsRouteListIsVisible()
     }
 
     @MainActor
@@ -82,10 +99,7 @@ final class flannelUITests: XCTestCase {
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(findElement("New Chat").waitForExistence(timeout: 5))
 
-        XCTAssertEqual(app.segmentedControls.count, 0)
-        XCTAssertFalse(sidebarModeTabExists("Chat"))
-        XCTAssertFalse(sidebarModeTabExists("Cowork"))
-        XCTAssertFalse(sidebarModeTabExists("Code"))
+        assertNoModeTabs()
     }
 
     @MainActor
@@ -105,6 +119,8 @@ final class flannelUITests: XCTestCase {
 
         let exitSettings = findElement("Exit Settings")
         XCTAssertTrue(exitSettings.waitForExistence(timeout: 5))
+        assertSettingsRouteListIsVisible()
+        assertNoModeTabs()
 
         let generalRoute = findElement("General")
         XCTAssertTrue(generalRoute.waitForExistence(timeout: 5))
@@ -139,12 +155,29 @@ final class flannelUITests: XCTestCase {
     }
 
     private func openSettingsRoute(_ route: String) {
+        XCTAssertTrue(settingsRouteLabels.contains(route), "Unknown settings route label: \(route)")
+
         let settings = findElement("Settings")
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
         settings.tap()
 
+        XCTAssertTrue(findElement("Exit Settings").waitForExistence(timeout: 5))
+
         let routeElement = findElement(route)
         XCTAssertTrue(routeElement.waitForExistence(timeout: 5))
         routeElement.tap()
+    }
+
+    private func assertSettingsRouteListIsVisible() {
+        for label in settingsRouteLabels {
+            XCTAssertTrue(findElement(label).waitForExistence(timeout: 5), "Missing settings route: \(label)")
+        }
+    }
+
+    private func assertNoModeTabs() {
+        XCTAssertEqual(app.segmentedControls.count, 0)
+        XCTAssertFalse(sidebarModeTabExists("Chat"))
+        XCTAssertFalse(sidebarModeTabExists("Cowork"))
+        XCTAssertFalse(sidebarModeTabExists("Code"))
     }
 }
