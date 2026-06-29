@@ -2873,6 +2873,14 @@ private struct SidebarThreadRow: View {
     var removeTag: (String) -> Void
     @State private var isHovering = false
 
+    private var lastMessagePreview: String? {
+        guard let lastMessage = thread.messages.last(where: { $0.role != .system }) else {
+            return nil
+        }
+        let preview = lastMessage.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return preview.isEmpty ? nil : preview
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 9) {
             Button(action: choose) {
@@ -2907,9 +2915,8 @@ private struct SidebarThreadRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
 
-                        if let lastMessage = thread.messages.last(where: { $0.role != .system }),
-                           !lastMessage.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Text(lastMessage.text)
+                        if isSelected, let lastMessagePreview {
+                            Text(lastMessagePreview)
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
                                 .lineLimit(1)
@@ -2923,7 +2930,9 @@ private struct SidebarThreadRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(thread.title), updated \(thread.updatedAt.formatted(date: .abbreviated, time: .shortened))")
+            .accessibilityValue(lastMessagePreview ?? "")
             .accessibilityAddTraits(isSelected ? .isSelected : [])
+            .help(lastMessagePreview ?? thread.title)
 
             if isSelected || isHovering {
                 HStack(spacing: 2) {
