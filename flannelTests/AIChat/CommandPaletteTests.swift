@@ -203,6 +203,7 @@ struct CommandPaletteTests {
 
         let importCommand = try #require(FlannelCommand.defaultCommand(.importChat, context: visibleInspectorContext))
         let paletteCommand = try #require(FlannelCommand.defaultCommand(.openCommandPalette, context: visibleInspectorContext))
+        let settingsCommand = try #require(FlannelCommand.defaultCommand(.openSettings, context: visibleInspectorContext))
         let focusChat = try #require(FlannelCommand.defaultCommand(.focusChat, context: visibleInspectorContext))
         let focusChatWhenHidden = try #require(FlannelCommand.defaultCommand(.focusChat, context: hiddenInspectorContext))
         let showInspector = try #require(FlannelCommand.defaultCommand(.showInspector, context: hiddenInspectorContext))
@@ -211,6 +212,8 @@ struct CommandPaletteTests {
         #expect(importCommand.matches("restore backup"))
         #expect(paletteCommand.keyEquivalent == "⌘K")
         #expect(paletteCommand.matches("keyboard actions"))
+        #expect(settingsCommand.keyEquivalent == "⌘,")
+        #expect(settingsCommand.matches("preferences privacy"))
         #expect(focusChat.isEnabled)
         #expect(focusChatWhenHidden.isEnabled == false)
         #expect(showInspector.isEnabled)

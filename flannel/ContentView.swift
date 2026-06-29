@@ -2572,7 +2572,6 @@ private struct SidebarFooter: View {
                     trailingText: "⌘,",
                     action: openSettings
                 )
-                .keyboardShortcut(",", modifiers: [.command])
 
                 SidebarProviderStatusRow(
                     provider: provider,

@@ -62,6 +62,14 @@ private struct FlannelAppCommands: Commands {
     }
 
     var body: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings...") {
+                run(.openSettings)
+            }
+            .disabled(runFocusedCommand == nil || FlannelCommand.defaultCommand(.openSettings, context: context)?.isEnabled != true)
+            .keyboardShortcut(",", modifiers: [.command])
+        }
+
         CommandMenu("Chat") {
             commandButton(.newChat)
                 .keyboardShortcut("n", modifiers: [.command])
@@ -76,10 +84,6 @@ private struct FlannelAppCommands: Commands {
 
             commandButton(.openChat)
             commandButton(.openHistory)
-
-            Divider()
-
-            commandButton(.openSettings)
         }
 
         CommandMenu("Models") {

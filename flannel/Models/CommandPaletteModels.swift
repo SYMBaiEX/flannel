@@ -308,7 +308,8 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
                 subtitle: "Adjust privacy, storage, provider defaults, and developer settings.",
                 category: "Navigate",
                 systemImage: "gearshape",
-                keywords: ["preferences", "privacy", "storage"]
+                keywords: ["preferences", "privacy", "storage"],
+                keyEquivalent: "⌘,"
             ),
             FlannelCommand(
                 id: .focusChat,
