@@ -42,6 +42,7 @@ struct ContentView: View {
     @SceneStorage("flannel.settings.search") private var settingsSearchText = ""
     @State private var columnVisibilityBeforeSettings: NavigationSplitViewVisibility = .all
     @State private var sidebarSearchFocusRequest = 0
+    @State private var composerFocusRequest = 0
 
     var body: some View {
         rootSplitView
@@ -106,7 +107,7 @@ struct ContentView: View {
             searchFocusRequest: sidebarSearchFocusRequest,
             newChat: newChat,
             enterSettings: enterSettingsMode,
-            exitSettings: exitSettingsMode,
+            exitSettings: { exitSettingsMode() },
             persist: persistQuietly
         )
         .navigationSplitViewColumnWidth(min: width.min, ideal: width.ideal, max: width.max)
@@ -124,6 +125,7 @@ struct ContentView: View {
             selectedComparisonProviderIDs: $selectedComparisonProviderIDs,
             selectedComparisonRunID: $selectedComparisonRunID,
             selectedComparisonResultID: $selectedComparisonResultID,
+            composerFocusRequest: composerFocusRequest,
             isDiscoveringModels: isDiscoveringModels,
             isStreamingResponse: isStreamingResponse,
             isRunningComparison: isRunningComparison,
@@ -144,7 +146,7 @@ struct ContentView: View {
                 continueAfterToolResult(result, sourceToolCall: toolCall)
             },
             openModelSetup: { enterSettingsMode(.models) },
-            exitSettings: exitSettingsMode,
+            exitSettings: { exitSettingsMode() },
             persist: persistQuietly
         )
         .navigationSplitViewColumnWidth(min: 760, ideal: 1_020)
@@ -355,7 +357,7 @@ struct ContentView: View {
              .setRoutingCheapest, .setRoutingFastest:
             break
         case .openChat:
-            openConversationShell()
+            openConversationShell(focusComposer: true)
         case .openHistory:
             openConversationShell(focusHistorySearch: true)
         case .openCompare:
@@ -377,7 +379,7 @@ struct ContentView: View {
         case .openSettings:
             enterSettingsMode(.general)
         case .focusChat:
-            setInspectorVisibility(false)
+            setInspectorVisibility(false, focusComposerWhenHidden: true)
         case .showInspector:
             setInspectorVisibility(true)
         case .exportMarkdown:
@@ -407,12 +409,14 @@ struct ContentView: View {
         }
     }
 
-    private func openConversationShell(focusHistorySearch: Bool = false) {
+    private func openConversationShell(focusHistorySearch: Bool = false, focusComposer: Bool = false) {
         if sidebarSurface != .conversation {
-            exitSettingsMode()
+            exitSettingsMode(focusComposer: focusComposer && !focusHistorySearch)
         }
         if focusHistorySearch {
             sidebarSearchFocusRequest += 1
+        } else if focusComposer {
+            requestComposerFocus()
         }
     }
 
@@ -427,19 +431,29 @@ struct ContentView: View {
         }
     }
 
-    private func exitSettingsMode() {
+    private func exitSettingsMode(focusComposer: Bool = true) {
         withAnimation(.easeInOut(duration: 0.18)) {
             sidebarSurface = .conversation
             columnVisibility = store.preferences.showsRightSidebar ? columnVisibilityBeforeSettings : .doubleColumn
         }
+        if focusComposer {
+            requestComposerFocus()
+        }
     }
 
-    private func setInspectorVisibility(_ isVisible: Bool) {
+    private func setInspectorVisibility(_ isVisible: Bool, focusComposerWhenHidden: Bool = true) {
         withAnimation(.easeInOut(duration: 0.18)) {
             columnVisibility = isVisible ? .all : .doubleColumn
             store.preferences.showsRightSidebar = isVisible
             persistQuietly()
         }
+        if !isVisible && focusComposerWhenHidden {
+            requestComposerFocus()
+        }
+    }
+
+    private func requestComposerFocus() {
+        composerFocusRequest += 1
     }
 
     private func newChat(from template: ChatTemplate? = nil, folderID: UUID? = nil) {
@@ -447,6 +461,7 @@ struct ContentView: View {
         store.createAssistantThread(from: template, folderID: folderID)
         composerText = starterPrompt
         composerAttachments = []
+        requestComposerFocus()
         persistQuietly()
     }
 
@@ -3257,6 +3272,7 @@ private struct MainSurface: View {
     @Binding var selectedComparisonProviderIDs: Set<UUID>
     @Binding var selectedComparisonRunID: UUID?
     @Binding var selectedComparisonResultID: UUID?
+    var composerFocusRequest: Int
     var isDiscoveringModels: Bool
     var isStreamingResponse: Bool
     var isRunningComparison: Bool
@@ -3286,6 +3302,7 @@ private struct MainSurface: View {
                     store: store,
                     composerText: $composerText,
                     composerAttachments: $composerAttachments,
+                    composerFocusRequest: composerFocusRequest,
                     isStreamingResponse: isStreamingResponse,
                     sendMessage: sendMessage,
                     cancelStreaming: cancelStreaming,
@@ -3336,6 +3353,7 @@ private struct ChatSurface: View {
     @Bindable var store: WorkspaceStore
     @Binding var composerText: String
     @Binding var composerAttachments: [AIChatAttachment]
+    var composerFocusRequest: Int
     var isStreamingResponse: Bool
     var sendMessage: () -> Void
     var cancelStreaming: () -> Void
@@ -3464,6 +3482,9 @@ private struct ChatSurface: View {
                     if shouldFollowLatestMessage {
                         scrollToLatest(using: proxy)
                     }
+                }
+                .onChange(of: composerFocusRequest) { _, _ in
+                    composerFocusNonce = UUID()
                 }
                 .onChange(of: transcriptSearchText) { _, _ in
                     selectedTranscriptSearchIndex = 0
