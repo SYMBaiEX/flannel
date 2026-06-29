@@ -15,21 +15,41 @@ final class flannelUITestsLaunchTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["FLANNEL_RUN_UI_TESTS"] != "1",
+            "Set FLANNEL_RUN_UI_TESTS=1 in a desktop session with UI automation permission to run Flannel UI tests."
+        )
     }
 
     @MainActor
     func testLaunch() throws {
         let app = XCUIApplication()
         app.launch()
-
-        // Insert steps here to perform after app launch but before taking a screenshot,
-        // such as logging into a test account or navigating somewhere in the app
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
+        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Flannel"].waitForExistence(timeout: 5))
+        XCTAssertTrue(findElement("New Chat", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(findElement("Search chats", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(findElement("Message composer", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(findElement("Settings", in: app).waitForExistence(timeout: 5))
 
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Launch Screen"
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    private func findElement(_ label: String, in app: XCUIApplication) -> XCUIElement {
+        let candidates = [
+            app.buttons[label],
+            app.staticTexts[label],
+            app.links[label],
+            app.otherElements[label]
+        ]
+
+        for candidate in candidates where candidate.exists {
+            return candidate
+        }
+
+        return app.staticTexts[label]
     }
 }
