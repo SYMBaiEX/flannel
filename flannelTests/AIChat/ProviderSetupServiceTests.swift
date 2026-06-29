@@ -633,7 +633,7 @@ struct ProviderSetupServiceTests {
             accessMode: .subscriptionCLI,
             privacyScope: .localCLI,
             displayName: "ChatGPT/Codex CLI",
-            endpoint: "codex exec --json {stdin}",
+            endpoint: "codex exec --json -",
             modelIdentifier: "chatgpt-subscription"
         )
         let preferences = WorkspacePreferences(
@@ -673,7 +673,7 @@ struct ProviderSetupServiceTests {
             accessMode: .subscriptionCLI,
             privacyScope: .localCLI,
             displayName: "ChatGPT/Codex CLI",
-            endpoint: "codex exec --json {stdin}",
+            endpoint: "codex exec --json -",
             modelIdentifier: "chatgpt-subscription"
         )
         let preferences = WorkspacePreferences(
@@ -808,7 +808,7 @@ struct ProviderSetupServiceTests {
             accessMode: .subscriptionCLI,
             privacyScope: .localCLI,
             displayName: "ChatGPT/Codex CLI",
-            endpoint: "codex exec --json {stdin}",
+            endpoint: "codex exec --json -",
             modelIdentifier: "chatgpt-subscription"
         )
         let preferences = WorkspacePreferences(

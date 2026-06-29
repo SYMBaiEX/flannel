@@ -66,6 +66,29 @@ struct CLIProviderTransportTests {
             accessMode: .subscriptionCLI,
             privacyScope: .localCLI,
             displayName: "ChatGPT/Codex CLI",
+            endpoint: "codex exec --json -",
+            modelIdentifier: "chatgpt-subscription"
+        )
+
+        let spec = try CLIProviderCommandBuilder().makeCommandSpec(
+            for: ChatStreamingRequest(
+                provider: provider,
+                messages: [AssistantMessage(role: .user, text: "Explain the crash")]
+            )
+        )
+
+        #expect(spec.arguments == ["exec", "--json", "-"])
+        #expect(spec.stdinText == "User:\nExplain the crash\n\nAssistant:")
+        #expect(spec.outputFormat == .codexJSONLines)
+    }
+
+    @Test("Legacy Codex stdin placeholder contracts remain supported")
+    func codexLegacyStdinPlaceholderStillBuildsStdinPrompt() throws {
+        let provider = ProviderConfiguration(
+            kind: .chatGPTCLI,
+            accessMode: .subscriptionCLI,
+            privacyScope: .localCLI,
+            displayName: "ChatGPT/Codex CLI",
             endpoint: "codex exec --json {stdin}",
             modelIdentifier: "chatgpt-subscription"
         )
@@ -89,7 +112,7 @@ struct CLIProviderTransportTests {
             accessMode: .subscriptionCLI,
             privacyScope: .localCLI,
             displayName: "ChatGPT/Codex CLI",
-            endpoint: "codex exec --json {stdin}",
+            endpoint: "codex exec --json -",
             modelIdentifier: "chatgpt-subscription"
         )
         let toolResultID = try #require(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
@@ -344,7 +367,7 @@ struct CLIProviderTransportTests {
             accessMode: .subscriptionCLI,
             privacyScope: .localCLI,
             displayName: "ChatGPT/Codex CLI",
-            endpoint: "codex exec --json {stdin}",
+            endpoint: "codex exec --json -",
             modelIdentifier: "chatgpt-subscription"
         )
         let transport = CLIProviderTransport(resolveExecutable: { _ in nil })
@@ -418,7 +441,7 @@ struct CLIProviderTransportTests {
             accessMode: .subscriptionCLI,
             privacyScope: .localCLI,
             displayName: "ChatGPT/Codex CLI",
-            endpoint: "codex exec --json {stdin}",
+            endpoint: "codex exec --json -",
             modelIdentifier: "chatgpt-subscription"
         )
         let transport = CLIProviderTransport(

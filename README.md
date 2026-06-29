@@ -49,7 +49,7 @@ This repository documents a working implementation, not a roadmap-only feature l
   - Secret: required
   - Status: implemented
 - **ChatGPT/Codex CLI (`subscriptionCLI`)**
-  - Recommended CLI contract: `codex exec --json {stdin}`.
+  - Recommended CLI contract: `codex exec --json -`.
   - Flannel executes the command as direct argv, sends the rendered chat prompt through stdin, and decodes Codex JSONL assistant events into chat text.
   - Readiness requires a user-installed/authenticated command that can answer the local `flannel-ready` smoke probe.
 - **Claude Code CLI (`subscriptionCLI`)**

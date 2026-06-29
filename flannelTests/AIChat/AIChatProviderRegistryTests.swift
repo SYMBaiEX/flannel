@@ -447,7 +447,7 @@ struct AIChatProviderRegistryTests {
         let chatGPTCLI = try #require(store.providerConfigurations.first(where: { $0.kind == .chatGPTCLI }))
         let claudeCLI = try #require(store.providerConfigurations.first(where: { $0.kind == .claudeCodeCLI }))
 
-        #expect(chatGPTCLI.endpoint == "codex exec --json {stdin}")
+        #expect(chatGPTCLI.endpoint == "codex exec --json -")
         #expect(claudeCLI.endpoint == "claude -p --output-format stream-json --verbose")
 
         for provider in [chatGPTCLI, claudeCLI] {

@@ -4501,7 +4501,7 @@ final class WorkspaceStore {
                 accessMode: .subscriptionCLI,
                 privacyScope: .localCLI,
                 displayName: "ChatGPT/Codex CLI",
-                endpoint: "codex exec --json {stdin}",
+                endpoint: "codex exec --json -",
                 modelIdentifier: "chatgpt-subscription",
                 isEnabled: false,
                 connectionStatus: .needsAttention,
@@ -4637,7 +4637,7 @@ final class WorkspaceStore {
                 accessMode: .subscriptionCLI,
                 privacyScope: .localCLI,
                 displayName: displayName,
-                endpoint: "codex exec --json {stdin}",
+                endpoint: "codex exec --json -",
                 modelIdentifier: "chatgpt-subscription",
                 isEnabled: false,
                 connectionStatus: .needsAttention,
@@ -4788,8 +4788,9 @@ final class WorkspaceStore {
                     toProviderAt: index
                 )
             case .chatGPTCLI:
-                if providerConfigurations[index].endpoint.trimmingCharacters(in: .whitespacesAndNewlines) == "codex" {
-                    providerConfigurations[index].endpoint = "codex exec --json {stdin}"
+                let command = providerConfigurations[index].endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+                if command == "codex" || command == "codex exec --json {stdin}" {
+                    providerConfigurations[index].endpoint = "codex exec --json -"
                 }
                 normalizeSubscriptionCLIProvider(at: index)
             case .claudeCodeCLI:

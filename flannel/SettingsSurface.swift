@@ -2823,7 +2823,7 @@ private struct ProviderSettingsRow: View {
         guard provider.accessMode == .subscriptionCLI else { return nil }
         switch provider.kind {
         case .chatGPTCLI:
-            return "Recommended: `codex exec --json {stdin}`. Flannel decodes Codex JSONL events and sends the rendered prompt over stdin. Placeholders like `{prompt}`, `{last_user_message}`, and `{model}` are also supported. Pipes and shell expansion are rejected."
+            return "Recommended: `codex exec --json -`. The `-` tells Codex to read Flannel's rendered prompt from stdin while `--json` emits JSONL events. Placeholders like `{prompt}`, `{last_user_message}`, `{model}`, and legacy `{stdin}` are also supported. Pipes and shell expansion are rejected."
         case .claudeCodeCLI:
             return "Recommended: `claude -p --output-format stream-json --verbose`. Flannel decodes Claude JSON or stream-json output. Interactive Claude sessions are not launched from chat."
         default:
@@ -3535,7 +3535,7 @@ private extension ProviderConfiguration {
         case .customOpenAICompatible:
             "https://provider.example.com/v1"
         case .chatGPTCLI:
-            "codex exec --json {stdin}"
+            "codex exec --json -"
         case .claudeCodeCLI:
             "claude -p --output-format stream-json --verbose"
         case .vercelAISDKBridge:
