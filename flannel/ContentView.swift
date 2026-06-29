@@ -2800,46 +2800,55 @@ private struct SidebarThreadRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 9) {
-            Image(systemName: isArchived ? "archivebox" : "bubble.left")
-                .font(.body)
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.secondary)
-                .frame(width: 18)
+            Button(action: choose) {
+                HStack(alignment: .top, spacing: 9) {
+                    Image(systemName: isArchived ? "archivebox" : "bubble.left")
+                        .font(.body)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 18)
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
-                    Text(thread.title)
-                        .font(.callout.weight(.medium))
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 4) {
+                            Text(thread.title)
+                                .font(.callout.weight(.medium))
+                                .lineLimit(1)
+                            if isPinned {
+                                Image(systemName: "star.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        HStack(spacing: 4) {
+                            Text(thread.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                            if let folder {
+                                Text("•")
+                                Label(folder.title, systemImage: folder.symbolName)
+                                    .labelStyle(.titleAndIcon)
+                            }
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
-                    if isPinned {
-                        Image(systemName: "star.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
 
-                HStack(spacing: 4) {
-                    Text(thread.updatedAt.formatted(date: .abbreviated, time: .shortened))
-                    if let folder {
-                        Text("•")
-                        Label(folder.title, systemImage: folder.symbolName)
-                            .labelStyle(.titleAndIcon)
+                        if let lastMessage = thread.messages.last(where: { $0.role != .system }),
+                           !lastMessage.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text(lastMessage.text)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
                     }
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
 
-                if let lastMessage = thread.messages.last(where: { $0.role != .system }),
-                   !lastMessage.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(lastMessage.text)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
+                    Spacer(minLength: 4)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-
-            Spacer(minLength: 4)
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(thread.title), updated \(thread.updatedAt.formatted(date: .abbreviated, time: .shortened))")
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
 
             if isSelected || isHovering {
                 HStack(spacing: 2) {
@@ -2862,13 +2871,10 @@ private struct SidebarThreadRow: View {
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-        .onTapGesture(perform: choose)
         .onHover { hovering in
             isHovering = hovering
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityAction(named: "Open", choose)
+        .accessibilityElement(children: .contain)
         .accessibilityAction(named: isPinned ? "Remove from Favorites" : "Add to Favorites", pinToggle)
         .accessibilityAction(named: isArchived ? "Restore" : "Archive", archiveToggle)
         .contextMenu {
