@@ -8,7 +8,7 @@
 import CoreGraphics
 import Foundation
 
-enum FlannelSidebarSurface: String, Hashable, Sendable {
+nonisolated enum FlannelSidebarSurface: String, Hashable, Sendable {
     case conversation
     case settings
 
@@ -30,13 +30,32 @@ enum FlannelSidebarSurface: String, Hashable, Sendable {
     }
 }
 
-struct FlannelSidebarColumnWidth: Hashable, Sendable {
+nonisolated enum FlannelExitCommandIntent: Hashable, Sendable {
+    case exitSettings
+    case collapseArtifacts
+    case none
+
+    static func resolve(
+        sidebarSurface: FlannelSidebarSurface,
+        isInspectorVisible: Bool
+    ) -> FlannelExitCommandIntent {
+        if sidebarSurface == .settings {
+            return .exitSettings
+        }
+        if isInspectorVisible {
+            return .collapseArtifacts
+        }
+        return .none
+    }
+}
+
+nonisolated struct FlannelSidebarColumnWidth: Hashable, Sendable {
     var min: CGFloat
     var ideal: CGFloat
     var max: CGFloat
 }
 
-enum FlannelInspectorSection: String, CaseIterable, Hashable, Identifiable, Sendable {
+nonisolated enum FlannelInspectorSection: String, CaseIterable, Hashable, Identifiable, Sendable {
     case chatDetail
     case sources
     case compare

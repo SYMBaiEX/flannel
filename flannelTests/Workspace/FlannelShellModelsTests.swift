@@ -27,4 +27,28 @@ struct FlannelShellModelsTests {
         #expect(settingsWidth.min < conversationWidth.min)
         #expect(settingsWidth.max < conversationWidth.max)
     }
+
+    @Test("Escape exits settings before collapsing the artifact rail")
+    func exitCommandPrioritizesSettingsMode() {
+        #expect(FlannelExitCommandIntent.resolve(
+            sidebarSurface: .settings,
+            isInspectorVisible: true
+        ) == .exitSettings)
+        #expect(FlannelExitCommandIntent.resolve(
+            sidebarSurface: .settings,
+            isInspectorVisible: false
+        ) == .exitSettings)
+    }
+
+    @Test("Escape collapses artifacts only in conversation mode")
+    func exitCommandCollapsesArtifactsInConversationMode() {
+        #expect(FlannelExitCommandIntent.resolve(
+            sidebarSurface: .conversation,
+            isInspectorVisible: true
+        ) == .collapseArtifacts)
+        #expect(FlannelExitCommandIntent.resolve(
+            sidebarSurface: .conversation,
+            isInspectorVisible: false
+        ) == .none)
+    }
 }

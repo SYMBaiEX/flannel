@@ -52,6 +52,7 @@ struct ContentView: View {
             .overlay {
                 commandPaletteOverlay
             }
+            .onExitCommand(perform: handleExitCommand)
             .focusedSceneValue(\.flannelCommandContext, commandContext)
             .focusedSceneValue(\.flannelCommandRunner) { commandID in
                 runCommand(id: commandID)
@@ -260,6 +261,13 @@ struct ContentView: View {
         )
     }
 
+    private var exitCommandIntent: FlannelExitCommandIntent {
+        FlannelExitCommandIntent.resolve(
+            sidebarSurface: sidebarSurface,
+            isInspectorVisible: columnVisibility == .all
+        )
+    }
+
     private func openCommandPalette() {
         commandPaletteQuery = ""
         withAnimation(.easeOut(duration: 0.14)) {
@@ -270,6 +278,17 @@ struct ContentView: View {
     private func closeCommandPalette() {
         withAnimation(.easeOut(duration: 0.12)) {
             isCommandPalettePresented = false
+        }
+    }
+
+    private func handleExitCommand() {
+        switch exitCommandIntent {
+        case .exitSettings:
+            exitSettingsMode()
+        case .collapseArtifacts:
+            setInspectorVisibility(false)
+        case .none:
+            break
         }
     }
 
