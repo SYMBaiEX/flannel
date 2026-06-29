@@ -5,6 +5,7 @@
 //  Created by OpenAI Codex on 6/29/26.
 //
 
+import CoreGraphics
 import Testing
 @testable import flannel
 
@@ -50,5 +51,13 @@ struct FlannelShellModelsTests {
             sidebarSurface: .conversation,
             isInspectorVisible: false
         ) == .none)
+    }
+
+    @Test("Transcript follow policy treats near-bottom positions as pinned")
+    func transcriptFollowPolicyUsesBottomThreshold() {
+        #expect(FlannelTranscriptFollowPolicy.isPinnedToBottom(bottomDistance: -12))
+        #expect(FlannelTranscriptFollowPolicy.isPinnedToBottom(bottomDistance: 0))
+        #expect(FlannelTranscriptFollowPolicy.isPinnedToBottom(bottomDistance: 64))
+        #expect(FlannelTranscriptFollowPolicy.isPinnedToBottom(bottomDistance: 96) == false)
     }
 }

@@ -3315,7 +3315,26 @@ private struct MainSurface: View {
     }
 }
 
+private struct ChatTranscriptViewportHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct ChatTranscriptBottomYPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = .infinity
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 private struct ChatSurface: View {
+    private static let transcriptScrollCoordinateSpace = "flannel.chat.transcript.scroll"
+    private static let transcriptBottomAnchorID = "flannel.chat.transcript.bottom"
+
     @Bindable var store: WorkspaceStore
     @Binding var composerText: String
     @Binding var composerAttachments: [AIChatAttachment]
@@ -3334,6 +3353,8 @@ private struct ChatSurface: View {
     @State private var transcriptSearchText = ""
     @State private var selectedTranscriptSearchIndex = 0
     @State private var composerFocusNonce = UUID()
+    @State private var transcriptViewportHeight: CGFloat = 0
+    @State private var isTranscriptPinnedToBottom = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -3351,37 +3372,67 @@ private struct ChatSurface: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
-                    ChatTranscript(
-                        messages: visibleMessages,
-                        toolResultsByID: toolResultsByID,
-                        pinnedMessageIDs: Set(store.pinnedMessages
-                            .filter { $0.threadID == store.currentAssistantThread?.id }
-                            .map(\.messageID)),
-                        searchMatchedMessageIDs: transcriptSearchMatchedMessageIDs,
-                        activeSearchMessageID: activeTranscriptSearchMatch?.messageID,
-                        activeSearchMatchLabel: activeTranscriptSearchMatchLabel,
-                        hasRunnableProvider: store.activeProvider != nil,
-                        citationPreviews: { store.knowledgeCitationPreviews(for: $0.citations) },
-                        chooseSuggestedPrompt: chooseSuggestedPrompt,
-                        openModelSetup: openModelSetup,
-                        toggleMessagePin: toggleMessagePin,
-                        copyMessage: copyMessage,
-                        retryFromMessage: retryFromMessage,
-                        editMessage: editMessage,
-                        forkThreadFromMessage: forkThreadFromMessage,
-                        runRequestedToolCall: runRequestedToolCall,
-                        denyRequestedToolCall: denyRequestedToolCall,
-                        approveToolResult: { resolveToolApproval($0, approve: true) },
-                        denyToolResult: { resolveToolApproval($0, approve: false) }
-                    )
-                    .frame(maxWidth: 880)
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 22)
-                    .frame(maxWidth: .infinity)
+                    VStack(spacing: 0) {
+                        ChatTranscript(
+                            messages: visibleMessages,
+                            toolResultsByID: toolResultsByID,
+                            pinnedMessageIDs: Set(store.pinnedMessages
+                                .filter { $0.threadID == store.currentAssistantThread?.id }
+                                .map(\.messageID)),
+                            searchMatchedMessageIDs: transcriptSearchMatchedMessageIDs,
+                            activeSearchMessageID: activeTranscriptSearchMatch?.messageID,
+                            activeSearchMatchLabel: activeTranscriptSearchMatchLabel,
+                            hasRunnableProvider: store.activeProvider != nil,
+                            citationPreviews: { store.knowledgeCitationPreviews(for: $0.citations) },
+                            chooseSuggestedPrompt: chooseSuggestedPrompt,
+                            openModelSetup: openModelSetup,
+                            toggleMessagePin: toggleMessagePin,
+                            copyMessage: copyMessage,
+                            retryFromMessage: retryFromMessage,
+                            editMessage: editMessage,
+                            forkThreadFromMessage: forkThreadFromMessage,
+                            runRequestedToolCall: runRequestedToolCall,
+                            denyRequestedToolCall: denyRequestedToolCall,
+                            approveToolResult: { resolveToolApproval($0, approve: true) },
+                            denyToolResult: { resolveToolApproval($0, approve: false) }
+                        )
+                        .frame(maxWidth: 880)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 22)
+                        .frame(maxWidth: .infinity)
+
+                        transcriptBottomSentinel
+                    }
                 }
+                .coordinateSpace(name: Self.transcriptScrollCoordinateSpace)
                 .scrollContentBackground(.hidden)
+                .background {
+                    GeometryReader { geometry in
+                        Color.clear.preference(
+                            key: ChatTranscriptViewportHeightPreferenceKey.self,
+                            value: geometry.size.height
+                        )
+                    }
+                }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     VStack(spacing: 0) {
+                        if shouldShowJumpToLatest {
+                            Button {
+                                isTranscriptPinnedToBottom = true
+                                scrollToLatest(using: proxy)
+                            } label: {
+                                Label("Jump to latest", systemImage: "arrow.down")
+                            }
+                            .buttonStyle(.plain)
+                            .controlSize(.small)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .flannelGlassCapsule(.regular, interactive: true)
+                            .padding(.bottom, 8)
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                            .help("Scroll to the newest message.")
+                        }
+
                         FlannelSeparator(opacity: 0.45)
 
                         Composer(
@@ -3392,7 +3443,10 @@ private struct ChatSurface: View {
                             attachments: $composerAttachments,
                             isStreamingResponse: isStreamingResponse,
                             focusNonce: composerFocusNonce,
-                            send: sendMessage,
+                            send: {
+                                isTranscriptPinnedToBottom = true
+                                sendMessage()
+                            },
                             cancel: cancelStreaming,
                             compare: compareCurrentPrompt
                         )
@@ -3404,7 +3458,12 @@ private struct ChatSurface: View {
                     .background(.regularMaterial)
                 }
                 .onChange(of: visibleMessages.count) { _, _ in
-                    if transcriptSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if shouldFollowLatestMessage {
+                        scrollToLatest(using: proxy)
+                    }
+                }
+                .onChange(of: latestMessageScrollFingerprint) { _, _ in
+                    if shouldFollowLatestMessage {
                         scrollToLatest(using: proxy)
                     }
                 }
@@ -3419,15 +3478,57 @@ private struct ChatSurface: View {
                     scrollToSearchMatch(activeTranscriptSearchMatch?.messageID, using: proxy)
                 }
                 .onAppear {
+                    isTranscriptPinnedToBottom = true
                     scrollToLatest(using: proxy)
+                }
+                .onPreferenceChange(ChatTranscriptViewportHeightPreferenceKey.self) { height in
+                    transcriptViewportHeight = height
+                }
+                .onPreferenceChange(ChatTranscriptBottomYPreferenceKey.self) { bottomY in
+                    updateTranscriptBottomPosition(bottomY)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private var transcriptBottomSentinel: some View {
+        Color.clear
+            .frame(height: 1)
+            .id(Self.transcriptBottomAnchorID)
+            .background {
+                GeometryReader { geometry in
+                    Color.clear.preference(
+                        key: ChatTranscriptBottomYPreferenceKey.self,
+                        value: geometry.frame(in: .named(Self.transcriptScrollCoordinateSpace)).maxY
+                    )
+                }
+            }
+    }
+
     private var visibleMessages: [AssistantMessage] {
         (store.currentAssistantThread?.messages ?? []).filter { $0.role != .system }
+    }
+
+    private var latestMessageScrollFingerprint: String {
+        guard let latestMessage = visibleMessages.last else { return "empty" }
+        return [
+            latestMessage.id.uuidString,
+            "\(latestMessage.text.count)",
+            "\(latestMessage.toolCalls.count)",
+            "\(latestMessage.referencedEntityIDs.count)"
+        ].joined(separator: "-")
+    }
+
+    private var shouldFollowLatestMessage: Bool {
+        isTranscriptPinnedToBottom
+            && transcriptSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var shouldShowJumpToLatest: Bool {
+        !visibleMessages.isEmpty
+            && !isTranscriptPinnedToBottom
+            && transcriptSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var composerContextBudget: ChatContextBudget? {
@@ -3537,11 +3638,22 @@ private struct ChatSurface: View {
     }
 
     private func scrollToLatest(using proxy: ScrollViewProxy) {
-        guard let id = visibleMessages.last?.id else { return }
+        guard !visibleMessages.isEmpty else { return }
         DispatchQueue.main.async {
             withAnimation(.easeOut(duration: 0.18)) {
-                proxy.scrollTo(id, anchor: .bottom)
+                proxy.scrollTo(Self.transcriptBottomAnchorID, anchor: .bottom)
             }
+        }
+    }
+
+    private func updateTranscriptBottomPosition(_ bottomY: CGFloat) {
+        guard transcriptViewportHeight > 0, bottomY.isFinite else { return }
+        let bottomDistance = bottomY - transcriptViewportHeight
+        let isPinned = FlannelTranscriptFollowPolicy.isPinnedToBottom(bottomDistance: bottomDistance)
+        guard isPinned != isTranscriptPinnedToBottom else { return }
+
+        withAnimation(.easeInOut(duration: 0.12)) {
+            isTranscriptPinnedToBottom = isPinned
         }
     }
 

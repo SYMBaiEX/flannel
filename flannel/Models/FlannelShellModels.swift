@@ -55,6 +55,17 @@ nonisolated struct FlannelSidebarColumnWidth: Hashable, Sendable {
     var max: CGFloat
 }
 
+nonisolated enum FlannelTranscriptFollowPolicy {
+    static let defaultBottomThreshold: CGFloat = 88
+
+    static func isPinnedToBottom(
+        bottomDistance: CGFloat,
+        threshold: CGFloat = defaultBottomThreshold
+    ) -> Bool {
+        bottomDistance <= threshold
+    }
+}
+
 nonisolated enum FlannelInspectorSection: String, CaseIterable, Hashable, Identifiable, Sendable {
     case chatDetail
     case sources
