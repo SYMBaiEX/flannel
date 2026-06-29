@@ -8009,10 +8009,7 @@ private struct InspectorSurface: View {
     var useComparisonResultProvider: (ModelComparisonResult) -> Void
     var openSettingsTab: (SettingsTab) -> Void
     var persist: () -> Void
-    @SceneStorage("flannel.inspector.chatDetail.expanded") private var isChatDetailExpanded = true
-    @SceneStorage("flannel.inspector.compare.expanded") private var isCompareExpanded = true
-    @SceneStorage("flannel.inspector.sources.expanded") private var isSourcesExpanded = true
-    @SceneStorage("flannel.inspector.tools.expanded") private var isToolsExpanded = true
+    @SceneStorage("flannel.inspector.activeSection") private var activeSectionRawValue = FlannelInspectorSection.chatDetail.rawValue
 
     private var hasCompareArtifacts: Bool {
         selectedComparisonRunID != nil || !store.modelComparisonRuns.isEmpty || isRunningComparison
@@ -8030,9 +8027,39 @@ private struct InspectorSurface: View {
         hasCompareArtifacts || hasSourceArtifacts || hasToolArtifacts
     }
 
+    private var availableSections: [FlannelInspectorSection] {
+        FlannelInspectorSection.availableSections(
+            hasCompareArtifacts: hasCompareArtifacts,
+            hasSourceArtifacts: hasSourceArtifacts,
+            hasToolArtifacts: hasToolArtifacts
+        )
+    }
+
+    private var availableSectionIDs: [String] {
+        availableSections.map(\.rawValue)
+    }
+
+    private var fallbackSection: FlannelInspectorSection {
+        FlannelInspectorSection.defaultSection(
+            hasCompareArtifacts: hasCompareArtifacts,
+            hasSourceArtifacts: hasSourceArtifacts,
+            hasToolArtifacts: hasToolArtifacts
+        )
+    }
+
+    private var activeSection: FlannelInspectorSection {
+        get {
+            let storedSection = FlannelInspectorSection(rawValue: activeSectionRawValue) ?? fallbackSection
+            return availableSections.contains(storedSection) ? storedSection : fallbackSection
+        }
+        nonmutating set {
+            activeSectionRawValue = newValue.rawValue
+        }
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Artifacts")
@@ -8054,16 +8081,13 @@ private struct InspectorSurface: View {
                     .accessibilityLabel("Collapse Artifacts")
                 }
 
-                DisclosureGroup(isExpanded: $isChatDetailExpanded) {
-                    ChatDetailInspectorSection(
-                        store: store,
-                        openSettingsTab: openSettingsTab,
-                        persist: persist
-                    )
-                } label: {
-                    InspectorSectionHeader("Chat Detail", count: store.currentAssistantThread == nil ? 0 : 1, icon: "bubble.left.and.text.bubble.right")
-                }
-                .disclosureGroupStyle(.automatic)
+                InspectorSectionSelector(
+                    sections: availableSections,
+                    activeSection: activeSection,
+                    count: sectionCount,
+                    summary: sectionSummary,
+                    select: { activeSection = $0 }
+                )
 
                 if !hasContextualArtifacts {
                     InspectorCompactEmptySummary(
@@ -8071,51 +8095,16 @@ private struct InspectorSurface: View {
                     )
                 }
 
-                if hasCompareArtifacts {
-                    DisclosureGroup(isExpanded: $isCompareExpanded) {
-                        CompareInspectorSurface(
-                            store: store,
-                            selectedRunID: selectedComparisonRunID,
-                            selectedResultID: selectedComparisonResultID,
-                            isRunningComparison: isRunningComparison,
-                            copyResult: copyComparisonResult,
-                            useResultProvider: useComparisonResultProvider,
-                            openSettingsTab: openSettingsTab
-                        )
-                    } label: {
-                        InspectorSectionHeader("Compare", count: store.modelComparisonRuns.count, icon: "rectangle.split.3x1")
-                    }
-                    .disclosureGroupStyle(.automatic)
-                }
-
-                if hasSourceArtifacts {
-                    DisclosureGroup(isExpanded: $isSourcesExpanded) {
-                        MessageCitationList(
-                            previews: currentCitationPreviews,
-                            limit: 8,
-                            snippetLineLimit: 4
-                        )
-                    } label: {
-                        InspectorSectionHeader("Sources", count: currentCitations.count, icon: "books.vertical")
-                    }
-                    .disclosureGroupStyle(.automatic)
-                }
-
-                if hasToolArtifacts {
-                    DisclosureGroup(isExpanded: $isToolsExpanded) {
-                        ForEach(currentThreadToolResults.prefix(8)) { result in
-                            InspectorToolTraceRow(result: result)
-                        }
-                    } label: {
-                        InspectorSectionHeader("Tool Traces", count: currentThreadToolResults.count, icon: "wrench.and.screwdriver")
-                    }
-                    .disclosureGroupStyle(.automatic)
-                }
+                activeSectionContent
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 18)
         }
         .background(.bar)
+        .onAppear(perform: ensureActiveSectionIsAvailable)
+        .onChange(of: availableSectionIDs) { _, _ in
+            ensureActiveSectionIsAvailable()
+        }
     }
 
     private var currentCitations: [AIChatCitation] {
@@ -8134,6 +8123,150 @@ private struct InspectorSurface: View {
         store.toolExecutionResults
             .filter { currentThreadToolResultIDs.contains($0.id) }
             .sorted(using: KeyPathComparator(\.createdAt, order: .reverse))
+    }
+
+    @ViewBuilder
+    private var activeSectionContent: some View {
+        switch activeSection {
+        case .chatDetail:
+            ChatDetailInspectorSection(
+                store: store,
+                openSettingsTab: openSettingsTab,
+                persist: persist
+            )
+        case .sources:
+            if hasSourceArtifacts {
+                MessageCitationList(
+                    previews: currentCitationPreviews,
+                    limit: 8,
+                    snippetLineLimit: 4
+                )
+                .panelStyle()
+            } else {
+                InspectorEmptySection(
+                    icon: FlannelInspectorSection.sources.icon,
+                    title: "No sources yet",
+                    detail: "Citations from local RAG and indexed knowledge will appear here."
+                )
+            }
+        case .compare:
+            CompareInspectorSurface(
+                store: store,
+                selectedRunID: selectedComparisonRunID,
+                selectedResultID: selectedComparisonResultID,
+                isRunningComparison: isRunningComparison,
+                copyResult: copyComparisonResult,
+                useResultProvider: useComparisonResultProvider,
+                openSettingsTab: openSettingsTab
+            )
+        case .tools:
+            if hasToolArtifacts {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(currentThreadToolResults.prefix(8)) { result in
+                        InspectorToolTraceRow(result: result)
+                    }
+                }
+                .panelStyle()
+            } else {
+                InspectorEmptySection(
+                    icon: FlannelInspectorSection.tools.icon,
+                    title: "No tool traces yet",
+                    detail: "Approved local tool runs and command results will appear here."
+                )
+            }
+        }
+    }
+
+    private func ensureActiveSectionIsAvailable() {
+        guard let storedSection = FlannelInspectorSection(rawValue: activeSectionRawValue),
+              availableSections.contains(storedSection) else {
+            activeSection = fallbackSection
+            return
+        }
+    }
+
+    private func sectionCount(_ section: FlannelInspectorSection) -> Int {
+        switch section {
+        case .chatDetail:
+            store.currentAssistantThread == nil ? 0 : 1
+        case .sources:
+            currentCitations.count
+        case .compare:
+            max(store.modelComparisonRuns.count, isRunningComparison ? 1 : 0)
+        case .tools:
+            currentThreadToolResults.count
+        }
+    }
+
+    private func sectionSummary(_ section: FlannelInspectorSection) -> String {
+        switch section {
+        case .chatDetail:
+            return store.currentAssistantThread?.title ?? "Select a chat"
+        case .sources:
+            return currentCitations.isEmpty ? "Citations" : "\(currentCitations.count) cited local source\(currentCitations.count == 1 ? "" : "s")"
+        case .compare:
+            if isRunningComparison {
+                return "Running"
+            }
+            return store.modelComparisonRuns.isEmpty ? "No runs" : "\(store.modelComparisonRuns.count) run\(store.modelComparisonRuns.count == 1 ? "" : "s")"
+        case .tools:
+            return currentThreadToolResults.isEmpty ? "No traces" : "\(currentThreadToolResults.count) trace\(currentThreadToolResults.count == 1 ? "" : "s")"
+        }
+    }
+}
+
+private struct InspectorSectionSelector: View {
+    var sections: [FlannelInspectorSection]
+    var activeSection: FlannelInspectorSection
+    var count: (FlannelInspectorSection) -> Int
+    var summary: (FlannelInspectorSection) -> String
+    var select: (FlannelInspectorSection) -> Void
+
+    var body: some View {
+        VStack(spacing: 5) {
+            ForEach(sections) { section in
+                Button {
+                    select(section)
+                } label: {
+                    HStack(spacing: 9) {
+                        Image(systemName: section.icon)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(activeSection == section ? Color.accentColor : Color.secondary)
+                            .frame(width: 18)
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(section.title)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            Text(summary(section))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Text("\(count(section))")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .background(
+                    activeSection == section ? Color.primary.opacity(0.07) : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
+                .accessibilityLabel(section.title)
+                .accessibilityValue(activeSection == section ? "Selected" : "\(count(section)) items")
+            }
+        }
+        .padding(6)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 

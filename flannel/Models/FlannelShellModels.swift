@@ -35,3 +35,73 @@ struct FlannelSidebarColumnWidth: Hashable, Sendable {
     var ideal: CGFloat
     var max: CGFloat
 }
+
+enum FlannelInspectorSection: String, CaseIterable, Hashable, Identifiable, Sendable {
+    case chatDetail
+    case sources
+    case compare
+    case tools
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .chatDetail:
+            "Chat Detail"
+        case .sources:
+            "Sources"
+        case .compare:
+            "Compare"
+        case .tools:
+            "Tool Traces"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .chatDetail:
+            "bubble.left.and.text.bubble.right"
+        case .sources:
+            "books.vertical"
+        case .compare:
+            "rectangle.split.3x1"
+        case .tools:
+            "wrench.and.screwdriver"
+        }
+    }
+
+    static func defaultSection(
+        hasCompareArtifacts: Bool,
+        hasSourceArtifacts: Bool,
+        hasToolArtifacts: Bool
+    ) -> FlannelInspectorSection {
+        if hasSourceArtifacts {
+            return .sources
+        }
+        if hasCompareArtifacts {
+            return .compare
+        }
+        if hasToolArtifacts {
+            return .tools
+        }
+        return .chatDetail
+    }
+
+    static func availableSections(
+        hasCompareArtifacts: Bool,
+        hasSourceArtifacts: Bool,
+        hasToolArtifacts: Bool
+    ) -> [FlannelInspectorSection] {
+        var sections: [FlannelInspectorSection] = [.chatDetail]
+        if hasSourceArtifacts {
+            sections.append(.sources)
+        }
+        if hasCompareArtifacts {
+            sections.append(.compare)
+        }
+        if hasToolArtifacts {
+            sections.append(.tools)
+        }
+        return sections
+    }
+}
