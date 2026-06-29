@@ -152,7 +152,10 @@ struct SettingsSurface: View {
 
     private var routedSettings: some View {
         VStack(spacing: 0) {
-            SettingsRouteHeader(tab: selectedTabBinding.wrappedValue)
+            SettingsRouteHeader(
+                tab: selectedTabBinding.wrappedValue,
+                isSearchActive: !settingsSearchQuery.isEmpty
+            )
                 .padding(.horizontal, 28)
                 .padding(.vertical, 18)
 
@@ -430,27 +433,29 @@ struct SettingsSurface: View {
                             }
                         }
                         .disabled(isPullingOllamaModel || ollamaPullModelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
 
-                        if let ollamaPullMessage {
-                            Text(ollamaPullMessage)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                    if let ollamaPullMessage {
+                        SettingsInlineNotice(
+                            message: ollamaPullMessage,
+                            tone: settingsNoticeTone(for: ollamaPullMessage, isLoading: isPullingOllamaModel)
+                        )
                     }
                 }
                 .padding(.vertical, 4)
 
                 if let localDiscoveryMessage {
-                    Text(localDiscoveryMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    SettingsInlineNotice(
+                        message: localDiscoveryMessage,
+                        tone: settingsNoticeTone(for: localDiscoveryMessage, isLoading: isDiscoveringLocalModels)
+                    )
                 }
 
                 if let modelInspectionMessage {
-                    Text(modelInspectionMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    SettingsInlineNotice(
+                        message: modelInspectionMessage,
+                        tone: settingsNoticeTone(for: modelInspectionMessage, isLoading: modelInspectionMessage.hasPrefix("Inspecting "))
+                    )
                 }
 
                 if store.localDiscoveryResults.isEmpty {
@@ -581,36 +586,42 @@ struct SettingsSurface: View {
     }
 
     private var providerReadinessBulkCheckRow: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Readiness audit")
-                    .font(.headline)
-                Text(providerReadinessBulkDetail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer()
-
-            Button {
-                checkAllProviderReadiness()
-            } label: {
-                if isCheckingAllProviderReadiness {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Label("Check All Routes", systemImage: "checkmark.seal")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Readiness audit")
+                        .font(.headline)
+                    Text(providerReadinessBulkDetail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+
+                Spacer()
+
+                Button {
+                    checkAllProviderReadiness()
+                } label: {
+                    if isCheckingAllProviderReadiness {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Label("Check All Routes", systemImage: "checkmark.seal")
+                    }
+                }
+                .disabled(store.providerConfigurations.isEmpty || isCheckingAllProviderReadiness || !validatingProviderIDs.isEmpty)
             }
-            .disabled(store.providerConfigurations.isEmpty || isCheckingAllProviderReadiness || !validatingProviderIDs.isEmpty)
+
+            if let providerReadinessBatchMessage {
+                SettingsInlineNotice(
+                    message: providerReadinessBatchMessage,
+                    tone: settingsNoticeTone(for: providerReadinessBatchMessage, isLoading: isCheckingAllProviderReadiness)
+                )
+            }
         }
     }
 
     private var providerReadinessBulkDetail: String {
-        if let providerReadinessBatchMessage {
-            return providerReadinessBatchMessage
-        }
 
         let routeCount = store.providerConfigurations.count
         guard routeCount > 0 else {
@@ -682,10 +693,10 @@ struct SettingsSurface: View {
                 .buttonStyle(.bordered)
 
                 if let knowledgeRefreshMessage {
-                    Text(knowledgeRefreshMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    SettingsInlineNotice(
+                        message: knowledgeRefreshMessage,
+                        tone: settingsNoticeTone(for: knowledgeRefreshMessage, isLoading: knowledgeRefreshMessage.hasPrefix("Refreshing "))
+                    )
                 }
             }
         }
@@ -1263,10 +1274,10 @@ struct SettingsSurface: View {
                 .disabled(resetWorkspaceConfirmation != "DELETE FLANNEL DATA")
 
                 if let resetWorkspaceMessage {
-                    Text(resetWorkspaceMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    SettingsInlineNotice(
+                        message: resetWorkspaceMessage,
+                        tone: settingsNoticeTone(for: resetWorkspaceMessage)
+                    )
                 }
             }
         }
@@ -1439,7 +1450,11 @@ struct SettingsSurface: View {
     private func settingsForm<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         Form(content: content)
             .formStyle(.grouped)
-            .padding(20)
+            .scrollContentBackground(.hidden)
+            .frame(maxWidth: 860, alignment: .topLeading)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private func addProviderRoute(
@@ -2088,16 +2103,106 @@ private struct SettingsSidebarRow: View {
     }
 }
 
+private enum SettingsNoticeTone: Equatable {
+    case loading
+    case info
+    case success
+    case error
+
+    var color: Color {
+        switch self {
+        case .loading, .info:
+            .secondary
+        case .success:
+            .green
+        case .error:
+            .red
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .loading:
+            "clock.arrow.circlepath"
+        case .info:
+            "info.circle"
+        case .success:
+            "checkmark.circle"
+        case .error:
+            "exclamationmark.triangle"
+        }
+    }
+}
+
+private func settingsNoticeTone(for message: String, isLoading: Bool = false) -> SettingsNoticeTone {
+    if isLoading {
+        return .loading
+    }
+
+    let normalizedMessage = message.lowercased()
+    if normalizedMessage.contains("failed")
+        || normalizedMessage.contains("error")
+        || normalizedMessage.contains("attention")
+        || normalizedMessage.contains("enter ") {
+        return .error
+    }
+    if normalizedMessage.contains("ready")
+        || normalizedMessage.contains("created")
+        || normalizedMessage.contains("duplicated")
+        || normalizedMessage.contains("deleted")
+        || normalizedMessage.contains("finished")
+        || normalizedMessage.contains("refreshed")
+        || normalizedMessage.contains("saved")
+        || normalizedMessage.hasPrefix("using ") {
+        return .success
+    }
+    return .info
+}
+
+private struct SettingsInlineNotice: View {
+    var message: String
+    var tone: SettingsNoticeTone
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if tone == .loading {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: tone.systemImage)
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(tone.color)
+            }
+
+            Text(message)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.caption)
+        .foregroundStyle(tone.color)
+        .padding(.horizontal, FlannelSpacing.messageHorizontal)
+        .padding(.vertical, FlannelSpacing.messageVertical)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .flannelPaneSurface(.subtle, cornerRadius: FlannelRadius.md)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 private struct SettingsRouteHeader: View {
     var tab: SettingsTab
+    var isSearchActive: Bool
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: tab.systemImage)
                 .font(.title3)
                 .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.secondary)
-                .frame(width: 28, height: 28)
+                .foregroundStyle(.primary)
+                .frame(width: 34, height: 34)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .strokeBorder(FlannelSystemColor.quietStroke, lineWidth: FlannelSpacing.hairline)
+                }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(tab.title)
@@ -2109,7 +2214,19 @@ private struct SettingsRouteHeader: View {
             }
 
             Spacer()
+
+            if isSearchActive {
+                FlannelStatusChip(
+                    "Search active",
+                    systemImage: "magnifyingglass",
+                    tone: .info,
+                    prominence: .subtle
+                )
+                .accessibilityHidden(true)
+            }
         }
+        .padding(14)
+        .flannelPaneSurface(.subtle, cornerRadius: FlannelRadius.lg)
     }
 }
 
@@ -2716,15 +2833,12 @@ private struct ProviderSettingsRow: View {
                             .font(.caption)
                             .foregroundStyle(statusStyle)
                         if let setupMessage {
-                            Text(setupMessage)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            SettingsInlineNotice(
+                                message: setupMessage,
+                                tone: settingsNoticeTone(for: setupMessage, isLoading: isValidating)
+                            )
                         } else if let lastError = provider.lastErrorMessage {
-                            Text(lastError)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            SettingsInlineNotice(message: lastError, tone: .error)
                         }
                     }
                 }
@@ -4800,16 +4914,17 @@ private struct ToolSettingsRow: View {
                             .disabled(secretDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
 
-                    HStack(spacing: 6) {
-                        Image(systemName: tool.secretReference == nil ? "key.slash" : "key.fill")
-                            .foregroundStyle(tool.secretReference == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.green))
-                        Text(tool.secretReference == nil ? "No Keychain key saved" : "\(tool.connectorSecretName) saved in Keychain")
-                        if let setupMessage {
-                            Text("- \(setupMessage)")
-                                .foregroundStyle(.secondary)
-                        }
+                    SettingsInlineNotice(
+                        message: tool.secretReference == nil ? "No Keychain key saved" : "\(tool.connectorSecretName) saved in Keychain",
+                        tone: tool.secretReference == nil ? .info : .success
+                    )
+
+                    if let setupMessage {
+                        SettingsInlineNotice(
+                            message: setupMessage,
+                            tone: settingsNoticeTone(for: setupMessage)
+                        )
                     }
-                    .font(.caption)
                 }
             }
         }
@@ -5358,13 +5473,25 @@ private struct EmptySettingsRow: View {
     var detail: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.headline)
-            Text(detail)
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "tray")
+                .font(.title3)
+                .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .frame(width: 28, height: 28)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                Text(detail)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(.vertical, 4)
+        .padding(FlannelSpacing.paneInset)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .flannelPaneSurface(.subtle, cornerRadius: FlannelRadius.lg)
+        .accessibilityElement(children: .combine)
     }
 }
