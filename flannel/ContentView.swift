@@ -3048,7 +3048,8 @@ private struct CommandPaletteOverlay: View {
     var body: some View {
         ZStack(alignment: .top) {
             Rectangle()
-                .fill(.black.opacity(0.24))
+                .fill(.black.opacity(0.16))
+                .background(.ultraThinMaterial)
                 .ignoresSafeArea()
                 .onTapGesture {
                     dismiss()
@@ -3056,8 +3057,8 @@ private struct CommandPaletteOverlay: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 10) {
-                    Image(systemName: "command")
-                        .foregroundStyle(.secondary)
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.tertiary)
                     TextField("Search commands", text: $query)
                         .textFieldStyle(.plain)
                         .font(.title3)
@@ -3095,13 +3096,14 @@ private struct CommandPaletteOverlay: View {
                     .frame(maxHeight: 430)
                 }
             }
-            .frame(width: 640)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .frame(minWidth: 520, idealWidth: 640, maxWidth: 640)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(.quaternary, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(FlannelSystemColor.quietStroke, lineWidth: FlannelSpacing.hairline)
             }
-            .shadow(color: .black.opacity(0.24), radius: 40, x: 0, y: 22)
+            .shadow(color: .black.opacity(0.22), radius: 34, x: 0, y: 20)
+            .padding(.horizontal, 28)
             .padding(.top, 86)
         }
         .onAppear {
@@ -3164,7 +3166,8 @@ private struct CommandPaletteRow: View {
             HStack(spacing: 10) {
                 Image(systemName: command.systemImage)
                     .frame(width: 24)
-                    .foregroundStyle(command.isEnabled ? .indigo : .secondary)
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(command.isEnabled ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
@@ -3175,7 +3178,7 @@ private struct CommandPaletteRow: View {
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(.quaternary.opacity(0.35), in: Capsule())
+                            .background(.thinMaterial, in: Capsule())
                     }
                     Text(command.subtitle)
                         .font(.caption)
@@ -3196,7 +3199,7 @@ private struct CommandPaletteRow: View {
                         .monospaced()
                         .padding(.horizontal, 7)
                         .padding(.vertical, 4)
-                        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
                 }
             }
             .padding(.horizontal, 10)
@@ -3208,7 +3211,13 @@ private struct CommandPaletteRow: View {
         .disabled(!command.isEnabled)
         .background {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isSelected ? AnyShapeStyle(.quaternary.opacity(0.55)) : AnyShapeStyle(.clear))
+                .fill(isSelected ? AnyShapeStyle(Color.accentColor.opacity(0.12)) : AnyShapeStyle(.clear))
+        }
+        .overlay {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Color.accentColor.opacity(0.22), lineWidth: FlannelSpacing.hairline)
+            }
         }
     }
 }
