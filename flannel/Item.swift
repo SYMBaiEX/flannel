@@ -1172,7 +1172,7 @@ struct LocalMemoryRecord: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-struct LocalMemorySettings: Codable, Hashable, Sendable {
+nonisolated struct LocalMemorySettings: Codable, Hashable, Sendable {
     var isEnabled: Bool
     var includeInChatContext: Bool
     var maximumContextMemories: Int
@@ -1199,7 +1199,7 @@ struct LocalMemorySettings: Codable, Hashable, Sendable {
     }
 }
 
-struct AssistantMessage: Identifiable, Codable, Hashable, Sendable {
+nonisolated struct AssistantMessage: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var role: AssistantRole
     var text: String
@@ -1314,7 +1314,7 @@ struct AssistantMessage: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-struct AssistantThread: Identifiable, Codable, Hashable, Sendable {
+nonisolated struct AssistantThread: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var title: String
     var mode: AssistantMode

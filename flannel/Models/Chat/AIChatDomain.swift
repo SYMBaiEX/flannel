@@ -41,7 +41,7 @@ enum AIChatAttachmentKind: String, Codable, CaseIterable, Sendable {
     case toolResult
 }
 
-struct AIChatAttachment: Identifiable, Codable, Hashable, Sendable {
+nonisolated struct AIChatAttachment: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var kind: AIChatAttachmentKind
     var title: String
@@ -120,7 +120,7 @@ nonisolated struct AIChatCitation: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-struct AIToolCallRecord: Identifiable, Codable, Hashable, Sendable {
+nonisolated struct AIToolCallRecord: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var providerCallID: String?
     var toolName: String
@@ -160,7 +160,7 @@ struct AIToolCallRecord: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-struct AIChatMessage: Identifiable, Codable, Hashable, Sendable {
+nonisolated struct AIChatMessage: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var role: AIChatRole
     var text: String
@@ -197,7 +197,7 @@ struct AIChatMessage: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-struct AIChatThread: Identifiable, Codable, Hashable, Sendable {
+nonisolated struct AIChatThread: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var title: String
     var mode: AIChatThreadMode
