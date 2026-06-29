@@ -3529,6 +3529,7 @@ private struct ChatSurface: View {
                 }
                 .onChange(of: activeTranscriptSearchMatch?.id) { _, _ in
                     scrollToSearchMatch(activeTranscriptSearchMatch?.messageID, using: proxy)
+                    announceActiveTranscriptSearchMatch()
                 }
                 .onAppear {
                     isTranscriptPinnedToBottom = true
@@ -3649,6 +3650,21 @@ private struct ChatSurface: View {
     private var activeTranscriptSearchMatchLabel: String? {
         guard let selectedTranscriptSearchPosition else { return nil }
         return "Match \(selectedTranscriptSearchPosition) of \(transcriptSearchMatches.count)"
+    }
+
+    private func announceActiveTranscriptSearchMatch() {
+        guard let activeTranscriptSearchMatch,
+              let activeTranscriptSearchMatchLabel else { return }
+        let preview = activeTranscriptSearchMatch.preview
+        let role = activeTranscriptSearchMatch.role.rawValue.capitalized
+        let announcement = preview.isEmpty
+            ? "\(activeTranscriptSearchMatchLabel), \(role) message"
+            : "\(activeTranscriptSearchMatchLabel), \(role) message: \(preview)"
+        NSAccessibility.post(
+            element: NSApp as Any,
+            notification: .announcementRequested,
+            userInfo: [.announcement: announcement]
+        )
     }
 
     private func resolveToolApproval(_ result: LocalToolExecutionResult, approve: Bool) {
