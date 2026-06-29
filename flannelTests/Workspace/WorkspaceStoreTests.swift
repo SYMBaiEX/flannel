@@ -1229,7 +1229,7 @@ struct WorkspaceStoreTests {
         store.toolConfigurations[readerIndex].isEnabled = true
         store.toolConfigurations[readerIndex].permissionPolicy = .alwaysAllow
         store.preferences.localOnlyMode = false
-        let expectedURL = try #require(URL(string: "https://example.com/flannel-live-reader"))
+        let expectedURL = URL(string: "https://example.com/flannel-live-reader")!
         let service = WebPageCaptureService { url, capturedAt, _ in
             CapturedWebPage(
                 url: url,
@@ -3445,7 +3445,7 @@ struct WorkspaceStoreTests {
         let asset = LibraryAsset(
             title: "Stale reference",
             kind: .link,
-            sourceURL: try #require(URL(string: url)),
+            sourceURL: URL(string: url)!,
             sourceIdentifier: url,
             summary: "Captured docs page.",
             summaryStatus: .ready,
@@ -3460,7 +3460,7 @@ struct WorkspaceStoreTests {
             ),
             notes: "Original capture notes."
         )
-        let indexFreshAsset = try webPageAsset(
+        let indexFreshAsset = webPageAsset(
             title: indexStaleSource.title,
             url: indexURL,
             capturedAt: freshCaptureDate,
@@ -3536,19 +3536,19 @@ struct WorkspaceStoreTests {
         )
         store.knowledgeSources = [freshSource, manualSource, queuedSource, placeholderSource]
         store.libraryAssets = [
-            try webPageAsset(
+            webPageAsset(
                 title: freshSource.title,
                 url: freshURL,
                 capturedAt: freshCaptureDate,
                 text: "Fresh captured text."
             ),
-            try webPageAsset(
+            webPageAsset(
                 title: manualSource.title,
                 url: manualURL,
                 capturedAt: oldCaptureDate,
                 text: "Manual captured text."
             ),
-            try webPageAsset(
+            webPageAsset(
                 title: queuedSource.title,
                 url: queuedURL,
                 capturedAt: oldCaptureDate,
@@ -3557,7 +3557,7 @@ struct WorkspaceStoreTests {
             LibraryAsset(
                 title: placeholderSource.title,
                 kind: .link,
-                sourceURL: try #require(URL(string: placeholderURL)),
+                sourceURL: URL(string: placeholderURL)!,
                 sourceIdentifier: placeholderURL,
                 summary: "Placeholder only.",
                 summaryStatus: .missing,
@@ -3618,9 +3618,9 @@ struct WorkspaceStoreTests {
         )
         store.knowledgeSources = [middleSource, newestSource, oldestSource]
         store.libraryAssets = [
-            try webPageAsset(title: oldestSource.title, url: oldestSource.location, capturedAt: oldestDate, text: "Oldest captured text."),
-            try webPageAsset(title: middleSource.title, url: middleSource.location, capturedAt: middleDate, text: "Middle captured text."),
-            try webPageAsset(title: newestSource.title, url: newestSource.location, capturedAt: newestDate, text: "Newest captured text.")
+            webPageAsset(title: oldestSource.title, url: oldestSource.location, capturedAt: oldestDate, text: "Oldest captured text."),
+            webPageAsset(title: middleSource.title, url: middleSource.location, capturedAt: middleDate, text: "Middle captured text."),
+            webPageAsset(title: newestSource.title, url: newestSource.location, capturedAt: newestDate, text: "Newest captured text.")
         ]
 
         let queuedIDs = store.queueStaleWatchedWebPageKnowledgeSources(
@@ -3802,7 +3802,7 @@ struct WorkspaceStoreTests {
             watched: true
         ))
         let captured = CapturedWebPage(
-            url: try #require(URL(string: url)),
+            url: URL(string: url)!,
             title: "Example Docs",
             text: "FROST NEEDLE 42 canonicalization pipeline preserves DOM headings and code samples for local RAG retrieval.",
             excerpt: "FROST NEEDLE 42 canonicalization pipeline preserves DOM headings and code samples.",
@@ -4553,11 +4553,11 @@ struct WorkspaceStoreTests {
         url: String,
         capturedAt: Date,
         text: String
-    ) throws -> LibraryAsset {
+    ) -> LibraryAsset {
         LibraryAsset(
             title: title,
             kind: .link,
-            sourceURL: try #require(URL(string: url)),
+            sourceURL: URL(string: url)!,
             sourceIdentifier: url,
             summary: "Captured page body.",
             summaryStatus: .ready,
