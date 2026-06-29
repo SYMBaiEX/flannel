@@ -3431,8 +3431,6 @@ private struct ChatSurface: View {
                             .help("Scroll to the newest message.")
                         }
 
-                        FlannelSeparator(opacity: 0.45)
-
                         Composer(
                             provider: store.activeProvider,
                             localOnlyMode: store.preferences.localOnlyMode ?? true,
@@ -3449,11 +3447,13 @@ private struct ChatSurface: View {
                             compare: compareCurrentPrompt
                         )
                         .frame(maxWidth: 860)
+                        .padding(10)
+                        .flannelFloatingDockSurface(cornerRadius: 24)
                         .padding(.horizontal, 28)
-                        .padding(.vertical, 12)
+                        .padding(.bottom, 14)
                         .frame(maxWidth: .infinity)
                     }
-                    .background(.regularMaterial)
+                    .padding(.top, 12)
                 }
                 .onChange(of: visibleMessages.count) { _, _ in
                     if shouldFollowLatestMessage {
