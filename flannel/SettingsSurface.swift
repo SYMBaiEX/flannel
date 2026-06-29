@@ -11,6 +11,7 @@ import SwiftUI
 struct SettingsSurface: View {
     @Bindable var store: WorkspaceStore
     var persist: () -> Void
+    var exitSettings: (() -> Void)?
     @AppStorage("flannel.settings.selectedTab") private var selectedTab: SettingsTab = .general
     @State private var localSearchText = ""
     private var externalSelectedTab: Binding<SettingsTab>?
@@ -60,12 +61,14 @@ struct SettingsSurface: View {
     init(
         store: WorkspaceStore,
         persist: @escaping () -> Void,
+        exitSettings: (() -> Void)? = nil,
         selectedTab: Binding<SettingsTab>? = nil,
         searchText: Binding<String>? = nil,
         usesSidebarNavigation: Bool = true
     ) {
         self.store = store
         self.persist = persist
+        self.exitSettings = exitSettings
         self.externalSelectedTab = selectedTab
         self.externalSearchText = searchText
         self.usesSidebarNavigation = usesSidebarNavigation
@@ -154,7 +157,8 @@ struct SettingsSurface: View {
         VStack(spacing: 0) {
             SettingsRouteHeader(
                 tab: selectedTabBinding.wrappedValue,
-                isSearchActive: !settingsSearchQuery.isEmpty
+                isSearchActive: !settingsSearchQuery.isEmpty,
+                exitSettings: exitSettings
             )
                 .padding(.horizontal, 28)
                 .padding(.vertical, 18)
@@ -2205,6 +2209,7 @@ private struct SettingsInlineNotice: View {
 private struct SettingsRouteHeader: View {
     var tab: SettingsTab
     var isSearchActive: Bool
+    var exitSettings: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -2230,14 +2235,26 @@ private struct SettingsRouteHeader: View {
 
             Spacer()
 
-            if isSearchActive {
-                FlannelStatusChip(
-                    "Search active",
-                    systemImage: "magnifyingglass",
-                    tone: .info,
-                    prominence: .subtle
-                )
-                .accessibilityLabel("Settings search is active")
+            HStack(spacing: 8) {
+                if isSearchActive {
+                    FlannelStatusChip(
+                        "Search active",
+                        systemImage: "magnifyingglass",
+                        tone: .info,
+                        prominence: .subtle
+                    )
+                    .accessibilityLabel("Settings search is active")
+                }
+
+                if let exitSettings {
+                    Button(action: exitSettings) {
+                        Label("Exit Settings", systemImage: "chevron.left")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Return to the active chat.")
+                    .accessibilityLabel("Exit Settings and return to chat")
+                }
             }
         }
         .padding(14)

@@ -144,6 +144,7 @@ struct ContentView: View {
                 continueAfterToolResult(result, sourceToolCall: toolCall)
             },
             openModelSetup: { enterSettingsMode(.models) },
+            exitSettings: exitSettingsMode,
             persist: persistQuietly
         )
         .navigationSplitViewColumnWidth(min: 760, ideal: 1_020)
@@ -3270,6 +3271,7 @@ private struct MainSurface: View {
     var discoverModels: () -> Void
     var continueAfterToolResult: (LocalToolExecutionResult, AIToolCallRecord?) -> Void
     var openModelSetup: () -> Void
+    var exitSettings: () -> Void
     var persist: () -> Void
 
     var body: some View {
@@ -3297,6 +3299,7 @@ private struct MainSurface: View {
                 SettingsSurface(
                     store: store,
                     persist: persist,
+                    exitSettings: exitSettings,
                     selectedTab: $selectedSettingsTab,
                     searchText: $settingsSearchText,
                     usesSidebarNavigation: false
