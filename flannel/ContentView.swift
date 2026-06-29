@@ -3928,9 +3928,15 @@ private struct MessageBubble: View {
     @State private var showsAttachments = false
     @State private var showsSources = false
     @State private var showsToolCalls = true
+    @State private var isMessageRowHovering = false
+    @FocusState private var isMessageActionMenuFocused: Bool
 
     private var isUserMessage: Bool {
         message.role == .user
+    }
+
+    private var shouldRevealMessageActions: Bool {
+        isMessageRowHovering || isMessageActionMenuFocused || isActiveSearchMatch
     }
 
     private var trimmedText: String {
@@ -3993,6 +3999,9 @@ private struct MessageBubble: View {
                         edit: edit,
                         fork: fork
                     )
+                    .focused($isMessageActionMenuFocused)
+                    .opacity(shouldRevealMessageActions ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.12), value: shouldRevealMessageActions)
                 }
 
                 if !visibleAttachments.isEmpty {
@@ -4113,6 +4122,10 @@ private struct MessageBubble: View {
                     lineWidth: isActiveSearchMatch ? 1.5 : 1
                 )
         )
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isMessageRowHovering = hovering
+        }
         .accessibilityElement(children: .contain)
     }
 
