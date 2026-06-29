@@ -18,6 +18,7 @@ enum FlannelCommandID: String, CaseIterable, Identifiable, Sendable {
     case runComparison
     case discoverModels
     case toggleLocalOnly
+    case toggleCloudProviders
     case setRoutingSelectedProvider
     case setRoutingLocalFirst
     case setRoutingBestAvailable
@@ -59,6 +60,7 @@ enum FlannelCommandID: String, CaseIterable, Identifiable, Sendable {
             .fastest
         case .newChat, .importChat, .openCommandPalette, .sendMessage, .stopStreaming,
              .comparePrompt, .runComparison, .discoverModels, .toggleLocalOnly,
+             .toggleCloudProviders,
              .openChat, .openHistory, .openCompare, .openModels, .openKnowledge,
              .rebuildQueuedKnowledge, .rebuildAllKnowledge, .openTools, .openAgents,
              .openPrompts, .openSettings, .focusChat, .showInspector, .exportMarkdown,
@@ -92,6 +94,7 @@ struct FlannelCommandContext: Hashable, Sendable {
     var canCompareCurrentPrompt: Bool
     var canRunComparison: Bool
     var localOnlyMode: Bool
+    var allowCloudProviders: Bool
     var inspectorVisible: Bool
     var hasKnowledgeSources: Bool
     var hasQueuedKnowledgeSources: Bool
@@ -105,6 +108,7 @@ struct FlannelCommandContext: Hashable, Sendable {
         canCompareCurrentPrompt: Bool,
         canRunComparison: Bool,
         localOnlyMode: Bool,
+        allowCloudProviders: Bool = false,
         inspectorVisible: Bool,
         hasKnowledgeSources: Bool = false,
         hasQueuedKnowledgeSources: Bool = false,
@@ -117,6 +121,7 @@ struct FlannelCommandContext: Hashable, Sendable {
         self.canCompareCurrentPrompt = canCompareCurrentPrompt
         self.canRunComparison = canRunComparison
         self.localOnlyMode = localOnlyMode
+        self.allowCloudProviders = allowCloudProviders
         self.inspectorVisible = inspectorVisible
         self.hasKnowledgeSources = hasKnowledgeSources
         self.hasQueuedKnowledgeSources = hasQueuedKnowledgeSources
@@ -131,6 +136,7 @@ struct FlannelCommandContext: Hashable, Sendable {
         canCompareCurrentPrompt: false,
         canRunComparison: false,
         localOnlyMode: true,
+        allowCloudProviders: false,
         inspectorVisible: true,
         hasKnowledgeSources: false,
         hasQueuedKnowledgeSources: false,
@@ -265,7 +271,19 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
                 subtitle: context.localOnlyMode ? "Allow explicitly configured external providers." : "Keep routing on local providers and local CLI modes.",
                 category: "Privacy",
                 systemImage: context.localOnlyMode ? "lock.open" : "lock",
-                keywords: ["privacy", "cloud", "network", "provider"]
+                keywords: ["privacy", "cloud", "network", "provider"],
+                keyEquivalent: "⌥⌘L"
+            ),
+            FlannelCommand(
+                id: .toggleCloudProviders,
+                title: context.allowCloudProviders && !context.localOnlyMode ? "Block Cloud API Providers" : "Allow Cloud API Providers",
+                subtitle: context.allowCloudProviders && !context.localOnlyMode
+                    ? "Keep local servers and subscription CLI routes available while blocking external API-key providers."
+                    : "Turn off local-only mode and allow explicitly configured BYOK API routes.",
+                category: "Privacy",
+                systemImage: context.allowCloudProviders && !context.localOnlyMode ? "network.slash" : "network",
+                keywords: ["privacy", "cloud", "network", "provider", "byok", "api key", "openai", "anthropic"],
+                keyEquivalent: "⌥⌘C"
             ),
             FlannelCommand.routingPolicyCommand(.selectedProvider, context: context),
             FlannelCommand.routingPolicyCommand(.localFirst, context: context),

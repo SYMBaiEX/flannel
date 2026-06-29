@@ -253,6 +253,7 @@ struct ContentView: View {
             canCompareCurrentPrompt: canCompareCurrentPromptFromCommand,
             canRunComparison: canRunComparisonFromCommand,
             localOnlyMode: store.preferences.localOnlyMode ?? true,
+            allowCloudProviders: store.preferences.allowCloudProviders ?? false,
             inspectorVisible: columnVisibility == .all,
             hasKnowledgeSources: !store.knowledgeSources.isEmpty,
             hasQueuedKnowledgeSources: store.knowledgeSources.contains { source in
@@ -340,6 +341,14 @@ struct ContentView: View {
             discoverLocalModels()
         case .toggleLocalOnly:
             store.preferences.localOnlyMode = !(store.preferences.localOnlyMode ?? true)
+            persistQuietly()
+        case .toggleCloudProviders:
+            if (store.preferences.allowCloudProviders ?? false) && !(store.preferences.localOnlyMode ?? true) {
+                store.preferences.allowCloudProviders = false
+            } else {
+                store.preferences.localOnlyMode = false
+                store.preferences.allowCloudProviders = true
+            }
             persistQuietly()
         case .setRoutingSelectedProvider, .setRoutingLocalFirst, .setRoutingBestAvailable,
              .setRoutingCheapest, .setRoutingFastest:

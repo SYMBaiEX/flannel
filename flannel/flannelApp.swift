@@ -108,6 +108,9 @@ private struct FlannelAppCommands: Commands {
 
         CommandMenu("Privacy") {
             commandButton(.toggleLocalOnly)
+                .keyboardShortcut("l", modifiers: [.command, .option])
+            commandButton(.toggleCloudProviders)
+                .keyboardShortcut("c", modifiers: [.command, .option])
         }
 
         CommandMenu("Artifacts") {

@@ -178,6 +178,61 @@ struct CommandPaletteTests {
         #expect(disabledTitle == "Enable Local-Only Mode")
     }
 
+    @Test("Cloud provider command reflects local and cloud privacy boundaries")
+    func cloudProviderCommandReflectsPrivacyBoundary() throws {
+        let localOnlyContext = FlannelCommandContext(
+            hasCurrentThread: true,
+            canSendMessage: false,
+            isStreaming: false,
+            isDiscoveringModels: false,
+            canCompareCurrentPrompt: false,
+            canRunComparison: false,
+            localOnlyMode: true,
+            allowCloudProviders: false,
+            inspectorVisible: true
+        )
+        let localAndCLIContext = FlannelCommandContext(
+            hasCurrentThread: true,
+            canSendMessage: false,
+            isStreaming: false,
+            isDiscoveringModels: false,
+            canCompareCurrentPrompt: false,
+            canRunComparison: false,
+            localOnlyMode: false,
+            allowCloudProviders: false,
+            inspectorVisible: true
+        )
+        let cloudAllowedContext = FlannelCommandContext(
+            hasCurrentThread: true,
+            canSendMessage: false,
+            isStreaming: false,
+            isDiscoveringModels: false,
+            canCompareCurrentPrompt: false,
+            canRunComparison: false,
+            localOnlyMode: false,
+            allowCloudProviders: true,
+            inspectorVisible: true
+        )
+
+        let localOnlyCommand = try #require(FlannelCommand.defaultCommand(.toggleCloudProviders, context: localOnlyContext))
+        let localAndCLICommand = try #require(FlannelCommand.defaultCommand(.toggleCloudProviders, context: localAndCLIContext))
+        let cloudAllowedCommand = try #require(FlannelCommand.defaultCommand(.toggleCloudProviders, context: cloudAllowedContext))
+
+        #expect(localOnlyCommand.title == "Allow Cloud API Providers")
+        #expect(localOnlyCommand.subtitle.contains("Turn off local-only mode"))
+        #expect(localOnlyCommand.systemImage == "network")
+        #expect(localOnlyCommand.keyEquivalent == "⌥⌘C")
+        #expect(localOnlyCommand.matches("byok api key"))
+
+        #expect(localAndCLICommand.title == "Allow Cloud API Providers")
+        #expect(localAndCLICommand.matches("cloud providers"))
+
+        #expect(cloudAllowedCommand.title == "Block Cloud API Providers")
+        #expect(cloudAllowedCommand.subtitle.contains("blocking external API-key providers"))
+        #expect(cloudAllowedCommand.systemImage == "network.slash")
+        #expect(cloudAllowedCommand.isEnabled)
+    }
+
     @Test("Routing policy commands are searchable and reflect active policy")
     func routingPolicyCommandsReflectActivePolicy() throws {
         let context = FlannelCommandContext(
@@ -235,6 +290,8 @@ struct CommandPaletteTests {
         let importCommand = try #require(FlannelCommand.defaultCommand(.importChat, context: visibleInspectorContext))
         let paletteCommand = try #require(FlannelCommand.defaultCommand(.openCommandPalette, context: visibleInspectorContext))
         let settingsCommand = try #require(FlannelCommand.defaultCommand(.openSettings, context: visibleInspectorContext))
+        let localOnlyCommand = try #require(FlannelCommand.defaultCommand(.toggleLocalOnly, context: visibleInspectorContext))
+        let cloudProviderCommand = try #require(FlannelCommand.defaultCommand(.toggleCloudProviders, context: visibleInspectorContext))
         let focusChat = try #require(FlannelCommand.defaultCommand(.focusChat, context: visibleInspectorContext))
         let focusChatWhenHidden = try #require(FlannelCommand.defaultCommand(.focusChat, context: hiddenInspectorContext))
         let showInspector = try #require(FlannelCommand.defaultCommand(.showInspector, context: hiddenInspectorContext))
@@ -245,6 +302,10 @@ struct CommandPaletteTests {
         #expect(paletteCommand.matches("keyboard actions"))
         #expect(settingsCommand.keyEquivalent == "⌘,")
         #expect(settingsCommand.matches("preferences privacy"))
+        #expect(localOnlyCommand.keyEquivalent == "⌥⌘L")
+        #expect(localOnlyCommand.matches("privacy network"))
+        #expect(cloudProviderCommand.keyEquivalent == "⌥⌘C")
+        #expect(cloudProviderCommand.matches("cloud provider byok"))
         #expect(focusChat.isEnabled)
         #expect(focusChatWhenHidden.isEnabled == false)
         #expect(showInspector.isEnabled)
