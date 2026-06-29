@@ -108,6 +108,26 @@ private struct FlannelPaneSurfaceModifier: ViewModifier {
     }
 }
 
+private struct FlannelFloatingDockSurfaceModifier: ViewModifier {
+    var cornerRadius: CGFloat
+    var tint: Color?
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        content
+            .glassEffect(.regular.tint(tint).interactive(true), in: shape)
+            .overlay {
+                shape.strokeBorder(
+                    FlannelSystemColor.separator.opacity(0.22),
+                    lineWidth: FlannelSpacing.hairline
+                )
+            }
+            .shadow(color: .black.opacity(0.12), radius: 22, x: 0, y: 14)
+            .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 1)
+    }
+}
+
 extension View {
     func flannelBackgroundSurface(_ surface: FlannelBackgroundSurface = .window) -> some View {
         modifier(FlannelBackgroundSurfaceModifier(surface: surface))
@@ -139,5 +159,11 @@ extension View {
     ) -> some View {
         glassEffect(surface.glass.tint(tint).interactive(interactive), in: Capsule())
     }
-}
 
+    func flannelFloatingDockSurface(
+        cornerRadius: CGFloat = 24,
+        tint: Color? = nil
+    ) -> some View {
+        modifier(FlannelFloatingDockSurfaceModifier(cornerRadius: cornerRadius, tint: tint))
+    }
+}
