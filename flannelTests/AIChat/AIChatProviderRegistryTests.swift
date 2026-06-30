@@ -73,6 +73,7 @@ struct AIChatProviderRegistryTests {
         let ollama = store.providerConfigurations[ollamaIndex]
         let lmStudioIndex = try #require(store.providerConfigurations.firstIndex(where: { $0.kind == .lmStudio }))
         store.providerConfigurations[lmStudioIndex].modelIdentifier = "local-model"
+        store.providerConfigurations[lmStudioIndex].connectionStatus = .ready
 
         store.preferences.localOnlyMode = false
         store.preferences.allowCloudProviders = true
@@ -235,6 +236,7 @@ struct AIChatProviderRegistryTests {
             modelIdentifier: "gpt-5.5",
             secretReference: "flannel.test.openai",
             isEnabled: true,
+            connectionStatus: .ready,
             capabilities: [.chat, .streaming, .toolCalling],
             supportsStreaming: true,
             supportsToolCalling: true
@@ -248,6 +250,7 @@ struct AIChatProviderRegistryTests {
             endpoint: "http://localhost:11434",
             modelIdentifier: "llama3.1",
             isEnabled: true,
+            connectionStatus: .ready,
             isLocalPreferred: true,
             capabilities: [.chat, .streaming],
             supportsStreaming: true
@@ -262,6 +265,7 @@ struct AIChatProviderRegistryTests {
             modelIdentifier: "llama-3.3-70b-versatile",
             secretReference: "flannel.test.groq",
             isEnabled: true,
+            connectionStatus: .ready,
             capabilities: [.chat, .streaming],
             supportsStreaming: true
         )
@@ -304,6 +308,7 @@ struct AIChatProviderRegistryTests {
             endpoint: "http://localhost:1234/v1",
             modelIdentifier: "local-chat",
             isEnabled: true,
+            connectionStatus: .ready,
             capabilities: [.chat, .streaming],
             supportsStreaming: true
         )
@@ -1002,6 +1007,68 @@ struct AIChatProviderRegistryTests {
     }
 
     @MainActor
+    @Test("Disconnected discovery-backed local providers cannot route chat")
+    func disconnectedDiscoveryBackedLocalProvidersCannotRouteChat() throws {
+        let (_, store) = try makeLoadedStore()
+        let disconnectedLocal = ProviderConfiguration(
+            id: UUID(uuidString: "7411dd98-e8a6-4d66-a6ff-b0dbdca52dd1")!,
+            kind: .ollama,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "Disconnected Ollama",
+            endpoint: "http://localhost:11434",
+            modelIdentifier: "llama3.1",
+            isEnabled: true,
+            connectionStatus: .disconnected,
+            isLocalPreferred: true,
+            capabilities: [.chat, .streaming],
+            supportsStreaming: true
+        )
+
+        store.providerConfigurations = [disconnectedLocal]
+        store.preferences.localOnlyMode = true
+        store.preferences.preferredProviderID = disconnectedLocal.id
+        store.preferences.providerRoutingPolicy = .selectedProvider
+
+        #expect(disconnectedLocal.runtimePolicy.readinessStrategy == .localModelDiscovery)
+        #expect(store.isProviderRunnableForChat(disconnectedLocal) == false)
+        #expect(store.chatProviderFallbackChain().isEmpty)
+        #expect(store.activeProvider == nil)
+    }
+
+    @MainActor
+    @Test("CLI subscription providers require command readiness before routing")
+    func cliSubscriptionProvidersRequireReadinessBeforeRouting() throws {
+        let (_, store) = try makeLoadedStore()
+        store.preferences.localOnlyMode = false
+        store.preferences.allowCloudProviders = true
+
+        let cliProvider = ProviderConfiguration(
+            id: UUID(uuidString: "17a30da2-a640-4419-896b-31c5ad0d70b7")!,
+            kind: .claudeCodeCLI,
+            accessMode: .subscriptionCLI,
+            privacyScope: .localCLI,
+            displayName: "Claude Code CLI",
+            endpoint: "/bin/echo {prompt}",
+            modelIdentifier: "claude-sonnet-4-5",
+            isEnabled: true,
+            connectionStatus: .disconnected,
+            capabilities: [.chat, .streaming, .toolCalling],
+            supportsStreaming: true,
+            supportsToolCalling: true
+        )
+
+        store.providerConfigurations = [cliProvider]
+
+        #expect(cliProvider.runtimePolicy.readinessStrategy == .cliCommandResolution)
+        #expect(store.isProviderRunnableForChat(cliProvider) == false)
+        #expect(store.chatRoutingBlockReason(for: cliProvider) == "Run provider readiness before routing chat to this provider.")
+
+        store.providerConfigurations[0].connectionStatus = .ready
+        #expect(store.isProviderRunnableForChat(store.providerConfigurations[0]))
+    }
+
+    @MainActor
     @Test("OpenAI-compatible hosted APIs require configured credentials and readiness")
     func openAICompatibleHostedProvidersRequireConfiguredCredentialsAndReadiness() throws {
         let (_, store) = try makeLoadedStore()
@@ -1160,6 +1227,7 @@ struct AIChatProviderRegistryTests {
             endpoint: "http://localhost:11434",
             modelIdentifier: "llama3.1",
             isEnabled: true,
+            connectionStatus: .ready,
             isLocalPreferred: true,
             supportsStreaming: true
         )
@@ -1201,6 +1269,7 @@ struct AIChatProviderRegistryTests {
             endpoint: "http://localhost:11434",
             modelIdentifier: "llama3.1",
             isEnabled: true,
+            connectionStatus: .ready,
             isLocalPreferred: true,
             capabilities: [.chat, .streaming],
             supportsStreaming: true,
@@ -1215,6 +1284,7 @@ struct AIChatProviderRegistryTests {
             endpoint: "http://localhost:1234/v1",
             modelIdentifier: "local-reasoner",
             isEnabled: true,
+            connectionStatus: .ready,
             capabilities: [.chat, .streaming, .toolCalling, .vision, .reasoning, .structuredOutput],
             supportsStreaming: true,
             supportsToolCalling: true,
@@ -1243,6 +1313,7 @@ struct AIChatProviderRegistryTests {
             endpoint: "http://localhost:11434",
             modelIdentifier: "slow-local",
             isEnabled: true,
+            connectionStatus: .ready,
             isLocalPreferred: true,
             supportsStreaming: true
         )
@@ -1255,6 +1326,7 @@ struct AIChatProviderRegistryTests {
             endpoint: "http://localhost:1234/v1",
             modelIdentifier: "fast-local",
             isEnabled: true,
+            connectionStatus: .ready,
             supportsStreaming: true
         )
         store.providerConfigurations = [slower, faster]
@@ -1298,6 +1370,7 @@ struct AIChatProviderRegistryTests {
             endpoint: "http://localhost:11434",
             modelIdentifier: "slow-local",
             isEnabled: true,
+            connectionStatus: .ready,
             capabilities: [.chat, .streaming],
             supportsStreaming: true
         )
@@ -1310,6 +1383,7 @@ struct AIChatProviderRegistryTests {
             endpoint: "http://localhost:1234/v1",
             modelIdentifier: "fast-local",
             isEnabled: true,
+            connectionStatus: .ready,
             capabilities: [.chat, .streaming],
             supportsStreaming: true
         )
@@ -1322,6 +1396,7 @@ struct AIChatProviderRegistryTests {
             endpoint: "http://localhost:8080/v1",
             modelIdentifier: "compatible-local",
             isEnabled: true,
+            connectionStatus: .ready,
             capabilities: [.chat, .streaming],
             supportsStreaming: true
         )

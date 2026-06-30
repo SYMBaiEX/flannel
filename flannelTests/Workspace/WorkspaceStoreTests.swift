@@ -446,6 +446,7 @@ struct WorkspaceStoreTests {
         store.providerConfigurations[0].isEnabled = false
         let lmStudioIndex = try #require(store.providerConfigurations.firstIndex { $0.kind == .lmStudio })
         store.providerConfigurations[lmStudioIndex].modelIdentifier = "local-model"
+        store.providerConfigurations[lmStudioIndex].connectionStatus = .ready
 
         let provider = try #require(store.activeProvider)
 

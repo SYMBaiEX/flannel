@@ -3429,8 +3429,12 @@ final class WorkspaceStore {
             return provider.lastErrorMessage ?? "This provider is rate limited; try again after the provider recovers."
         case .syncing:
             return "Provider readiness is still checking. Try routing after the check completes."
-        case .ready, .disconnected:
+        case .ready:
             break
+        case .disconnected:
+            if provider.runtimePolicy.readinessStrategy != .staticConfiguration {
+                return provider.lastErrorMessage ?? "Run provider readiness before routing chat to this provider."
+            }
         }
 
         if provider.accessMode == .subscriptionCLI,
@@ -3443,8 +3447,10 @@ final class WorkspaceStore {
 
     private func cachedProviderReadinessAllowsChat(_ provider: ProviderConfiguration) -> Bool {
         switch provider.connectionStatus {
-        case .ready, .disconnected:
+        case .ready:
             return true
+        case .disconnected:
+            return provider.runtimePolicy.readinessStrategy == .staticConfiguration
         case .needsAttention, .rateLimited, .syncing:
             return false
         }
