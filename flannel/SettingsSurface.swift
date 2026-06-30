@@ -56,6 +56,11 @@ struct SettingsSurface: View {
     @State private var newTemplateMode: AssistantMode = .workspaceCopilot
     @State private var newTemplateTags = ""
     @State private var newTemplateIsPinned = false
+    @State private var newKnowledgeSourceKind: KnowledgeSourceKind = .folder
+    @State private var newKnowledgeSourceTitle = ""
+    @State private var newKnowledgeSourceLocation = ""
+    @State private var newKnowledgeSourceWatched = true
+    @State private var newKnowledgeSourceMessage: String?
     @State private var refreshingKnowledgeSourceIDs: Set<UUID> = []
     @State private var knowledgeRefreshMessage: String?
     @State private var resetWorkspaceConfirmation = ""
@@ -139,6 +144,14 @@ struct SettingsSurface: View {
 
     private var localDiscoveryResultsForModelsPane: [LocalProviderDiscoveryResult] {
         store.localDiscoveryResults.filter(localDiscoveryResultMatchesSearch)
+    }
+
+    private var settingsAddableKnowledgeSourceKinds: [KnowledgeSourceKind] {
+        [.folder, .file, .codeRepository, .webPage, .chatHistory, .workspaceNotes]
+    }
+
+    private var canAddKnowledgeSourceFromSettings: Bool {
+        !newKnowledgeSourceLocation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var sidebarSettings: some View {
@@ -649,6 +662,83 @@ struct SettingsSurface: View {
 
     private var knowledgePane: some View {
         settingsForm {
+            Section("Add Retrieval Source") {
+                Picker("Source type", selection: $newKnowledgeSourceKind) {
+                    ForEach(settingsAddableKnowledgeSourceKinds) { kind in
+                        Label(kind.settingsTitle, systemImage: kind.settingsSystemImage).tag(kind)
+                    }
+                }
+                .onChange(of: newKnowledgeSourceKind) { _, kind in
+                    applyDefaultKnowledgeLocation(for: kind)
+                }
+
+                TextField("Title", text: $newKnowledgeSourceTitle)
+
+                HStack {
+                    TextField(newKnowledgeSourceKind.settingsLocationPlaceholder, text: $newKnowledgeSourceLocation)
+                        .textSelection(.enabled)
+
+                    if newKnowledgeSourceKind.usesPathPicker {
+                        Button {
+                            chooseKnowledgeSourceLocation()
+                        } label: {
+                            Label("Choose...", systemImage: "folder.badge.plus")
+                        }
+                    }
+                }
+
+                Toggle("Watch for changes", isOn: $newKnowledgeSourceWatched)
+                    .disabled(!newKnowledgeSourceKind.supportsWatching)
+
+                HStack {
+                    Button {
+                        addKnowledgeSourceFromSettings()
+                    } label: {
+                        Label("Add Source", systemImage: "plus")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canAddKnowledgeSourceFromSettings)
+
+                    Button {
+                        Task { @MainActor in
+                            await store.rebuildKnowledgeIndexManifestsUsingConfiguredEmbeddings(onlyQueued: true)
+                            knowledgeRefreshMessage = "Rebuilt queued local knowledge sources."
+                            persist()
+                        }
+                    } label: {
+                        Label("Rebuild Queued", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(store.knowledgeSources.contains { $0.status == .queued || $0.status == .stale || $0.status == .notIndexed } == false)
+
+                    Button {
+                        Task { @MainActor in
+                            await store.rebuildKnowledgeIndexManifestsUsingConfiguredEmbeddings()
+                            knowledgeRefreshMessage = "Rebuilt all local knowledge sources."
+                            persist()
+                        }
+                    } label: {
+                        Label("Rebuild All", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(store.knowledgeSources.isEmpty)
+
+                    Spacer()
+                }
+
+                Text(newKnowledgeSourceKind.settingsOnboardingDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let newKnowledgeSourceMessage {
+                    SettingsInlineNotice(
+                        message: newKnowledgeSourceMessage,
+                        tone: settingsNoticeTone(for: newKnowledgeSourceMessage)
+                    )
+                }
+            }
+
             Section("Retrieval Sources") {
                 if store.knowledgeSources.isEmpty {
                     EmptySettingsRow(
@@ -903,6 +993,59 @@ struct SettingsSurface: View {
         }
         knowledgeRefreshMessage = "Marked \(store.knowledgeSources[index].title) stale."
         persist()
+    }
+
+    private func addKnowledgeSourceFromSettings() {
+        guard let source = store.addKnowledgeSource(
+            title: newKnowledgeSourceTitle,
+            kind: newKnowledgeSourceKind,
+            location: newKnowledgeSourceLocation,
+            watched: newKnowledgeSourceWatched && newKnowledgeSourceKind.supportsWatching
+        ) else {
+            newKnowledgeSourceMessage = "Add a readable path, repository, URL, chat history, or workspace source first."
+            return
+        }
+
+        newKnowledgeSourceTitle = ""
+        newKnowledgeSourceLocation = ""
+        applyDefaultKnowledgeLocation(for: newKnowledgeSourceKind)
+        newKnowledgeSourceMessage = "Queued \(source.title) for local retrieval."
+        knowledgeRefreshMessage = "Queued \(source.title) for local index rebuild."
+        persist()
+    }
+
+    private func applyDefaultKnowledgeLocation(for kind: KnowledgeSourceKind) {
+        newKnowledgeSourceWatched = kind.supportsWatching
+
+        switch kind {
+        case .chatHistory:
+            newKnowledgeSourceLocation = "flannel://chat-history"
+        case .workspaceNotes:
+            newKnowledgeSourceLocation = "flannel://workspace"
+        case .folder, .file, .webPage, .codeRepository:
+            if newKnowledgeSourceLocation.hasPrefix("flannel://") {
+                newKnowledgeSourceLocation = ""
+            }
+        }
+    }
+
+    private func chooseKnowledgeSourceLocation() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = newKnowledgeSourceKind == .file
+        panel.canChooseDirectories = newKnowledgeSourceKind == .folder || newKnowledgeSourceKind == .codeRepository
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+        panel.message = newKnowledgeSourceKind == .codeRepository
+            ? "Choose a local code repository or project folder for Flannel to index."
+            : "Choose a local \(newKnowledgeSourceKind.settingsTitle.lowercased()) for Flannel to index."
+
+        guard panel.runModal() == .OK,
+              let url = panel.url else { return }
+
+        newKnowledgeSourceLocation = url.path
+        if newKnowledgeSourceTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            newKnowledgeSourceTitle = url.lastPathComponent
+        }
     }
 
     private var toolsPane: some View {
@@ -4871,6 +5014,58 @@ private extension KnowledgeSourceKind {
             "note.text"
         case .codeRepository:
             "chevron.left.forwardslash.chevron.right"
+        }
+    }
+
+    var settingsLocationPlaceholder: String {
+        switch self {
+        case .folder:
+            "~/Documents/Research"
+        case .file:
+            "~/Documents/brief.md"
+        case .webPage:
+            "https://example.com/reference"
+        case .chatHistory:
+            "flannel://chat-history"
+        case .workspaceNotes:
+            "flannel://workspace"
+        case .codeRepository:
+            "~/dev/project"
+        }
+    }
+
+    var settingsOnboardingDetail: String {
+        switch self {
+        case .folder:
+            "Indexes supported documents inside a local folder. Watched folders can be re-queued when files change."
+        case .file:
+            "Indexes one local document such as Markdown, TXT, PDF, DOCX, HTML, or a supported source file."
+        case .webPage:
+            "Adds a local web capture source. Page text stays local after capture; refreshes require network access."
+        case .chatHistory:
+            "Indexes local Flannel chat history so future chats can retrieve prior decisions and citations."
+        case .workspaceNotes:
+            "Indexes local workspace notes, projects, drafts, and saved context that already live in Flannel."
+        case .codeRepository:
+            "Indexes readable code and documentation from a local repository with default build/dependency exclusions."
+        }
+    }
+
+    var usesPathPicker: Bool {
+        switch self {
+        case .folder, .file, .codeRepository:
+            true
+        case .webPage, .chatHistory, .workspaceNotes:
+            false
+        }
+    }
+
+    var supportsWatching: Bool {
+        switch self {
+        case .folder, .file, .webPage, .codeRepository:
+            true
+        case .chatHistory, .workspaceNotes:
+            false
         }
     }
 }
