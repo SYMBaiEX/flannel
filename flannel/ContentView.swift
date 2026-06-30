@@ -2135,7 +2135,6 @@ private struct AppSidebar: View {
                     provider: store.activeProvider,
                     localOnlyMode: store.preferences.localOnlyMode ?? true,
                     allowCloudProviders: store.preferences.allowCloudProviders ?? false,
-                    openProfile: { enterSettings(.general) },
                     openModels: { enterSettings(.models) },
                     openSettings: { enterSettings(.general) }
                 )
@@ -2842,7 +2841,6 @@ private struct SidebarFooter: View {
     var provider: ProviderConfiguration?
     var localOnlyMode: Bool
     var allowCloudProviders: Bool
-    var openProfile: () -> Void
     var openModels: () -> Void
     var openSettings: () -> Void
 
@@ -2909,7 +2907,7 @@ private struct SidebarFooter: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             SidebarFooterRow(
                 title: "Models & Providers",
                 detail: providerStatusTitle,
@@ -2929,36 +2927,16 @@ private struct SidebarFooter: View {
             SidebarFooterRow(
                 title: "Settings",
                 detail: "General, privacy, tools",
-                caption: "Routes stay in this sidebar",
+                caption: footerHint,
                 systemImage: "gearshape",
                 tint: .secondary,
                 action: openSettings
             )
-
-            HStack(spacing: 8) {
-                Button(action: openProfile) {
-                    Label("Profile", systemImage: "person.crop.circle")
-                        .font(.caption.weight(.medium))
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .help("Open profile and workspace settings")
-                .accessibilityHint("Opens General settings inside this window.")
-
-                Spacer(minLength: 8)
-
-                Text(footerHint)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
         }
-        .padding(10)
-        .flannelPaneSurface(.subtle, cornerRadius: 18)
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.top, 9)
+        .padding(.bottom, 10)
+        .flannelSeparator(edge: .top, inset: 12, opacity: 0.48)
     }
 }
 
@@ -2999,15 +2977,13 @@ private struct SidebarFooterRow<Trailing: View>: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Text(detail)
                         .font(.callout.weight(.medium))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    Text(caption)
-                        .font(.caption2)
+
+                    Text("\(detail) • \(caption)")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -3023,6 +2999,7 @@ private struct SidebarFooterRow<Trailing: View>: View {
             }
             .padding(.horizontal, 2)
             .padding(.vertical, 4)
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.borderless)
         .help(title)
