@@ -3787,10 +3787,10 @@ private struct ProviderSettingsRow: View {
                 systemImage: "key",
                 tone: .warning
             )
-        case .missingCLICommand, .invalidCLICommand, .missingCLIExecutable, .claudePrintModeRequired, .cliSmokeProbeFailed:
+        case .missingCLICommand, .invalidCLICommand, .missingCLIExecutable, .claudePrintModeRequired, .cliStatusCheckFailed, .cliSmokeProbeFailed:
             return ProviderSettingsNextStep(
-                title: diagnostic.code == .cliSmokeProbeFailed ? "Sign in or repair the CLI" : "Repair the local CLI command",
-                detail: diagnostic.code == .cliSmokeProbeFailed
+                title: diagnostic.code == .cliSmokeProbeFailed || diagnostic.code == .cliStatusCheckFailed ? "Sign in or repair the CLI" : "Repair the local CLI command",
+                detail: diagnostic.code == .cliSmokeProbeFailed || diagnostic.code == .cliStatusCheckFailed
                     ? "Run the same command in Terminal, confirm the subscription account is signed in, then check readiness again."
                     : "Install and sign in to the CLI, use the recommended print/JSON command, then check readiness.",
                 systemImage: "terminal",

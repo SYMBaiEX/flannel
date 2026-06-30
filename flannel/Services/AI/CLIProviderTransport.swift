@@ -249,8 +249,23 @@ nonisolated struct CLIProviderTransport: Sendable {
         }
     }
 
+    nonisolated func streamText(for commandSpec: CLIProviderCommandSpec) -> AsyncThrowingStream<String, Error> {
+        do {
+            let preparedCommand = try makePreparedCommand(for: commandSpec)
+            return executeCommand(preparedCommand)
+        } catch {
+            return AsyncThrowingStream { continuation in
+                continuation.finish(throwing: error)
+            }
+        }
+    }
+
     nonisolated func makePreparedCommand(for request: ChatStreamingRequest) throws -> CLIProviderPreparedCommand {
         let commandSpec = try commandBuilder.makeCommandSpec(for: request)
+        return try makePreparedCommand(for: commandSpec)
+    }
+
+    nonisolated func makePreparedCommand(for commandSpec: CLIProviderCommandSpec) throws -> CLIProviderPreparedCommand {
         guard let executableURL = resolveExecutable(commandSpec.executable) else {
             throw CLIProviderTransportError.missingExecutable(commandSpec.executable)
         }

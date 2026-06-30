@@ -9,6 +9,31 @@ import Testing
 
 struct LocalProviderDiscoveryServiceTests {
     @MainActor
+    @Test("Default local discovery targets come from the known provider catalog")
+    func defaultDiscoveryTargetsComeFromCatalog() async throws {
+        let transport = LocalDiscoveryTransportRecorder(
+            responses: [
+                "http://localhost:11434/api/tags": .init(statusCode: 200, body: #"{"models":[]}"#),
+                "http://localhost:11434/api/ps": .init(statusCode: 200, body: #"{"models":[]}"#),
+                "http://localhost:1234/api/v1/models": .init(statusCode: 200, body: #"{"models":[]}"#)
+            ]
+        )
+        let service = LocalProviderDiscoveryService(
+            transport: { request in try await transport.send(request) }
+        )
+
+        let results = await service.discover()
+        let requests = await transport.requests()
+
+        #expect(results.map(\.providerKind) == [.ollama, .lmStudio])
+        #expect(requests.map(\.url) == [
+            "http://localhost:11434/api/tags",
+            "http://localhost:11434/api/ps",
+            "http://localhost:1234/api/v1/models"
+        ])
+    }
+
+    @MainActor
     @Test("Ollama discovery uses native tags and ps endpoints")
     func ollamaDiscoveryUsesNativeTagsAndRunningModels() async throws {
         let transport = LocalDiscoveryTransportRecorder(

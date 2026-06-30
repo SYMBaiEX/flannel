@@ -26,7 +26,7 @@ enum ProviderSettingsMessaging {
         case .localServer:
             return "Setup looks complete. Run discovery or readiness to confirm the selected local model."
         case .subscriptionCLI:
-            return "Setup looks complete. Run readiness to confirm the local CLI account can answer a smoke check."
+            return "Setup looks complete. Run readiness to confirm the local CLI auth status and smoke check."
         case .apiKey, .anthropicCompatible:
             return "Setup looks complete. Run readiness to confirm the endpoint, credentials, and selected model."
         case .openAICompatible:
@@ -43,7 +43,7 @@ enum ProviderSettingsMessaging {
         case .localServer:
             return "Checking local server and selected model..."
         case .subscriptionCLI:
-            return "Running local CLI smoke check..."
+            return "Checking local CLI auth status and smoke check..."
         case .apiKey, .anthropicCompatible:
             return "Checking endpoint, credentials, and selected model..."
         case .openAICompatible:
@@ -68,7 +68,7 @@ enum ProviderSettingsMessaging {
                     : "\(modelCount) local model\(modelCount == 1 ? "" : "s")"
                 return "Ready. Confirmed \(provider.kind.title) and checked \(modelSummary)."
             case .subscriptionCLI:
-                return "Ready. Local CLI smoke check passed."
+                return "Ready. Local CLI auth status and smoke check passed."
             case .apiKey, .anthropicCompatible:
                 return "Ready. Endpoint, credentials, and selected model were confirmed."
             case .openAICompatible:
@@ -97,7 +97,7 @@ enum ProviderSettingsMessaging {
             case .localServer:
                 return "Local readiness checked \(checkedText). Selected model is installed and reachable."
             case .subscriptionCLI:
-                return "CLI readiness checked \(checkedText). The local subscription command answered Flannel's smoke check."
+                return "CLI readiness checked \(checkedText). The local subscription command passed auth status and answered Flannel's smoke check."
             case .apiKey, .anthropicCompatible:
                 return "Endpoint readiness checked \(checkedText). Credentials and selected model were confirmed."
             case .openAICompatible:

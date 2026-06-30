@@ -27,12 +27,15 @@ struct LocalProviderDiscoveryService: Sendable {
     }
 
     func discover() async -> [LocalProviderDiscoveryResult] {
-        await discover(
-            targets: [
-                (.ollama, "http://localhost:11434"),
-                (.lmStudio, "http://localhost:1234")
-            ]
-        )
+        let targets = AIKnownProviderCatalog.entries.compactMap { entry -> (LLMProviderKind, String)? in
+            guard entry.modelDiscoveryStrategy == .localServer,
+                  entry.requestBoundary == .localServer,
+                  let endpoint = entry.endpoint else {
+                return nil
+            }
+            return (LLMProviderKind(entry.providerKind), endpoint)
+        }
+        return await discover(targets: targets)
     }
 
     func discover(targets: [(LLMProviderKind, String)]) async -> [LocalProviderDiscoveryResult] {
@@ -62,7 +65,12 @@ struct LocalProviderDiscoveryService: Sendable {
         do {
             let request = try makeRequest(endpoint: endpoint, appending: ["api", "tags"])
             let response: OllamaTagsDiscoveryResponse = try await decode(request)
-            let runningDiscovery = await discoverRunningOllamaModels(endpoint: endpoint)
+            let runningDiscovery: OllamaRunningModelsDiscovery
+            if AIKnownProviderCatalog.entry(for: AIProviderKind.ollama)?.supportsRunningModelInventory == true {
+                runningDiscovery = await discoverRunningOllamaModels(endpoint: endpoint)
+            } else {
+                runningDiscovery = .init(models: [:], errorMessage: nil)
+            }
             let models = Self.makeOllamaDescriptors(
                 response: response,
                 runningModels: runningDiscovery.models,
@@ -90,6 +98,15 @@ struct LocalProviderDiscoveryService: Sendable {
             let models = try await discoverLMStudioNative(endpoint: endpoint)
             return .init(providerKind: .lmStudio, endpoint: endpoint, status: .ready, models: models)
         } catch let nativeError {
+            guard AIKnownProviderCatalog.entry(for: AIProviderKind.lmStudio)?.supportsOpenAICompatibleModelDiscovery == true else {
+                return .init(
+                    providerKind: .lmStudio,
+                    endpoint: endpoint,
+                    status: .needsAttention,
+                    errorMessage: Self.discoveryErrorDescription(nativeError)
+                )
+            }
+
             do {
                 let models = try await discoverOpenAICompatibleModels(
                     endpoint: endpoint,

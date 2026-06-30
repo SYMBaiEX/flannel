@@ -172,6 +172,30 @@ nonisolated struct CLIProviderCommandBuilder: Sendable {
         )
     }
 
+    nonisolated func makeReadinessStatusCommandSpec(
+        for provider: ProviderConfiguration
+    ) throws -> CLIProviderCommandSpec? {
+        guard provider.accessMode == .subscriptionCLI else { return nil }
+        guard let cliContract = provider.providerCatalogEntry?.cliContract,
+              !cliContract.statusCommandArguments.isEmpty else {
+            return nil
+        }
+
+        let tokens = try Self.parseCommand(provider.endpoint, providerName: provider.displayName)
+        guard let executable = tokens.first else {
+            throw CLIProviderTransportError.missingCommandContract(provider.displayName)
+        }
+
+        return CLIProviderCommandSpec(
+            providerDisplayName: provider.displayName,
+            executable: executable,
+            arguments: cliContract.statusCommandArguments,
+            stdinText: nil,
+            timeout: timeout,
+            outputFormat: .plainText
+        )
+    }
+
     nonisolated static func parseCommand(_ rawValue: String, providerName: String) throws -> [String] {
         let command = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !command.isEmpty else {
@@ -521,6 +545,27 @@ nonisolated struct CLIProviderCommandBuilder: Sendable {
         executable: String,
         arguments: [String]
     ) -> CLIProviderOutputFormat {
+        if let documentedFormat = provider.providerCatalogEntry?.cliContract?.defaultOutputDecoding.transportOutputFormat {
+            switch documentedFormat {
+            case .codexJSONLines:
+                let executableName = URL(fileURLWithPath: executable).lastPathComponent.lowercased()
+                if executableName == "codex",
+                   arguments.contains("--json") {
+                    return .codexJSONLines
+                }
+            case .claudeStreamJSON:
+                if optionValue(named: "--output-format", in: arguments)?.lowercased() == "stream-json" {
+                    return .claudeStreamJSON
+                }
+            case .claudeJSON:
+                if optionValue(named: "--output-format", in: arguments)?.lowercased() == "json" {
+                    return .claudeJSON
+                }
+            case .plainText:
+                break
+            }
+        }
+
         switch provider.kind {
         case .chatGPTCLI:
             let executableName = URL(fileURLWithPath: executable).lastPathComponent.lowercased()
@@ -587,6 +632,21 @@ nonisolated struct CLIProviderCommandBuilder: Sendable {
             "User"
         case .assistant:
             "Assistant"
+        }
+    }
+}
+
+private extension AIProviderCLIOutputDecoding {
+    nonisolated var transportOutputFormat: CLIProviderOutputFormat {
+        switch self {
+        case .plainText:
+            .plainText
+        case .codexJSONLines:
+            .codexJSONLines
+        case .claudeJSON:
+            .claudeJSON
+        case .claudeStreamJSON:
+            .claudeStreamJSON
         }
     }
 }

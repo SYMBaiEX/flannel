@@ -105,6 +105,42 @@ struct CLIProviderTransportTests {
         #expect(spec.outputFormat == .codexJSONLines)
     }
 
+    @Test("Subscription CLI providers expose documented auth status commands for readiness")
+    func subscriptionCLIReadinessStatusCommandsUseDocumentedContracts() throws {
+        let codexProvider = ProviderConfiguration(
+            kind: .chatGPTCLI,
+            accessMode: .subscriptionCLI,
+            privacyScope: .localCLI,
+            displayName: "ChatGPT/Codex CLI",
+            endpoint: "/usr/local/bin/codex exec --json -",
+            modelIdentifier: "chatgpt-subscription"
+        )
+        let claudeProvider = ProviderConfiguration(
+            kind: .claudeCodeCLI,
+            accessMode: .subscriptionCLI,
+            privacyScope: .localCLI,
+            displayName: "Claude Code CLI",
+            endpoint: "/Applications/Claude Code.app/Contents/MacOS/claude -p --output-format stream-json --verbose",
+            modelIdentifier: "claude-subscription"
+        )
+        let builder = CLIProviderCommandBuilder()
+
+        let codexStatusSpec = try builder.makeReadinessStatusCommandSpec(for: codexProvider)
+        let claudeStatusSpec = try builder.makeReadinessStatusCommandSpec(for: claudeProvider)
+        let codexSpec = try #require(codexStatusSpec)
+        let claudeSpec = try #require(claudeStatusSpec)
+
+        #expect(codexSpec.executable == "/usr/local/bin/codex")
+        #expect(codexSpec.arguments == ["login", "status"])
+        #expect(codexSpec.stdinText == nil)
+        #expect(codexSpec.outputFormat == .plainText)
+
+        #expect(claudeSpec.executable == "/Applications/Claude Code.app/Contents/MacOS/claude")
+        #expect(claudeSpec.arguments == ["auth", "status"])
+        #expect(claudeSpec.stdinText == nil)
+        #expect(claudeSpec.outputFormat == .plainText)
+    }
+
     @Test("Rendered CLI prompts preserve transcript metadata, citations, and tool traces")
     func renderedPromptIncludesDurableContextForSubscriptionCLI() throws {
         let provider = ProviderConfiguration(
@@ -379,6 +415,25 @@ struct CLIProviderTransportTests {
                     messages: [AssistantMessage(role: .user, text: "Hi")]
                 )
             )
+        }
+    }
+
+    @Test("Prepared readiness status commands fail fast when the configured executable is unavailable")
+    func preparedReadinessStatusCommandChecksExecutableAvailability() {
+        let provider = ProviderConfiguration(
+            kind: .chatGPTCLI,
+            accessMode: .subscriptionCLI,
+            privacyScope: .localCLI,
+            displayName: "ChatGPT/Codex CLI",
+            endpoint: "codex exec --json -",
+            modelIdentifier: "chatgpt-subscription"
+        )
+        let transport = CLIProviderTransport(resolveExecutable: { _ in nil })
+        let commandSpec = try! CLIProviderCommandBuilder().makeReadinessStatusCommandSpec(for: provider)
+        let preparedSpec = try! #require(commandSpec)
+
+        #expect(throws: CLIProviderTransportError.missingExecutable("codex")) {
+            try transport.makePreparedCommand(for: preparedSpec)
         }
     }
 

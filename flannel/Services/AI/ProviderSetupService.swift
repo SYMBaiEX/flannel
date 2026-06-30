@@ -24,6 +24,7 @@ nonisolated enum ProviderSetupDiagnosticCode: String, Hashable, Sendable {
     case invalidCLICommand
     case missingCLIExecutable
     case claudePrintModeRequired
+    case cliStatusCheckFailed
     case cliSmokeProbeFailed
     case blockedByLocalOnlyMode
     case blockedByCloudPreference
@@ -352,7 +353,7 @@ nonisolated struct ProviderSetupService: Sendable {
             _ = try cliTransport.makePreparedCommand(for: request)
             return nil
         } catch let error as CLIProviderTransportError {
-            return diagnostic(for: error)
+            return diagnostic(for: error, provider: provider)
         } catch {
             return ProviderSetupDiagnostic(
                 code: .invalidCLICommand,
@@ -372,6 +373,18 @@ nonisolated struct ProviderSetupService: Sendable {
         var report = setupReport
 
         do {
+            try await runCLIStatusCheck(for: provider)
+        } catch {
+            return cliReadinessFailureValidation(
+                for: provider,
+                report: &report,
+                selectedModelIdentifier: selectedModelIdentifier,
+                checkedAt: checkedAt,
+                diagnostic: cliStatusCheckDiagnostic(for: error, provider: provider)
+            )
+        }
+
+        do {
             _ = try await runCLIReadinessSmokeProbe(for: provider)
             return ProviderReadinessValidation(
                 report: report,
@@ -385,34 +398,26 @@ nonisolated struct ProviderSetupService: Sendable {
                 checkedAt: checkedAt,
                 errorMessage: nil
             )
-        } catch let error as CLIProviderTransportError {
-            let diagnostic = cliSmokeProbeDiagnostic(for: error)
-            if !report.diagnostics.contains(where: { $0.id == diagnostic.id }) {
-                report.diagnostics.append(diagnostic)
-            }
-            return ProviderReadinessValidation(
-                report: report,
-                connectionStatus: .needsAttention,
-                availableModels: provider.availableModels,
-                selectedModelIdentifier: selectedModelIdentifier,
-                selectedModelIsAvailable: false,
-                checkedAt: checkedAt,
-                errorMessage: diagnostic.message
-            )
         } catch {
-            let diagnostic = cliSmokeProbeDiagnostic(for: error)
-            if !report.diagnostics.contains(where: { $0.id == diagnostic.id }) {
-                report.diagnostics.append(diagnostic)
-            }
-            return ProviderReadinessValidation(
-                report: report,
-                connectionStatus: .needsAttention,
-                availableModels: provider.availableModels,
+            return cliReadinessFailureValidation(
+                for: provider,
+                report: &report,
                 selectedModelIdentifier: selectedModelIdentifier,
-                selectedModelIsAvailable: false,
                 checkedAt: checkedAt,
-                errorMessage: diagnostic.message
+                diagnostic: cliSmokeProbeDiagnostic(for: error, provider: provider)
             )
+        }
+    }
+
+    private func runCLIStatusCheck(for provider: ProviderConfiguration) async throws {
+        var readinessTransport = cliTransport
+        readinessTransport.commandBuilder.timeout = .seconds(max(1, Int(ceil(readinessTimeout))))
+        guard let commandSpec = try readinessTransport.commandBuilder.makeReadinessStatusCommandSpec(for: provider) else {
+            return
+        }
+
+        for try await _ in readinessTransport.streamText(for: commandSpec) {
+            // Exit status is the contract boundary for auth/status checks.
         }
     }
 
@@ -676,7 +681,7 @@ nonisolated struct ProviderSetupService: Sendable {
         return isLoopback(url)
     }
 
-    private func diagnostic(for error: CLIProviderTransportError) -> ProviderSetupDiagnostic {
+    private func diagnostic(for error: CLIProviderTransportError, provider: ProviderConfiguration) -> ProviderSetupDiagnostic {
         let code: ProviderSetupDiagnosticCode
         switch error {
         case .missingCommandContract:
@@ -691,21 +696,101 @@ nonisolated struct ProviderSetupService: Sendable {
             code = .invalidCLICommand
         }
 
+        let message = appendCLIRecommendation(
+            to: error.localizedDescription,
+            provider: provider
+        )
         return ProviderSetupDiagnostic(
             code: code,
             severity: .error,
             field: "endpoint",
-            message: error.localizedDescription
+            message: message
         )
     }
 
-    private func cliSmokeProbeDiagnostic(for error: Error) -> ProviderSetupDiagnostic {
-        ProviderSetupDiagnostic(
-            code: .cliSmokeProbeFailed,
+    private func cliStatusCheckDiagnostic(
+        for error: Error,
+        provider: ProviderConfiguration
+    ) -> ProviderSetupDiagnostic {
+        let code: ProviderSetupDiagnosticCode
+        if let transportError = error as? CLIProviderTransportError,
+           case .missingExecutable = transportError {
+            code = .missingCLIExecutable
+        } else {
+            code = .cliStatusCheckFailed
+        }
+
+        return ProviderSetupDiagnostic(
+            code: code,
             severity: .error,
             field: "endpoint",
-            message: error.localizedDescription
+            message: appendCLIRecommendation(
+                to: error.localizedDescription,
+                provider: provider
+            )
         )
+    }
+
+    private func cliSmokeProbeDiagnostic(
+        for error: Error,
+        provider: ProviderConfiguration
+    ) -> ProviderSetupDiagnostic {
+        let code: ProviderSetupDiagnosticCode
+        if let transportError = error as? CLIProviderTransportError,
+           case .missingExecutable = transportError {
+            code = .missingCLIExecutable
+        } else {
+            code = .cliSmokeProbeFailed
+        }
+
+        return ProviderSetupDiagnostic(
+            code: code,
+            severity: .error,
+            field: "endpoint",
+            message: appendCLIRecommendation(
+                to: error.localizedDescription,
+                provider: provider
+            )
+        )
+    }
+
+    private func cliReadinessFailureValidation(
+        for provider: ProviderConfiguration,
+        report: inout ProviderSetupReport,
+        selectedModelIdentifier: String,
+        checkedAt: Date,
+        diagnostic: ProviderSetupDiagnostic
+    ) -> ProviderReadinessValidation {
+        if !report.diagnostics.contains(where: { $0.id == diagnostic.id }) {
+            report.diagnostics.append(diagnostic)
+        }
+
+        return ProviderReadinessValidation(
+            report: report,
+            connectionStatus: .needsAttention,
+            availableModels: provider.availableModels,
+            selectedModelIdentifier: selectedModelIdentifier,
+            selectedModelIsAvailable: false,
+            checkedAt: checkedAt,
+            errorMessage: diagnostic.message
+        )
+    }
+
+    private func appendCLIRecommendation(
+        to message: String,
+        provider: ProviderConfiguration
+    ) -> String {
+        guard provider.accessMode == .subscriptionCLI,
+              let recommendedCommand = provider.providerCatalogEntry?.recommendedCLICommand,
+              !recommendedCommand.isEmpty else {
+            return message
+        }
+
+        if message.contains(recommendedCommand) {
+            return message
+        }
+
+        return "\(message) Recommended command: \(recommendedCommand)"
     }
 
     private func makeOpenAICompatibleModelsRequest(for provider: ProviderConfiguration, endpoint: String) throws -> URLRequest {

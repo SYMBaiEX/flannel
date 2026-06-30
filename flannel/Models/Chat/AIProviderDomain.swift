@@ -23,9 +23,9 @@ enum AIProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case claudeCodeCLI
     case vercelAISDKBridge
 
-    var id: String { rawValue }
+    nonisolated var id: String { rawValue }
 
-    var displayName: String {
+    nonisolated var displayName: String {
         switch self {
         case .ollama:
             "Ollama"
@@ -58,7 +58,7 @@ enum AIProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var isLocalProvider: Bool {
+    nonisolated var isLocalProvider: Bool {
         switch self {
         case .ollama, .lmStudio:
             true
@@ -68,7 +68,7 @@ enum AIProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var defaultBaseURL: URL? {
+    nonisolated var defaultBaseURL: URL? {
         switch self {
         case .ollama:
             URL(string: "http://localhost:11434")
@@ -176,7 +176,7 @@ struct AIModelDescriptor: Identifiable, Codable, Hashable, Sendable {
         capabilities.contains(.vision)
     }
 
-    init(
+    nonisolated init(
         providerKind: AIProviderKind,
         providerMode: AIProviderMode,
         identifier: String,
@@ -286,7 +286,7 @@ enum AIProviderCredentialRequirement: String, Codable, CaseIterable, Hashable, S
     case subscriptionCLI
     case localBridge
 
-    var title: String {
+    nonisolated var title: String {
         switch self {
         case .none:
             "No credential"
@@ -301,15 +301,15 @@ enum AIProviderCredentialRequirement: String, Codable, CaseIterable, Hashable, S
         }
     }
 
-    var requiresKeychainSecret: Bool {
+    nonisolated var requiresKeychainSecret: Bool {
         self == .requiredAPIKey
     }
 
-    var supportsKeychainSecret: Bool {
+    nonisolated var supportsKeychainSecret: Bool {
         self == .requiredAPIKey || self == .optionalAPIKey
     }
 
-    var isSubscriptionBacked: Bool {
+    nonisolated var isSubscriptionBacked: Bool {
         self == .subscriptionCLI
     }
 }
@@ -337,6 +337,74 @@ enum AIProviderModelDiscoveryStrategy: String, Codable, CaseIterable, Hashable, 
     }
 }
 
+enum AIProviderRuntimeInterface: String, Codable, CaseIterable, Hashable, Sendable {
+    case nativeAPI
+    case openAICompatible
+    case anthropicCompatible
+    case subscriptionCLI
+    case aiSDKBridge
+
+    nonisolated var title: String {
+        switch self {
+        case .nativeAPI:
+            "Official or native API"
+        case .openAICompatible:
+            "OpenAI-compatible"
+        case .anthropicCompatible:
+            "Anthropic-compatible"
+        case .subscriptionCLI:
+            "Subscription CLI"
+        case .aiSDKBridge:
+            "AI SDK bridge"
+        }
+    }
+}
+
+enum AIProviderDiscoveryCapability: String, Codable, CaseIterable, Hashable, Sendable {
+    case nativeModelCatalog
+    case runningModelInventory
+    case openAICompatibleModelList
+    case bridgeHealthEndpoint
+
+    nonisolated var title: String {
+        switch self {
+        case .nativeModelCatalog:
+            "Native model catalog"
+        case .runningModelInventory:
+            "Running model inventory"
+        case .openAICompatibleModelList:
+            "OpenAI-compatible model list"
+        case .bridgeHealthEndpoint:
+            "Bridge health endpoint"
+        }
+    }
+}
+
+enum AIProviderCLIOutputDecoding: String, Codable, CaseIterable, Hashable, Sendable {
+    case plainText
+    case codexJSONLines
+    case claudeJSON
+    case claudeStreamJSON
+}
+
+struct AIProviderCLIContract: Hashable, Sendable {
+    var preferredExecutable: String
+    var recommendedCommand: String
+    var statusCommandArguments: [String]
+    var defaultOutputDecoding: AIProviderCLIOutputDecoding
+    var supportsPromptViaStdin: Bool
+    var supportsPromptPlaceholderArguments: Bool
+}
+
+struct AIProviderSourceReference: Identifiable, Hashable, Sendable {
+    var label: String
+    var url: String
+
+    nonisolated var id: String {
+        "\(label)::\(url)"
+    }
+}
+
 struct AIProviderCatalogEntry: Identifiable, Hashable, Sendable {
     var providerKind: AIProviderKind
     var providerMode: AIProviderMode
@@ -350,32 +418,69 @@ struct AIProviderCatalogEntry: Identifiable, Hashable, Sendable {
     var credentialRequirement: AIProviderCredentialRequirement
     var modelDiscoveryStrategy: AIProviderModelDiscoveryStrategy
     var requestBoundary: ProviderRuntimeBoundary
+    var primaryRuntimeInterface: AIProviderRuntimeInterface
+    var supportedRuntimeInterfaces: [AIProviderRuntimeInterface]
+    var discoveryCapabilities: [AIProviderDiscoveryCapability]
+    var cliContract: AIProviderCLIContract?
+    var sourceReferences: [AIProviderSourceReference]
 
-    var id: String {
+    nonisolated var id: String {
         "\(providerKind.rawValue):\(providerMode.rawValue):\(accessMode.rawValue)"
     }
 
-    var leavesDeviceDirectly: Bool {
+    nonisolated var leavesDeviceDirectly: Bool {
         requestBoundary.leavesDeviceDirectly
     }
 
-    var requiresKeychainSecret: Bool {
+    nonisolated var requiresKeychainSecret: Bool {
         credentialRequirement.requiresKeychainSecret
     }
 
-    var supportsOptionalKeychainSecret: Bool {
+    nonisolated var supportsOptionalKeychainSecret: Bool {
         credentialRequirement == .optionalAPIKey
     }
 
-    var supportsSubscriptionCLI: Bool {
+    nonisolated var supportsSubscriptionCLI: Bool {
         credentialRequirement.isSubscriptionBacked
     }
 
-    var normalizedRecommendedModelIdentifiers: [String] {
+    nonisolated var usesOfficialAPI: Bool {
+        primaryRuntimeInterface == .nativeAPI && requestBoundary == .externalAPI
+    }
+
+    nonisolated var supportsOpenAICompatibleRuntime: Bool {
+        supportedRuntimeInterfaces.contains(.openAICompatible)
+    }
+
+    nonisolated var supportsAnthropicCompatibleRuntime: Bool {
+        supportedRuntimeInterfaces.contains(.anthropicCompatible)
+    }
+
+    nonisolated var supportsNativeModelCatalogDiscovery: Bool {
+        discoveryCapabilities.contains(.nativeModelCatalog)
+    }
+
+    nonisolated var supportsRunningModelInventory: Bool {
+        discoveryCapabilities.contains(.runningModelInventory)
+    }
+
+    nonisolated var supportsOpenAICompatibleModelDiscovery: Bool {
+        discoveryCapabilities.contains(.openAICompatibleModelList)
+    }
+
+    nonisolated var supportsBridgeHealthDiscovery: Bool {
+        discoveryCapabilities.contains(.bridgeHealthEndpoint)
+    }
+
+    nonisolated var recommendedCLICommand: String? {
+        cliContract?.recommendedCommand
+    }
+
+    nonisolated var normalizedRecommendedModelIdentifiers: [String] {
         Self.normalizedModelIdentifiers(recommendedModelIdentifiers + [defaultModelIdentifier])
     }
 
-    var modelDescriptors: [AIModelDescriptor] {
+    nonisolated var modelDescriptors: [AIModelDescriptor] {
         normalizedRecommendedModelIdentifiers.map { modelIdentifier in
             AIModelDescriptor(
                 providerKind: providerKind,
@@ -389,7 +494,7 @@ struct AIProviderCatalogEntry: Identifiable, Hashable, Sendable {
         }
     }
 
-    private static func normalizedModelIdentifiers(_ modelIdentifiers: [String]) -> [String] {
+    nonisolated private static func normalizedModelIdentifiers(_ modelIdentifiers: [String]) -> [String] {
         var seen = Set<String>()
         var normalized: [String] = []
         for modelIdentifier in modelIdentifiers {
@@ -417,7 +522,15 @@ enum AIKnownProviderCatalog {
             capabilities: [.chat, .streaming, .toolCalling, .embeddings],
             credentialRequirement: .none,
             modelDiscoveryStrategy: .localServer,
-            requestBoundary: .localServer
+            requestBoundary: .localServer,
+            primaryRuntimeInterface: .nativeAPI,
+            supportedRuntimeInterfaces: [.nativeAPI, .openAICompatible],
+            discoveryCapabilities: [.nativeModelCatalog, .runningModelInventory],
+            cliContract: nil,
+            sourceReferences: [
+                AIProviderSourceReference(label: "Ollama API", url: "https://docs.ollama.com/api"),
+                AIProviderSourceReference(label: "Ollama OpenAI compatibility", url: "https://docs.ollama.com/api/openai-compatibility")
+            ]
         ),
         AIProviderCatalogEntry(
             providerKind: .lmStudio,
@@ -431,7 +544,15 @@ enum AIKnownProviderCatalog {
             capabilities: [.chat, .streaming, .toolCalling, .embeddings, .openAICompatible, .anthropicCompatible],
             credentialRequirement: .none,
             modelDiscoveryStrategy: .localServer,
-            requestBoundary: .localServer
+            requestBoundary: .localServer,
+            primaryRuntimeInterface: .openAICompatible,
+            supportedRuntimeInterfaces: [.nativeAPI, .openAICompatible, .anthropicCompatible],
+            discoveryCapabilities: [.nativeModelCatalog, .openAICompatibleModelList],
+            cliContract: nil,
+            sourceReferences: [
+                AIProviderSourceReference(label: "LM Studio REST API", url: "https://lmstudio.ai/docs/app/api/endpoints/rest"),
+                AIProviderSourceReference(label: "LM Studio OpenAI compatibility", url: "https://lmstudio.ai/docs/developer/openai-compat")
+            ]
         ),
         AIProviderCatalogEntry(
             providerKind: .openAI,
@@ -445,7 +566,14 @@ enum AIKnownProviderCatalog {
             capabilities: [.chat, .streaming, .toolCalling, .vision, .reasoning, .structuredOutput],
             credentialRequirement: .requiredAPIKey,
             modelDiscoveryStrategy: .openAICompatibleModels,
-            requestBoundary: .externalAPI
+            requestBoundary: .externalAPI,
+            primaryRuntimeInterface: .nativeAPI,
+            supportedRuntimeInterfaces: [.nativeAPI],
+            discoveryCapabilities: [.openAICompatibleModelList],
+            cliContract: nil,
+            sourceReferences: [
+                AIProviderSourceReference(label: "OpenAI Responses API", url: "https://platform.openai.com/docs/api-reference/responses")
+            ]
         ),
         AIProviderCatalogEntry(
             providerKind: .anthropic,
@@ -459,7 +587,14 @@ enum AIKnownProviderCatalog {
             capabilities: [.chat, .streaming, .toolCalling, .vision, .reasoning],
             credentialRequirement: .requiredAPIKey,
             modelDiscoveryStrategy: .staticCatalog,
-            requestBoundary: .externalAPI
+            requestBoundary: .externalAPI,
+            primaryRuntimeInterface: .nativeAPI,
+            supportedRuntimeInterfaces: [.nativeAPI],
+            discoveryCapabilities: [],
+            cliContract: nil,
+            sourceReferences: [
+                AIProviderSourceReference(label: "Anthropic Messages API", url: "https://docs.anthropic.com/en/api/messages")
+            ]
         ),
         AIProviderCatalogEntry(
             providerKind: .gemini,
@@ -473,7 +608,12 @@ enum AIKnownProviderCatalog {
             capabilities: [.chat, .streaming, .toolCalling, .vision, .openAICompatible],
             credentialRequirement: .requiredAPIKey,
             modelDiscoveryStrategy: .openAICompatibleModels,
-            requestBoundary: .externalAPI
+            requestBoundary: .externalAPI,
+            primaryRuntimeInterface: .openAICompatible,
+            supportedRuntimeInterfaces: [.openAICompatible],
+            discoveryCapabilities: [.openAICompatibleModelList],
+            cliContract: nil,
+            sourceReferences: []
         ),
         AIProviderCatalogEntry(
             providerKind: .xAI,
@@ -487,7 +627,12 @@ enum AIKnownProviderCatalog {
             capabilities: [.chat, .streaming, .toolCalling, .reasoning, .openAICompatible],
             credentialRequirement: .requiredAPIKey,
             modelDiscoveryStrategy: .openAICompatibleModels,
-            requestBoundary: .externalAPI
+            requestBoundary: .externalAPI,
+            primaryRuntimeInterface: .openAICompatible,
+            supportedRuntimeInterfaces: [.openAICompatible],
+            discoveryCapabilities: [.openAICompatibleModelList],
+            cliContract: nil,
+            sourceReferences: []
         ),
         AIProviderCatalogEntry(
             providerKind: .mistral,
@@ -501,7 +646,12 @@ enum AIKnownProviderCatalog {
             capabilities: [.chat, .streaming, .toolCalling, .openAICompatible],
             credentialRequirement: .requiredAPIKey,
             modelDiscoveryStrategy: .openAICompatibleModels,
-            requestBoundary: .externalAPI
+            requestBoundary: .externalAPI,
+            primaryRuntimeInterface: .openAICompatible,
+            supportedRuntimeInterfaces: [.openAICompatible],
+            discoveryCapabilities: [.openAICompatibleModelList],
+            cliContract: nil,
+            sourceReferences: []
         ),
         AIProviderCatalogEntry(
             providerKind: .groq,
@@ -515,7 +665,12 @@ enum AIKnownProviderCatalog {
             capabilities: [.chat, .streaming, .toolCalling, .openAICompatible],
             credentialRequirement: .requiredAPIKey,
             modelDiscoveryStrategy: .openAICompatibleModels,
-            requestBoundary: .externalAPI
+            requestBoundary: .externalAPI,
+            primaryRuntimeInterface: .openAICompatible,
+            supportedRuntimeInterfaces: [.openAICompatible],
+            discoveryCapabilities: [.openAICompatibleModelList],
+            cliContract: nil,
+            sourceReferences: []
         ),
         AIProviderCatalogEntry(
             providerKind: .openRouter,
@@ -529,7 +684,12 @@ enum AIKnownProviderCatalog {
             capabilities: [.chat, .streaming, .toolCalling, .openAICompatible],
             credentialRequirement: .requiredAPIKey,
             modelDiscoveryStrategy: .openAICompatibleModels,
-            requestBoundary: .externalAPI
+            requestBoundary: .externalAPI,
+            primaryRuntimeInterface: .openAICompatible,
+            supportedRuntimeInterfaces: [.openAICompatible],
+            discoveryCapabilities: [.openAICompatibleModelList],
+            cliContract: nil,
+            sourceReferences: []
         ),
         AIProviderCatalogEntry(
             providerKind: .perplexity,
@@ -543,7 +703,12 @@ enum AIKnownProviderCatalog {
             capabilities: [.chat, .streaming, .webSearch, .openAICompatible],
             credentialRequirement: .requiredAPIKey,
             modelDiscoveryStrategy: .openAICompatibleModels,
-            requestBoundary: .externalAPI
+            requestBoundary: .externalAPI,
+            primaryRuntimeInterface: .openAICompatible,
+            supportedRuntimeInterfaces: [.openAICompatible],
+            discoveryCapabilities: [.openAICompatibleModelList],
+            cliContract: nil,
+            sourceReferences: []
         ),
         AIProviderCatalogEntry(
             providerKind: .customOpenAICompatible,
@@ -557,7 +722,12 @@ enum AIKnownProviderCatalog {
             capabilities: [.chat, .streaming, .toolCalling, .openAICompatible],
             credentialRequirement: .optionalAPIKey,
             modelDiscoveryStrategy: .openAICompatibleModels,
-            requestBoundary: .externalAPI
+            requestBoundary: .externalAPI,
+            primaryRuntimeInterface: .openAICompatible,
+            supportedRuntimeInterfaces: [.openAICompatible],
+            discoveryCapabilities: [.openAICompatibleModelList],
+            cliContract: nil,
+            sourceReferences: []
         ),
         AIProviderCatalogEntry(
             providerKind: .chatGPTCLI,
@@ -571,7 +741,22 @@ enum AIKnownProviderCatalog {
             capabilities: [.chat, .streaming],
             credentialRequirement: .subscriptionCLI,
             modelDiscoveryStrategy: .cliSession,
-            requestBoundary: .localCLI
+            requestBoundary: .localCLI,
+            primaryRuntimeInterface: .subscriptionCLI,
+            supportedRuntimeInterfaces: [.subscriptionCLI],
+            discoveryCapabilities: [],
+            cliContract: AIProviderCLIContract(
+                preferredExecutable: "codex",
+                recommendedCommand: "codex exec --json -",
+                statusCommandArguments: ["login", "status"],
+                defaultOutputDecoding: .codexJSONLines,
+                supportsPromptViaStdin: true,
+                supportsPromptPlaceholderArguments: true
+            ),
+            sourceReferences: [
+                AIProviderSourceReference(label: "Codex CLI reference", url: "https://developers.openai.com/codex/cli/reference"),
+                AIProviderSourceReference(label: "Codex CLI authentication", url: "https://developers.openai.com/codex/cli/authentication")
+            ]
         ),
         AIProviderCatalogEntry(
             providerKind: .claudeCodeCLI,
@@ -585,7 +770,22 @@ enum AIKnownProviderCatalog {
             capabilities: [.chat, .streaming],
             credentialRequirement: .subscriptionCLI,
             modelDiscoveryStrategy: .cliSession,
-            requestBoundary: .localCLI
+            requestBoundary: .localCLI,
+            primaryRuntimeInterface: .subscriptionCLI,
+            supportedRuntimeInterfaces: [.subscriptionCLI],
+            discoveryCapabilities: [],
+            cliContract: AIProviderCLIContract(
+                preferredExecutable: "claude",
+                recommendedCommand: "claude -p --output-format stream-json --verbose",
+                statusCommandArguments: ["auth", "status"],
+                defaultOutputDecoding: .claudeStreamJSON,
+                supportsPromptViaStdin: false,
+                supportsPromptPlaceholderArguments: true
+            ),
+            sourceReferences: [
+                AIProviderSourceReference(label: "Claude Code CLI reference", url: "https://code.claude.com/docs/en/cli-reference"),
+                AIProviderSourceReference(label: "Claude Code authentication", url: "https://docs.anthropic.com/en/docs/claude-code/settings")
+            ]
         ),
         AIProviderCatalogEntry(
             providerKind: .vercelAISDKBridge,
@@ -599,19 +799,26 @@ enum AIKnownProviderCatalog {
             capabilities: [.chat, .streaming, .toolCalling, .embeddings, .structuredOutput],
             credentialRequirement: .localBridge,
             modelDiscoveryStrategy: .bridgeHealth,
-            requestBoundary: .localBridge
+            requestBoundary: .localBridge,
+            primaryRuntimeInterface: .aiSDKBridge,
+            supportedRuntimeInterfaces: [.aiSDKBridge],
+            discoveryCapabilities: [.bridgeHealthEndpoint],
+            cliContract: nil,
+            sourceReferences: [
+                AIProviderSourceReference(label: "Vercel AI SDK", url: "https://vercel.com/docs/ai-sdk")
+            ]
         )
     ]
 
-    static func entry(for providerKind: AIProviderKind) -> AIProviderCatalogEntry? {
+    nonisolated static func entry(for providerKind: AIProviderKind) -> AIProviderCatalogEntry? {
         entries.first { $0.providerKind == providerKind }
     }
 
-    static func entry(for providerKind: LLMProviderKind) -> AIProviderCatalogEntry? {
+    nonisolated static func entry(for providerKind: LLMProviderKind) -> AIProviderCatalogEntry? {
         entry(for: AIProviderKind(providerKind))
     }
 
-    static func recommendedModelIdentifiers(for providerKind: AIProviderKind) -> [String] {
+    nonisolated static func recommendedModelIdentifiers(for providerKind: AIProviderKind) -> [String] {
         entry(for: providerKind)?.normalizedRecommendedModelIdentifiers ?? []
     }
 }
@@ -651,8 +858,14 @@ extension AIProviderKind {
     }
 }
 
+extension ProviderConfiguration {
+    nonisolated var providerCatalogEntry: AIProviderCatalogEntry? {
+        AIKnownProviderCatalog.entry(for: kind)
+    }
+}
+
 private extension ModelCapability {
-    var aiModelCapability: AIModelCapability? {
+    nonisolated var aiModelCapability: AIModelCapability? {
         switch self {
         case .chat:
             .chat

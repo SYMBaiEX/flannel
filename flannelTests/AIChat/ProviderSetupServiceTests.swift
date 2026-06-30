@@ -649,8 +649,8 @@ struct ProviderSetupServiceTests {
     }
 
     @MainActor
-    @Test("Subscription CLI readiness runs a smoke probe and validates decoded output")
-    func subscriptionCLIReadinessRunsSmokeProbeAndValidatesOutput() async {
+    @Test("Subscription CLI readiness runs auth status before the smoke probe")
+    func subscriptionCLIReadinessRunsStatusAndSmokeProbe() async {
         let commandRecorder = CLIReadinessCommandRecorder()
         let service = ProviderSetupService(
             cliTransport: CLIProviderTransport(
@@ -695,10 +695,12 @@ struct ProviderSetupServiceTests {
         #expect(validation.checkedAt == Date(timeIntervalSince1970: 1_780_000_001))
 
         let commands = await commandRecorder.commands()
-        #expect(commands.count == 1)
+        #expect(commands.count == 2)
         #expect(commands.first?.providerDisplayName == "ChatGPT/Codex CLI")
         #expect(commands.first?.timeout == .seconds(4))
-        #expect(commands.first?.stdinText?.contains("Flannel local CLI readiness check") == true)
+        #expect(commands.first?.arguments == ["login", "status"])
+        #expect(commands.first?.stdinText == nil)
+        #expect(commands.last?.stdinText?.contains("Flannel local CLI readiness check") == true)
     }
 
     @MainActor
@@ -730,6 +732,7 @@ struct ProviderSetupServiceTests {
         #expect(validation.selectedModelIsAvailable == false)
         #expect(validation.report.diagnostics.contains(where: { $0.code == .missingCLIExecutable }))
         #expect(validation.errorMessage?.contains("claude") == true)
+        #expect(validation.errorMessage?.contains("Recommended command: claude -p --output-format stream-json --verbose") == true)
     }
 
     @MainActor
@@ -778,9 +781,10 @@ struct ProviderSetupServiceTests {
         #expect(validation.checkedAt == Date(timeIntervalSince1970: 1_780_000_002))
 
         let commands = await commandRecorder.commands()
-        #expect(commands.count == 1)
-        #expect(commands.first?.arguments.contains("-p") == true)
-        #expect(commands.first?.arguments.contains("--output-format") == true)
+        #expect(commands.count == 2)
+        #expect(commands.first?.arguments == ["auth", "status"])
+        #expect(commands.last?.arguments.contains("-p") == true)
+        #expect(commands.last?.arguments.contains("--output-format") == true)
     }
 
     @MainActor
@@ -830,8 +834,9 @@ struct ProviderSetupServiceTests {
         #expect(validation.checkedAt == Date(timeIntervalSince1970: 1_780_000_003))
 
         let commands = await commandRecorder.commands()
-        #expect(commands.count == 1)
-        #expect(commands.first?.stdinText?.contains("flannel-ready") == true)
+        #expect(commands.count == 2)
+        #expect(commands.first?.arguments == ["login", "status"])
+        #expect(commands.last?.stdinText?.contains("flannel-ready") == true)
     }
 
     @Test("Claude subscription CLI providers require print mode or a prompt placeholder")
@@ -856,6 +861,7 @@ struct ProviderSetupServiceTests {
 
         #expect(report.hasBlockingIssues)
         #expect(report.diagnostics.contains(where: { $0.code == .claudePrintModeRequired }))
+        #expect(report.diagnostics.first?.message.contains("Recommended command: claude -p --output-format stream-json --verbose") == true)
     }
 
     @Test("Settings messaging explains local discovery readiness distinctly")
@@ -943,8 +949,8 @@ struct ProviderSetupServiceTests {
         #expect(ProviderSettingsMessaging.readinessSummary(for: endpointProvider, validation: endpointValidation).contains("Compatible endpoint checked"))
         #expect(ProviderSettingsMessaging.disconnectedChipTitle(for: cliProvider) == "CLI not checked")
         #expect(ProviderSettingsMessaging.statusText(for: cliProvider) == "CLI command has not been smoke-tested yet.")
-        #expect(ProviderSettingsMessaging.setupMessage(for: cliProvider, validation: cliValidation) == "Ready. Local CLI smoke check passed.")
-        #expect(ProviderSettingsMessaging.readinessSummary(for: cliProvider, validation: cliValidation).contains("local subscription command answered Flannel's smoke check"))
+        #expect(ProviderSettingsMessaging.setupMessage(for: cliProvider, validation: cliValidation) == "Ready. Local CLI auth status and smoke check passed.")
+        #expect(ProviderSettingsMessaging.readinessSummary(for: cliProvider, validation: cliValidation).contains("passed auth status and answered Flannel's smoke check"))
     }
 
     @Test("Local discovery settings message preserves provider-specific failures")
@@ -1000,9 +1006,9 @@ struct ProviderSetupServiceTests {
         )
 
         #expect(ProviderSettingsMessaging.preflightSetupMessage(for: localProvider, report: report) == "Setup looks complete. Run discovery or readiness to confirm the selected local model.")
-        #expect(ProviderSettingsMessaging.preflightSetupMessage(for: cliProvider, report: report) == "Setup looks complete. Run readiness to confirm the local CLI account can answer a smoke check.")
+        #expect(ProviderSettingsMessaging.preflightSetupMessage(for: cliProvider, report: report) == "Setup looks complete. Run readiness to confirm the local CLI auth status and smoke check.")
         #expect(ProviderSettingsMessaging.pendingReadinessMessage(for: localProvider) == "Checking local server and selected model...")
-        #expect(ProviderSettingsMessaging.pendingReadinessMessage(for: cliProvider) == "Running local CLI smoke check...")
+        #expect(ProviderSettingsMessaging.pendingReadinessMessage(for: cliProvider) == "Checking local CLI auth status and smoke check...")
     }
 }
 
