@@ -2802,11 +2802,11 @@ private struct SidebarFooter: View {
 
     private var providerStatusDetail: String {
         if let provider {
-            return "\(privacyTitle) - \(provider.accessMode.title)"
+            return provider.accessMode.title
         }
 
         if localOnlyMode {
-            return "Local-only, choose Ollama or LM Studio"
+            return "Choose Ollama or LM Studio"
         }
 
         return allowCloudProviders ? "Cloud routes allowed" : "Cloud routes blocked"
@@ -2824,109 +2824,146 @@ private struct SidebarFooter: View {
         return provider?.privacyScope.title ?? "Private"
     }
 
+    private var privacyIcon: String {
+        if localOnlyMode {
+            return "lock.fill"
+        }
+
+        if provider?.privacyScope == .externalAPI {
+            return allowCloudProviders ? "network" : "network.slash"
+        }
+
+        return provider?.privacyScope == .localCLI ? "terminal" : "lock"
+    }
+
+    private var privacyTone: FlannelStatusTone {
+        if localOnlyMode {
+            return .accent
+        }
+
+        if provider?.privacyScope == .externalAPI {
+            return allowCloudProviders ? .warning : .danger
+        }
+
+        return provider == nil ? .warning : .neutral
+    }
+
+    private var footerTint: Color? {
+        switch privacyTone {
+        case .accent:
+            return Color.accentColor.opacity(0.08)
+        case .warning:
+            return Color.orange.opacity(0.08)
+        case .danger:
+            return Color.red.opacity(0.08)
+        case .success:
+            return Color.green.opacity(0.08)
+        case .info:
+            return Color.blue.opacity(0.08)
+        case .custom(let color):
+            return color.opacity(0.08)
+        case .neutral:
+            return nil
+        }
+    }
+
     var body: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 0) {
             FlannelSeparator(opacity: 0.5)
 
-            VStack(spacing: 6) {
-                HStack(spacing: 8) {
-                    SidebarFooterControl(
-                        title: "Profile",
-                        subtitle: "Local workspace",
-                        systemImage: "person.crop.circle",
-                        action: openProfile
-                    )
-                    .help("Open profile and workspace settings")
-                    .accessibilityHint("Opens General settings inside this window.")
+            HStack(spacing: 7) {
+                SidebarFooterIconButton(
+                    title: "Profile",
+                    systemImage: "person.crop.circle",
+                    action: openProfile
+                )
+                .help("Open profile and workspace settings")
+                .accessibilityHint("Opens General settings inside this window.")
 
-                    SidebarFooterControl(
-                        title: "Settings",
-                        subtitle: "Preferences",
-                        systemImage: "gearshape",
-                        action: openSettings
-                    )
-                    .help("Open Settings")
-                    .accessibilityHint("Opens Settings inside this window.")
-                }
+                Divider()
+                    .frame(height: 28)
 
                 Button(action: openModels) {
                     Label {
-                        HStack(spacing: 5) {
+                        VStack(alignment: .leading, spacing: 5) {
                             Text(providerStatusTitle)
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(.primary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
-                            Text("-")
-                                .foregroundStyle(.tertiary)
-                            Text(providerStatusDetail)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
+
+                            HStack(spacing: 5) {
+                                FlannelStatusChip(
+                                    privacyTitle,
+                                    systemImage: privacyIcon,
+                                    tone: privacyTone,
+                                    prominence: .subtle
+                                )
+                                .font(.caption2)
+
+                                Text(providerStatusDetail)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
                         }
                     } icon: {
-                        Image(systemName: localOnlyMode ? "lock" : "network")
-                            .font(.caption.weight(.semibold))
-                            .frame(width: 14)
+                        Image(systemName: provider == nil ? "exclamationmark.triangle" : "cpu")
+                            .font(.callout.weight(.semibold))
+                            .frame(width: 18)
+                            .foregroundStyle(provider == nil ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                     }
-                    .font(.caption)
                     .symbolRenderingMode(.hierarchical)
                     .labelStyle(.titleAndIcon)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 6)
                     .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
-                .help("Open Models & Providers. \(providerStatusTitle), \(providerStatusDetail)")
+                .help("Open Models & Providers. \(providerStatusTitle), \(privacyTitle), \(providerStatusDetail)")
                 .accessibilityLabel("Provider and privacy status")
-                .accessibilityValue("\(providerStatusTitle), \(providerStatusDetail)")
+                .accessibilityValue("\(providerStatusTitle), \(privacyTitle), \(providerStatusDetail)")
                 .accessibilityHint("Opens Models and Providers settings inside this window.")
+
+                Divider()
+                    .frame(height: 28)
+
+                SidebarFooterIconButton(
+                    title: "Settings",
+                    systemImage: "gearshape",
+                    action: openSettings
+                )
+                .help("Open Settings")
+                .accessibilityHint("Opens Settings inside this window.")
             }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 10)
+            .padding(7)
+            .flannelGlassSurface(.regular, tint: footerTint, interactive: false, cornerRadius: 12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
-        .padding(.top, 6)
     }
 }
 
-private struct SidebarFooterControl: View {
+private struct SidebarFooterIconButton: View {
     var title: String
-    var subtitle: String
     var systemImage: String
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Label {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    Text(subtitle)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            } icon: {
-                Image(systemName: systemImage)
-                    .font(.callout)
-                    .frame(width: 18)
-            }
-            .symbolRenderingMode(.hierarchical)
-            .labelStyle(.titleAndIcon)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            Image(systemName: systemImage)
+                .font(.callout.weight(.medium))
+                .symbolRenderingMode(.hierarchical)
+                .frame(width: 28, height: 32)
+                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .buttonStyle(.borderless)
         .controlSize(.small)
         .foregroundStyle(.secondary)
         .accessibilityLabel(title)
-        .accessibilityValue(subtitle)
     }
 }
 
