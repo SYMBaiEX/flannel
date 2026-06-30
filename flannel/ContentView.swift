@@ -1862,7 +1862,6 @@ private struct AppSidebar: View {
     @State private var selectedModelIdentifier: String?
     @State private var selectedProjectFilterID: UUID?
     @State private var selectedDateFilter: ChatHistoryDateFilter = .all
-    @FocusState private var isSidebarSearchFocused: Bool
 
     private var query: String {
         store.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2095,10 +2094,6 @@ private struct AppSidebar: View {
                 .transition(.opacity)
             }
         }
-        .onChange(of: searchFocusRequest) {
-            guard sidebarSurface == .conversation else { return }
-            isSidebarSearchFocused = true
-        }
     }
 
     private var conversationSidebar: some View {
@@ -2175,40 +2170,13 @@ private struct AppSidebar: View {
     }
 
     private var sidebarSearchField: some View {
-        HStack(spacing: 7) {
-            Image(systemName: "magnifyingglass")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(width: 14)
-
-            TextField("Search chats", text: $store.searchText)
-                .textFieldStyle(.plain)
-                .focused($isSidebarSearchFocused)
-                .submitLabel(.search)
-                .accessibilityLabel("Search chats")
-
-            if !store.searchText.isEmpty {
-                Button {
-                    store.searchText = ""
-                    isSidebarSearchFocused = true
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .help("Clear chat search")
-                .accessibilityLabel("Clear chat search")
-            }
-        }
-        .font(.callout)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(isSidebarSearchFocused ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.22), lineWidth: 1)
-        }
+        NativeSidebarSearchField(
+            text: $store.searchText,
+            placeholder: "Search chats",
+            focusRequest: searchFocusRequest
+        )
+        .frame(height: 28)
+        .accessibilityLabel("Search chats")
     }
 
     @ViewBuilder
@@ -2685,6 +2653,62 @@ private struct SettingsRouteRow: View {
         .accessibilityLabel(tab.title)
         .accessibilityValue(isSelected ? "Selected" : "")
         .accessibilityHint(tab.detail)
+    }
+}
+
+private struct NativeSidebarSearchField: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    var focusRequest: Int
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    func makeNSView(context: Context) -> NSSearchField {
+        let searchField = NSSearchField()
+        searchField.placeholderString = placeholder
+        searchField.delegate = context.coordinator
+        searchField.sendsSearchStringImmediately = true
+        searchField.focusRingType = .default
+        searchField.controlSize = .regular
+        searchField.font = .preferredFont(forTextStyle: .body)
+        searchField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        searchField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return searchField
+    }
+
+    func updateNSView(_ searchField: NSSearchField, context: Context) {
+        context.coordinator.text = $text
+        searchField.placeholderString = placeholder
+
+        if searchField.stringValue != text {
+            searchField.stringValue = text
+        }
+
+        guard context.coordinator.focusRequest != focusRequest else { return }
+        context.coordinator.focusRequest = focusRequest
+        DispatchQueue.main.async {
+            searchField.window?.makeFirstResponder(searchField)
+        }
+    }
+
+    final class Coordinator: NSObject, NSSearchFieldDelegate {
+        var text: Binding<String>
+        var focusRequest = 0
+
+        init(text: Binding<String>) {
+            self.text = text
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let searchField = notification.object as? NSSearchField else { return }
+            text.wrappedValue = searchField.stringValue
+        }
+
+        func searchFieldDidEndSearching(_ sender: NSSearchField) {
+            text.wrappedValue = sender.stringValue
+        }
     }
 }
 
