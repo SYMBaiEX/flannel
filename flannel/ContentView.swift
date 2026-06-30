@@ -17,6 +17,12 @@ private struct ChatProviderStreamAttempt {
     var contextTokenCount: Int?
 }
 
+private enum ShellFocusDestination {
+    case composer
+    case sidebarSearch
+    case inspector
+}
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var store: WorkspaceStore
@@ -45,6 +51,7 @@ struct ContentView: View {
     @State private var settingsSidebarFocusRequest = 0
     @State private var composerFocusRequest = 0
     @State private var inspectorFocusRequest = 0
+    @State private var settingsReturnFocus: ShellFocusDestination = .composer
 
     var body: some View {
         rootSplitView
@@ -109,7 +116,9 @@ struct ContentView: View {
             searchFocusRequest: sidebarSearchFocusRequest,
             settingsFocusRequest: settingsSidebarFocusRequest,
             newChat: newChat,
-            enterSettings: enterSettingsMode,
+            enterSettings: { tab in
+                enterSettingsMode(tab, returnFocus: .sidebarSearch)
+            },
             exitSettings: { exitSettingsMode() },
             persist: persistQuietly
         )
@@ -148,7 +157,9 @@ struct ContentView: View {
             continueAfterToolResult: { result, toolCall in
                 continueAfterToolResult(result, sourceToolCall: toolCall)
             },
-            openModelSetup: { enterSettingsMode(.models) },
+            openModelSetup: {
+                enterSettingsMode(.models, returnFocus: .composer)
+            },
             exitSettings: { exitSettingsMode() },
             importChat: importChat,
             exportWorkspaceSnapshot: exportWorkspaceSnapshot,
@@ -180,7 +191,9 @@ struct ContentView: View {
             collapseArtifacts: { setInspectorVisibility(false) },
             copyComparisonResult: copyComparisonResult,
             useComparisonResultProvider: useComparisonResultProvider,
-            openSettingsTab: enterSettingsMode,
+            openSettingsTab: { tab in
+                enterSettingsMode(tab, returnFocus: .inspector)
+            },
             persist: persistQuietly
         )
         .navigationSplitViewColumnWidth(min: 320, ideal: 360, max: 420)
@@ -195,7 +208,7 @@ struct ContentView: View {
                     isDiscoveringModels: isDiscoveringModels,
                     discoverModels: discoverLocalModels,
                     openProviderSetup: {
-                        enterSettingsMode(.models)
+                        enterSettingsMode(.models, returnFocus: .composer)
                     },
                     persist: persistQuietly
                 )
@@ -386,21 +399,21 @@ struct ContentView: View {
         case .openCompare:
             runModelComparison()
         case .openModels:
-            enterSettingsMode(.models)
+            enterSettingsMode(.models, returnFocus: .composer)
         case .openKnowledge:
-            enterSettingsMode(.knowledge)
+            enterSettingsMode(.knowledge, returnFocus: .composer)
         case .rebuildQueuedKnowledge:
             rebuildKnowledgeIndex(onlyQueued: true)
         case .rebuildAllKnowledge:
             rebuildKnowledgeIndex(onlyQueued: false)
         case .openTools:
-            enterSettingsMode(.tools)
+            enterSettingsMode(.tools, returnFocus: .composer)
         case .openAgents:
-            enterSettingsMode(.agents)
+            enterSettingsMode(.agents, returnFocus: .composer)
         case .openPrompts:
-            enterSettingsMode(.prompts)
+            enterSettingsMode(.prompts, returnFocus: .composer)
         case .openSettings:
-            enterSettingsMode(.general)
+            enterSettingsMode(.general, returnFocus: .composer)
         case .focusChat:
             setInspectorVisibility(false, focusComposerWhenHidden: true)
         case .showInspector:
@@ -443,11 +456,12 @@ struct ContentView: View {
         }
     }
 
-    private func enterSettingsMode(_ tab: SettingsTab = .general) {
+    private func enterSettingsMode(_ tab: SettingsTab = .general, returnFocus: ShellFocusDestination = .composer) {
         selectedSettingsTab = tab
         let isEnteringSettings = sidebarSurface != .settings
         if isEnteringSettings {
             columnVisibilityBeforeSettings = columnVisibility
+            settingsReturnFocus = returnFocus
         }
         withAnimation(.easeInOut(duration: 0.18)) {
             sidebarSurface = .settings
@@ -463,6 +477,7 @@ struct ContentView: View {
 
     private func exitSettingsMode(focusComposer: Bool = true) {
         let restoredVisibility = columnVisibilityBeforeSettings
+        let returnFocus = settingsReturnFocus
         withAnimation(.easeInOut(duration: 0.18)) {
             sidebarSurface = .conversation
             columnVisibility = restoredVisibility
@@ -470,7 +485,7 @@ struct ContentView: View {
             persistQuietly()
         }
         if focusComposer {
-            requestComposerFocus()
+            requestFocus(returnFocus)
         }
     }
 
@@ -494,6 +509,21 @@ struct ContentView: View {
 
     private func requestComposerFocus() {
         composerFocusRequest += 1
+    }
+
+    private func requestFocus(_ destination: ShellFocusDestination) {
+        switch destination {
+        case .composer:
+            requestComposerFocus()
+        case .sidebarSearch:
+            sidebarSearchFocusRequest += 1
+        case .inspector:
+            if columnVisibility == .all {
+                inspectorFocusRequest += 1
+            } else {
+                requestComposerFocus()
+            }
+        }
     }
 
     private func announce(_ message: String) {
