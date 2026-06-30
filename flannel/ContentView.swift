@@ -9163,6 +9163,16 @@ private struct ProviderRoutingPicker: View {
                 let familyProviders = providers(in: family)
                 if !familyProviders.isEmpty {
                     Section(family.title) {
+                        if let prompt = family.modeChoicePrompt {
+                            Button { } label: {
+                                ProviderModeFamilyPromptMenuRow(
+                                    prompt: prompt,
+                                    icon: family.icon
+                                )
+                            }
+                            .disabled(true)
+                        }
+
                         ForEach(familyProviders) { provider in
                             let modelNames = selectableModelNames(for: provider)
                             if modelNames.isEmpty {
@@ -9346,6 +9356,20 @@ private struct ProviderRoutingPicker: View {
         }
 
         return ProviderRouteReadiness(text: "Check setup", icon: "wrench.adjustable", tint: .secondary)
+    }
+}
+
+private struct ProviderModeFamilyPromptMenuRow: View {
+    var prompt: String
+    var icon: String
+
+    var body: some View {
+        Label {
+            Text(prompt)
+                .font(.caption)
+        } icon: {
+            Image(systemName: icon)
+        }
     }
 }
 
