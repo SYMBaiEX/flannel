@@ -459,6 +459,46 @@ struct AIChatProviderRegistryTests {
     }
 
     @MainActor
+    @Test("Provider picker copy names API key subscription CLI and local server boundaries")
+    func providerPickerCopyNamesCredentialAndRuntimeBoundaries() throws {
+        let (_, store) = try makeLoadedStore()
+
+        let ollama = try #require(store.providerConfigurations.first(where: { $0.kind == .ollama }))
+        let openAIAPI = try #require(store.providerConfigurations.first(where: { $0.kind == .openAI }))
+        let chatGPTCLI = try #require(store.providerConfigurations.first(where: { $0.kind == .chatGPTCLI }))
+        let anthropicAPI = try #require(store.providerConfigurations.first(where: { $0.kind == .anthropic }))
+        let claudeCLI = try #require(store.providerConfigurations.first(where: { $0.kind == .claudeCodeCLI }))
+
+        #expect(ollama.providerModeSelectionTitle == "Use Ollama local server")
+        #expect(ollama.providerModeSelectionDetail.contains("Local Ollama chat route"))
+        #expect(ollama.providerPickerRouteSummary.contains("Local server"))
+        #expect(ollama.providerPickerRouteSummary.contains("Local Server"))
+        #expect(ollama.providerPickerAccessibilityLabel.contains("Ollama, Local server"))
+
+        #expect(openAIAPI.providerModeChoiceDetail.contains("API Key"))
+        #expect(openAIAPI.providerModeChoiceDetail.contains("External API"))
+        #expect(openAIAPI.providerModeSelectionDetail.contains("Requires a Keychain API key"))
+        #expect(openAIAPI.providerModeSelectionDetail.contains("not ChatGPT subscription access"))
+        #expect(openAIAPI.providerPickerAccessibilityLabel.contains("OpenAI API, API key"))
+        #expect(openAIAPI.providerPickerAccessibilityLabel.contains("External API"))
+
+        #expect(chatGPTCLI.providerModeChoiceDetail.contains("Subscription CLI"))
+        #expect(chatGPTCLI.providerModeChoiceDetail.contains("Local CLI"))
+        #expect(chatGPTCLI.providerModeSelectionDetail.contains("Local authenticated CLI route"))
+        #expect(chatGPTCLI.providerModeSelectionDetail.contains("does not read an OpenAI Platform key"))
+        #expect(chatGPTCLI.providerPickerAccessibilityLabel.contains("ChatGPT/Codex subscription, Subscription CLI"))
+        #expect(chatGPTCLI.providerPickerAccessibilityLabel.contains("Local CLI"))
+
+        #expect(anthropicAPI.providerModeSelectionDetail.contains("Requires a Keychain API key"))
+        #expect(anthropicAPI.providerModeSelectionDetail.contains("not Claude subscription access"))
+        #expect(anthropicAPI.providerPickerAccessibilityLabel.contains("Anthropic API, API key"))
+
+        #expect(claudeCLI.providerModeSelectionDetail.contains("Local authenticated CLI route"))
+        #expect(claudeCLI.providerModeSelectionDetail.contains("does not read an Anthropic Console key"))
+        #expect(claudeCLI.providerPickerAccessibilityLabel.contains("Claude Code subscription, Subscription CLI"))
+    }
+
+    @MainActor
     @Test("Provider runtime policy centralizes readiness and chat transport modes")
     func providerRuntimePolicyCentralizesModeMatrix() throws {
         let (_, store) = try makeLoadedStore()

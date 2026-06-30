@@ -2224,26 +2224,26 @@ private enum ProviderSettingsGroupKind: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .localServers:
-            "Local Servers"
+            "Local Server Routes"
         case .subscriptionCLI:
-            "Subscription CLIs"
+            "Subscription CLI Routes"
         case .byokAPIs:
-            "BYOK Cloud APIs"
+            "API-Key Cloud Routes"
         case .localBridge:
-            "Local Bridge"
+            "Local Bridge Route"
         }
     }
 
     var detail: String {
         switch self {
         case .localServers:
-            "Ollama and LM Studio use local loopback endpoints and do not require API keys."
+            "Ollama and LM Studio require a running local server and selected local model. They do not use provider API keys or subscription sign-in."
         case .subscriptionCLI:
-            "ChatGPT/Codex and Claude Code use locally authenticated commands, not provider API keys."
+            "ChatGPT/Codex and Claude Code use locally authenticated commands. They do not store or read provider API keys."
         case .byokAPIs:
-            "Hosted providers use your own API keys saved in macOS Keychain before cloud requests are allowed."
+            "Hosted providers require your own API key saved in macOS Keychain before cloud requests are allowed."
         case .localBridge:
-            "The optional bridge points at a local service that owns its own provider runtime."
+            "The optional bridge points at a local service that owns its own provider runtime and credential policy."
         }
     }
 
@@ -2300,30 +2300,30 @@ private enum ProviderModeGuideKind: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .localServer:
-            "Local servers"
+            "Local server routes"
         case .subscriptionCLI:
-            "Subscription CLIs"
+            "Subscription CLI routes"
         case .apiKey:
-            "API key routes"
+            "API-key routes"
         case .compatibleEndpoint:
             "OpenAI-compatible endpoints"
         case .aiSDKBridge:
-            "Local bridge"
+            "Local bridge route"
         }
     }
 
     var detail: String {
         switch self {
         case .localServer:
-            "Use loopback model servers such as Ollama or LM Studio. These routes stay on this Mac and do not use provider API keys."
+            "Use loopback model servers such as Ollama or LM Studio. These routes need a running local server and selected local model, not provider API keys."
         case .subscriptionCLI:
-            "Use a locally authenticated CLI session such as ChatGPT/Codex or Claude Code. Subscription sign-in is separate from BYOK API access."
+            "Use a locally authenticated CLI session such as ChatGPT/Codex or Claude Code. Subscription sign-in is separate from API-key access and stays in the local command-line tool."
         case .apiKey:
-            "Use the provider's official hosted API. Each route needs its own Keychain-backed API credential before remote requests can run."
+            "Use the provider's official hosted API. Each route needs its own Keychain-backed API key before remote requests can run."
         case .compatibleEndpoint:
             "Use a custom OpenAI-compatible endpoint, or an Anthropic-compatible endpoint when that route mode is selected. These routes always need an endpoint and model id, and they may stay local or go remote depending on the endpoint."
         case .aiSDKBridge:
-            "Use the optional local AI SDK bridge service. The bridge owns downstream provider/runtime selection outside this app."
+            "Use the optional local AI SDK bridge service. The bridge owns downstream provider runtime and credential handling outside this app."
         }
     }
 
@@ -2691,11 +2691,11 @@ private struct ProviderModeGuideRow: View {
         case .aiSDKBridge:
             return "\(configuredRouteCount) routes • \(modelSummary) • bridge-managed runtime"
         case .subscriptionCLI:
-            return "\(configuredRouteCount) routes • \(modelSummary) • local terminal auth"
+            return "\(configuredRouteCount) routes • \(modelSummary) • subscription CLI sign-in"
         case .apiKey:
-            return "\(configuredRouteCount) routes • \(modelSummary) • Keychain API credentials"
+            return "\(configuredRouteCount) routes • \(modelSummary) • Keychain API keys"
         case .localServer:
-            return "\(configuredRouteCount) routes • \(modelSummary) • loopback runtime"
+            return "\(configuredRouteCount) routes • \(modelSummary) • local server runtime"
         }
     }
 
@@ -2815,6 +2815,12 @@ private struct ProviderModeGuideRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        "\(kind.title). \(availability.title). \(kind.detail) \(routeSummary). \(configuredProviderSummary)."
     }
 }
 
@@ -2839,6 +2845,8 @@ private struct ProviderSettingsGroupHeader: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(kind.title). \(count) configured. \(kind.detail)")
     }
 }
 
@@ -2907,7 +2915,7 @@ private struct ProviderRoutingOverview: View {
         guard let activeProvider else {
             return "No runnable provider currently satisfies setup, privacy, and transport checks."
         }
-        return "\(activeProvider.accessMode.title) - \(activeProvider.modelIdentifier)"
+        return activeProvider.providerPickerRouteSummary
     }
 
     private var selectedProviderSummary: String {
@@ -2919,9 +2927,9 @@ private struct ProviderRoutingOverview: View {
             return "Choosing a provider records the route without changing privacy gates."
         }
         if activeProvider?.id == selectedProvider.id {
-            return "This selected provider is active. \(runnableProviderCount) runnable provider\(runnableProviderCount == 1 ? "" : "s") available."
+            return "This selected provider is active. \(selectedProvider.providerPickerRouteSummary). \(runnableProviderCount) runnable provider\(runnableProviderCount == 1 ? "" : "s") available."
         }
-        return "Selected but inactive until setup and privacy gates allow it."
+        return "Selected but inactive until setup and privacy gates allow it. \(selectedProvider.providerPickerRouteSummary)."
     }
 
     private var discoverySummary: String {
@@ -2954,11 +2962,12 @@ private struct ProviderSetupSummary: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(provider.settingsSetupInstruction)
 
             HStack(alignment: .top, spacing: 14) {
                 setupFact(
-                    provider.accessMode.title,
-                    detail: provider.privacyScope.title,
+                    provider.settingsRouteSummaryTitle,
+                    detail: provider.settingsRouteSummaryDetail,
                     systemImage: provider.accessMode.settingsSystemImage,
                     style: AnyShapeStyle(.secondary)
                 )
@@ -2998,6 +3007,8 @@ private struct ProviderSetupSummary: View {
         }
         .labelStyle(.titleAndIcon)
         .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title). \(detail)")
     }
 
     private var routingTitle: String {
@@ -3051,6 +3062,14 @@ private struct ProviderSettingsStatusChip: Identifiable {
     var id: String {
         "\(systemImage)-\(title)"
     }
+
+    var accessibilityLabel: String {
+        if let detail,
+           !detail.isEmpty {
+            return "\(title). \(detail)"
+        }
+        return title
+    }
 }
 
 private struct ProviderSettingsNextStep {
@@ -3086,6 +3105,7 @@ private struct ProviderSettingsChipStrip: View {
                             prominence: chip.prominence
                         )
                         .help(chip.detail ?? chip.title)
+                        .accessibilityLabel(chip.accessibilityLabel)
                     }
                 }
             }
@@ -3154,7 +3174,7 @@ private struct ProviderSettingsRow: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(provider.displayName)
                         .font(.headline)
-                    Text("\(provider.kind.title) - \(provider.modeBoundaryTitle) - \(modelSummary)")
+                    Text(provider.settingsBoundarySubtitle(modelSummary: modelSummary))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -3163,6 +3183,10 @@ private struct ProviderSettingsRow: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                .help(provider.modeBoundaryDetail)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(provider.settingsBoundaryAccessibilityLabel(modelSummary: modelSummary))
+                .accessibilityHint(provider.modeBoundaryDetail)
 
                 Spacer()
 
@@ -3405,7 +3429,16 @@ private struct ProviderSettingsRow: View {
     }
 
     private var endpointLabel: String {
-        provider.accessMode == .subscriptionCLI ? "Command" : "Endpoint"
+        switch provider.accessMode {
+        case .subscriptionCLI:
+            "CLI command"
+        case .localServer:
+            "Server endpoint"
+        case .apiKey, .openAICompatible, .anthropicCompatible:
+            "API endpoint"
+        case .aiSDKBridge:
+            "Bridge endpoint"
+        }
     }
 
     private var endpointHelp: String? {
@@ -3416,11 +3449,11 @@ private struct ProviderSettingsRow: View {
         guard provider.accessMode == .subscriptionCLI else { return nil }
         switch provider.kind {
         case .chatGPTCLI:
-            return "Recommended: `codex exec --json -`. The `-` tells Codex to read Flannel's rendered prompt from stdin while `--json` emits JSONL events. Placeholders like `{prompt}`, `{last_user_message}`, `{model}`, and legacy `{stdin}` are also supported. Pipes and shell expansion are rejected."
+            return "Subscription CLI route. Recommended: `codex exec --json -`. The `-` tells Codex to read Flannel's rendered prompt from stdin while `--json` emits JSONL events. This does not use an OpenAI Platform API key. Placeholders like `{prompt}`, `{last_user_message}`, `{model}`, and legacy `{stdin}` are also supported. Pipes and shell expansion are rejected."
         case .claudeCodeCLI:
-            return "Recommended: `claude -p --output-format stream-json --verbose`. Flannel decodes Claude JSON or stream-json output. Interactive Claude sessions are not launched from chat."
+            return "Subscription CLI route. Recommended: `claude -p --output-format stream-json --verbose`. Flannel decodes Claude JSON or stream-json output through the local Claude Code login. This does not use an Anthropic Console API key. Interactive Claude sessions are not launched from chat."
         default:
-            return "Use a direct argv-style command. Shell syntax, pipes, redirects, and command substitution are rejected."
+            return "Use a direct argv-style subscription CLI command. Shell syntax, pipes, redirects, and command substitution are rejected."
         }
     }
 
@@ -3485,7 +3518,8 @@ private struct ProviderSettingsRow: View {
             title: provider.settingsRouteChipTitle,
             systemImage: provider.accessMode.settingsSystemImage,
             tone: provider.settingsRouteChipTone,
-            prominence: .tinted
+            prominence: .tinted,
+            detail: provider.settingsRouteChipDetail
         )
     }
 
@@ -3514,7 +3548,8 @@ private struct ProviderSettingsRow: View {
             title: provider.settingsCredentialSummary,
             systemImage: provider.settingsCredentialSystemImage,
             tone: provider.settingsCredentialTone,
-            prominence: provider.secretReference == nil && provider.settingsRequiresKeychainSecret ? .tinted : .subtle
+            prominence: provider.secretReference == nil && provider.settingsRequiresKeychainSecret ? .tinted : .subtle,
+            detail: provider.settingsCredentialDetail
         )
     }
 
@@ -3709,15 +3744,22 @@ private struct ProviderSettingsRow: View {
         case .subscriptionCLI:
             return ProviderSettingsNextStep(
                 title: "Confirm the CLI is signed in",
-                detail: "Use the recommended command shape, make sure the CLI account works in Terminal, then check readiness.",
+                detail: "Use the recommended command shape, make sure the subscription CLI account works in Terminal, then check readiness. Do not paste an API key into this route.",
                 systemImage: "terminal",
                 tone: .info
             )
-        case .apiKey, .openAICompatible, .anthropicCompatible:
+        case .apiKey, .anthropicCompatible:
             return ProviderSettingsNextStep(
-                title: "Finish BYOK setup",
-                detail: "Save the API key in Keychain when required, confirm the model id, then check readiness.",
+                title: "Finish API-key setup",
+                detail: "Save the provider API key in Keychain when required, confirm the model id, then check readiness. Subscription sign-in does not satisfy this route.",
                 systemImage: "key",
+                tone: .info
+            )
+        case .openAICompatible:
+            return ProviderSettingsNextStep(
+                title: "Confirm endpoint and key policy",
+                detail: "Confirm whether the compatible endpoint is local or remote, save an API key only when that service requires one, then check readiness.",
+                systemImage: "arrow.left.arrow.right",
                 tone: .info
             )
         case .aiSDKBridge:
@@ -4074,34 +4116,78 @@ private extension ProviderConfiguration {
     var settingsSetupInstruction: String {
         switch kind {
         case .openAI:
-            "BYOK OpenAI Platform API. A ChatGPT subscription is not used here; use ChatGPT/Codex CLI for local subscription access."
+            "API-key route for the OpenAI Platform API. A ChatGPT subscription is not used here; use ChatGPT/Codex CLI for local subscription access."
         case .chatGPTCLI:
-            "ChatGPT/Codex subscription route. Flannel runs the configured local command and does not read an OpenAI Platform key from this row."
+            "Subscription CLI route for ChatGPT/Codex. Flannel runs the configured local command and does not read an OpenAI Platform API key from this row."
         case .anthropic:
-            "BYOK Anthropic API. Claude subscription access belongs to Claude Code CLI, not this API-key route."
+            "API-key route for the Anthropic API. Claude subscription access belongs to Claude Code CLI, not this API-key route."
         case .claudeCodeCLI:
-            "Claude Code subscription route. Flannel runs Claude Code print mode through a local authenticated install."
+            "Subscription CLI route for Claude Code. Flannel runs Claude Code print mode through a local authenticated install."
         case .ollama:
             "Local Ollama server route. No API key is required; start Ollama and run local discovery to hydrate models."
         case .lmStudio:
             "Local LM Studio server route. No API key is required; start the LM Studio local server before routing chat."
         case .gemini:
-            "BYOK Google Gemini route using the configured OpenAI-compatible Gemini endpoint."
+            "API-key route for Google Gemini using the configured OpenAI-compatible Gemini endpoint."
         case .xAI:
-            "BYOK xAI route for Grok models through the configured xAI API endpoint."
+            "API-key route for xAI Grok models through the configured xAI API endpoint."
         case .mistral:
-            "BYOK Mistral route through the configured Mistral API endpoint."
+            "API-key route through the configured Mistral API endpoint."
         case .groq:
-            "BYOK Groq route for hosted fast-inference models through the configured Groq endpoint."
+            "API-key route for hosted Groq models through the configured Groq endpoint."
         case .openRouter:
-            "BYOK OpenRouter route. Model identifiers usually include the upstream provider prefix."
+            "API-key route through OpenRouter. Model identifiers usually include the upstream provider prefix."
         case .perplexity:
-            "BYOK Perplexity route for Perplexity chat and search-capable models."
+            "API-key route for Perplexity chat and search-capable models."
         case .customOpenAICompatible:
             "Custom OpenAI-compatible route. Use the provider's base URL and key requirements, then validate before enabling."
         case .vercelAISDKBridge:
             "Local bridge route. A separate localhost service must be running; this row does not configure cloud keys directly."
         }
+    }
+
+    var settingsRouteSummaryTitle: String {
+        switch accessMode {
+        case .localServer:
+            "Local server route"
+        case .subscriptionCLI:
+            "Subscription CLI route"
+        case .apiKey:
+            "API-key route"
+        case .openAICompatible:
+            "OpenAI-compatible route"
+        case .anthropicCompatible:
+            "Anthropic-compatible route"
+        case .aiSDKBridge:
+            "Local bridge route"
+        }
+    }
+
+    var settingsRouteSummaryDetail: String {
+        switch accessMode {
+        case .localServer:
+            "Uses a running local model server"
+        case .subscriptionCLI:
+            "Uses a signed-in local command"
+        case .apiKey:
+            "Uses a Keychain API key"
+        case .openAICompatible:
+            runtimeBoundary == .localServer
+                ? "Uses a local compatible endpoint"
+                : "Uses a remote compatible endpoint"
+        case .anthropicCompatible:
+            "Uses an Anthropic-compatible endpoint"
+        case .aiSDKBridge:
+            "Uses a local bridge service"
+        }
+    }
+
+    func settingsBoundarySubtitle(modelSummary: String) -> String {
+        "\(settingsRouteSummaryTitle) - \(runtimeBoundary.title) - \(modelSummary)"
+    }
+
+    func settingsBoundaryAccessibilityLabel(modelSummary: String) -> String {
+        "\(displayName). \(settingsRouteSummaryTitle). \(runtimeBoundary.title). Model: \(modelSummary). \(settingsCredentialSummary)."
     }
 
     var settingsEndpointPlaceholder: String {
@@ -4140,31 +4226,31 @@ private extension ProviderConfiguration {
     var settingsEndpointHelp: String? {
         switch kind {
         case .ollama:
-            "Use the loopback Ollama server. Discovery checks configured Ollama endpoints and updates installed model lists."
+            "Local server route. Use the loopback Ollama server; no API key or subscription sign-in is read from this row."
         case .lmStudio:
-            "Use LM Studio's local server endpoint. Start the server in LM Studio before validating."
+            "Local server route. Use LM Studio's local server endpoint; start the server in LM Studio before validating."
         case .openAI:
-            "Use the OpenAI Platform API base URL. This is separate from ChatGPT web or desktop subscription access."
+            "API-key route. Use the OpenAI Platform API base URL. This is separate from ChatGPT web or desktop subscription access."
         case .anthropic:
-            "Use the Anthropic API base URL. This is separate from Claude subscription or Claude Code CLI access."
+            "API-key route. Use the Anthropic API base URL. This is separate from Claude subscription or Claude Code CLI access."
         case .gemini:
-            "Use Gemini's OpenAI-compatible endpoint when routing through the OpenAI-shaped transport."
+            "API-key route. Use Gemini's OpenAI-compatible endpoint when routing through the OpenAI-shaped transport."
         case .xAI:
-            "Use xAI's OpenAI-compatible API base URL for Grok models."
+            "API-key route. Use xAI's OpenAI-compatible API base URL for Grok models."
         case .mistral:
-            "Use Mistral's API base URL for Mistral-hosted models."
+            "API-key route. Use Mistral's API base URL for Mistral-hosted models."
         case .groq:
-            "Use Groq's OpenAI-compatible base URL for Groq-hosted model ids."
+            "API-key route. Use Groq's OpenAI-compatible base URL for Groq-hosted model ids."
         case .openRouter:
-            "Use OpenRouter's API base URL. The model id normally includes an upstream provider prefix."
+            "API-key route. Use OpenRouter's API base URL. The model id normally includes an upstream provider prefix."
         case .perplexity:
-            "Use Perplexity's API base URL for supported Perplexity model ids."
+            "API-key route. Use Perplexity's API base URL for supported Perplexity model ids."
         case .customOpenAICompatible:
-            "Use the service's OpenAI-compatible base URL. Local endpoints can stay HTTP; remote endpoints should use HTTPS."
+            "OpenAI-compatible route. Local endpoints can stay HTTP; remote endpoints should use HTTPS and follow the provider's key policy."
         case .chatGPTCLI, .claudeCodeCLI:
             nil
         case .vercelAISDKBridge:
-            "Use the local bridge URL after starting the separate bridge service."
+            "Local bridge route. Use the local bridge URL after starting the separate bridge service."
         }
     }
 
@@ -4251,19 +4337,19 @@ private extension ProviderConfiguration {
 
     var settingsCredentialSummary: String {
         if settingsRequiresKeychainSecret {
-            return secretReference == nil ? "Key missing" : "Key saved"
+            return secretReference == nil ? "API key missing" : "API key saved"
         }
         if settingsShowsKeychainSecretControl {
-            return secretReference == nil ? "Optional key" : "Key saved"
+            return secretReference == nil ? "Optional API key" : "API key saved"
         }
 
         switch accessMode {
         case .localServer:
-            return "No API key"
+            return "No API key used"
         case .subscriptionCLI:
-            return "Local login"
+            return "Subscription CLI sign-in"
         case .aiSDKBridge:
-            return "Bridge-owned"
+            return "Bridge-owned credentials"
         case .apiKey, .openAICompatible, .anthropicCompatible:
             return "No key required"
         }
@@ -4271,19 +4357,19 @@ private extension ProviderConfiguration {
 
     var settingsCredentialDetail: String {
         if settingsRequiresKeychainSecret {
-            return settingsAPIKeyName
+            return "\(settingsAPIKeyName) in Keychain"
         }
         if settingsShowsKeychainSecretControl {
-            return secretReference == nil ? "Optional provider key" : settingsAPIKeyName
+            return secretReference == nil ? "Provider key optional" : "\(settingsAPIKeyName) in Keychain"
         }
 
         switch accessMode {
         case .localServer:
-            return "Loopback server"
+            return "Start the local server and select a model"
         case .subscriptionCLI:
-            return "CLI auth"
+            return "Use the account already signed in to the local CLI"
         case .aiSDKBridge:
-            return "Local service"
+            return "Configured by the local bridge service"
         case .apiKey, .openAICompatible, .anthropicCompatible:
             return "Provider policy"
         }
@@ -4350,13 +4436,32 @@ private extension ProviderConfiguration {
     var settingsRouteChipTitle: String {
         switch accessMode {
         case .localServer:
-            "Local"
-        case .apiKey, .openAICompatible, .anthropicCompatible:
-            "BYOK"
+            "Local server"
+        case .apiKey, .anthropicCompatible:
+            "API key"
+        case .openAICompatible:
+            runtimeBoundary == .localServer ? "Local endpoint" : "Remote endpoint"
         case .subscriptionCLI:
-            "CLI"
+            "Subscription CLI"
         case .aiSDKBridge:
             "Bridge"
+        }
+    }
+
+    var settingsRouteChipDetail: String {
+        switch accessMode {
+        case .localServer:
+            "Routes chat to a configured local model server."
+        case .apiKey:
+            "Routes chat to the hosted provider API with a Keychain API key."
+        case .subscriptionCLI:
+            "Routes chat through the signed-in local command-line tool."
+        case .openAICompatible:
+            "Routes chat to an OpenAI-compatible endpoint; the endpoint decides whether it is local or remote."
+        case .anthropicCompatible:
+            "Routes chat to an Anthropic-compatible endpoint with its configured key policy."
+        case .aiSDKBridge:
+            "Routes chat to a local bridge process."
         }
     }
 
@@ -4366,7 +4471,9 @@ private extension ProviderConfiguration {
             .success
         case .subscriptionCLI, .aiSDKBridge:
             .info
-        case .apiKey, .openAICompatible, .anthropicCompatible:
+        case .openAICompatible:
+            runtimeBoundary == .localServer ? .success : .warning
+        case .apiKey, .anthropicCompatible:
             .warning
         }
     }
