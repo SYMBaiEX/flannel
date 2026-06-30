@@ -1,6 +1,6 @@
 # Flannel AI Chat Product and Engineering Specification (Implementation-Aligned)
 
-Last updated: 2026-06-29
+Last updated: 2026-06-30
 Scope note: this document describes behavior currently in this codebase, not roadmap-only vision.
 
 ## 1. System intent
@@ -19,6 +19,17 @@ Scope note: this document describes behavior currently in this codebase, not roa
 - Local fallback boundary: `AssistantRuntime` runs deterministic local tool responses and status reporting.
 - Tool boundary: `LocalToolExecutionService` gates execution, permissions, and execution result output.
 - Secret boundary: `KeychainSecretStore` owns credential lifecycle.
+
+## 2.1 June 2026 external-doc anchors
+
+These references keep Flannel's provider and macOS architecture vocabulary aligned with current primary docs:
+
+- Apple design direction: use native SwiftUI split views, toolbar/search placement, and system glass primitives before adding bespoke chrome. Custom glass belongs on app-specific controls, not as a replacement for the system sidebar or toolbar.
+- OpenAI: official hosted integration is the Platform API. Flannel's OpenAI route uses the Responses API streaming surface; ChatGPT/Codex subscription-style use must remain a local CLI-backed route when configured, not an API-key mode.
+- Anthropic: official hosted integration is the Messages API. Claude subscription-style use must remain a Claude Code CLI print-mode route when configured, not an Anthropic API-key mode.
+- Ollama: native local integration is the loopback `/api/*` surface for model list, running models, chat streaming, pull/delete, show, and embeddings.
+- LM Studio: local integration should prefer the native local server model list when available and keep the OpenAI-compatible `/v1/*` routes as the chat/embedding compatibility surface.
+- Vercel AI SDK: keep the bridge external and version-neutral. The current public AI SDK docs identify Version 6 as the latest documentation line, so Flannel should not hardcode a v7 dependency claim until upstream docs actually support it.
 
 ## 3. Provider mode truth
 
