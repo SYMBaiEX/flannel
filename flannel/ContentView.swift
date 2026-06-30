@@ -484,9 +484,12 @@ struct ContentView: View {
     }
 
     private func exitSettingsMode(focusComposer: Bool = true) {
+        let restoredVisibility = columnVisibilityBeforeSettings
         withAnimation(.easeInOut(duration: 0.18)) {
             sidebarSurface = .conversation
-            columnVisibility = store.preferences.showsRightSidebar ? .all : .doubleColumn
+            columnVisibility = restoredVisibility
+            store.preferences.showsRightSidebar = restoredVisibility == .all
+            persistQuietly()
         }
         if focusComposer {
             requestComposerFocus()
