@@ -150,6 +150,9 @@ struct ContentView: View {
             },
             openModelSetup: { enterSettingsMode(.models) },
             exitSettings: { exitSettingsMode() },
+            importChat: importChat,
+            exportWorkspaceSnapshot: exportWorkspaceSnapshot,
+            importWorkspaceSnapshot: importWorkspaceSnapshot,
             persist: persistQuietly
         )
         .navigationSplitViewColumnWidth(min: 620, ideal: 1_020)
@@ -3306,6 +3309,9 @@ private struct MainSurface: View {
     var continueAfterToolResult: (LocalToolExecutionResult, AIToolCallRecord?) -> Void
     var openModelSetup: () -> Void
     var exitSettings: () -> Void
+    var importChat: () -> Void
+    var exportWorkspaceSnapshot: () -> Void
+    var importWorkspaceSnapshot: () -> Void
     var persist: () -> Void
 
     var body: some View {
@@ -3335,6 +3341,9 @@ private struct MainSurface: View {
                     store: store,
                     persist: persist,
                     exitSettings: exitSettings,
+                    importChat: importChat,
+                    exportWorkspaceSnapshot: exportWorkspaceSnapshot,
+                    importWorkspaceSnapshot: importWorkspaceSnapshot,
                     selectedTab: $selectedSettingsTab,
                     searchText: $settingsSearchText,
                     usesSidebarNavigation: false

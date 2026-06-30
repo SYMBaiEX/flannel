@@ -12,6 +12,9 @@ struct SettingsSurface: View {
     @Bindable var store: WorkspaceStore
     var persist: () -> Void
     var exitSettings: (() -> Void)?
+    var importChat: (() -> Void)?
+    var exportWorkspaceSnapshot: (() -> Void)?
+    var importWorkspaceSnapshot: (() -> Void)?
     @AppStorage("flannel.settings.selectedTab") private var selectedTab: SettingsTab = .general
     @State private var localSearchText = ""
     private var externalSelectedTab: Binding<SettingsTab>?
@@ -62,6 +65,9 @@ struct SettingsSurface: View {
         store: WorkspaceStore,
         persist: @escaping () -> Void,
         exitSettings: (() -> Void)? = nil,
+        importChat: (() -> Void)? = nil,
+        exportWorkspaceSnapshot: (() -> Void)? = nil,
+        importWorkspaceSnapshot: (() -> Void)? = nil,
         selectedTab: Binding<SettingsTab>? = nil,
         searchText: Binding<String>? = nil,
         usesSidebarNavigation: Bool = true
@@ -69,6 +75,9 @@ struct SettingsSurface: View {
         self.store = store
         self.persist = persist
         self.exitSettings = exitSettings
+        self.importChat = importChat
+        self.exportWorkspaceSnapshot = exportWorkspaceSnapshot
+        self.importWorkspaceSnapshot = importWorkspaceSnapshot
         self.externalSelectedTab = selectedTab
         self.externalSearchText = searchText
         self.usesSidebarNavigation = usesSidebarNavigation
@@ -1265,6 +1274,39 @@ struct SettingsSurface: View {
                 LabeledContent("Comparison runs", value: "\(store.modelComparisonRuns.count)")
             }
 
+            if hasBackupActions {
+                Section("Backup & Restore") {
+                    Text("Export a portable local snapshot before risky changes, restore a full workspace snapshot, or import a single chat transcript.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if let exportWorkspaceSnapshot {
+                        Button {
+                            exportWorkspaceSnapshot()
+                        } label: {
+                            Label("Export Workspace Snapshot", systemImage: "square.and.arrow.up")
+                        }
+                    }
+
+                    if let importWorkspaceSnapshot {
+                        Button {
+                            importWorkspaceSnapshot()
+                        } label: {
+                            Label("Import Workspace Snapshot", systemImage: "square.and.arrow.down")
+                        }
+                    }
+
+                    if let importChat {
+                        Button {
+                            importChat()
+                        } label: {
+                            Label("Import Chat Transcript", systemImage: "bubble.left.and.bubble.right")
+                        }
+                    }
+                }
+            }
+
             Section("Delete Local Workspace Data") {
                 Text("This clears local chats, projects, drafts, captures, knowledge indexes, model comparison runs, pinned/archive state, local memories, provider references, and tool traces. Flannel will recreate clean local defaults. Keychain secret values are not deleted by this reset.")
                     .font(.caption)
@@ -1288,6 +1330,10 @@ struct SettingsSurface: View {
                 }
             }
         }
+    }
+
+    private var hasBackupActions: Bool {
+        importChat != nil || exportWorkspaceSnapshot != nil || importWorkspaceSnapshot != nil
     }
 
     private var advancedPane: some View {
