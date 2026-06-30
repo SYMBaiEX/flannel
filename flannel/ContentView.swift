@@ -2576,19 +2576,29 @@ private struct SettingsSidebar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 Button(action: exitSettings) {
-                    Label("Exit Settings", systemImage: "chevron.left")
-                        .font(.callout.weight(.medium))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(spacing: 7) {
+                        Image(systemName: "chevron.left")
+                            .font(.caption.weight(.semibold))
+                            .frame(width: 14)
+                        Text("Exit Settings")
+                            .font(.callout.weight(.medium))
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .controlSize(.small)
+                .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .help("Return to chat")
                 .accessibilityLabel("Exit Settings")
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Settings")
-                        .font(.headline)
+                        .font(.callout.weight(.semibold))
                     Text("Routes, providers, privacy")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
