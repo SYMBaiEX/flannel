@@ -2099,6 +2099,8 @@ private struct AppSidebar: View {
                     provider: store.activeProvider,
                     localOnlyMode: store.preferences.localOnlyMode ?? true,
                     allowCloudProviders: store.preferences.allowCloudProviders ?? false,
+                    openProfile: { enterSettings(.general) },
+                    openModels: { enterSettings(.models) },
                     openSettings: { enterSettings(.general) }
                 )
                 .transition(.opacity)
@@ -2785,6 +2787,8 @@ private struct SidebarFooter: View {
     var provider: ProviderConfiguration?
     var localOnlyMode: Bool
     var allowCloudProviders: Bool
+    var openProfile: () -> Void
+    var openModels: () -> Void
     var openSettings: () -> Void
 
     private var providerStatusTitle: String {
@@ -2822,40 +2826,105 @@ private struct SidebarFooter: View {
         VStack(spacing: 7) {
             FlannelSeparator(opacity: 0.5)
 
-            HStack(spacing: 9) {
-                Button(action: openSettings) {
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    SidebarFooterControl(
+                        title: "Profile",
+                        subtitle: "Local workspace",
+                        systemImage: "person.crop.circle",
+                        action: openProfile
+                    )
+                    .help("Open profile and workspace settings")
+                    .accessibilityHint("Opens General settings inside this window.")
+
+                    SidebarFooterControl(
+                        title: "Settings",
+                        subtitle: "Preferences",
+                        systemImage: "gearshape",
+                        action: openSettings
+                    )
+                    .help("Open Settings")
+                    .accessibilityHint("Opens Settings inside this window.")
+                }
+
+                Button(action: openModels) {
                     Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Settings")
-                                .font(.callout.weight(.medium))
+                        HStack(spacing: 5) {
+                            Text(providerStatusTitle)
+                                .font(.caption.weight(.medium))
                                 .foregroundStyle(.primary)
                                 .lineLimit(1)
-                            Text("\(providerStatusTitle) - \(providerStatusDetail)")
-                                .font(.caption2)
+                                .truncationMode(.middle)
+                            Text("-")
+                                .foregroundStyle(.tertiary)
+                            Text(providerStatusDetail)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }
                     } icon: {
-                        Image(systemName: "gearshape")
-                            .frame(width: 18)
+                        Image(systemName: localOnlyMode ? "lock" : "network")
+                            .font(.caption.weight(.semibold))
+                            .frame(width: 14)
                     }
+                    .font(.caption)
                     .symbolRenderingMode(.hierarchical)
                     .labelStyle(.titleAndIcon)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
                 .buttonStyle(.borderless)
-                .controlSize(.regular)
                 .foregroundStyle(.secondary)
-                .help("Open Settings. \(providerStatusTitle), \(providerStatusDetail)")
-                .accessibilityLabel("Settings")
+                .help("Open Models & Providers. \(providerStatusTitle), \(providerStatusDetail)")
+                .accessibilityLabel("Provider and privacy status")
                 .accessibilityValue("\(providerStatusTitle), \(providerStatusDetail)")
-                .accessibilityHint("Open preferences, models, and privacy settings.")
+                .accessibilityHint("Opens Models and Providers settings inside this window.")
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 10)
         }
         .padding(.top, 6)
+    }
+}
+
+private struct SidebarFooterControl: View {
+    var title: String
+    var subtitle: String
+    var systemImage: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            } icon: {
+                Image(systemName: systemImage)
+                    .font(.callout)
+                    .frame(width: 18)
+            }
+            .symbolRenderingMode(.hierarchical)
+            .labelStyle(.titleAndIcon)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.small)
+        .foregroundStyle(.secondary)
+        .accessibilityLabel(title)
+        .accessibilityValue(subtitle)
     }
 }
 
