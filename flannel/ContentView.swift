@@ -4450,9 +4450,7 @@ private struct CodeBlockView: View {
             .background(.quaternary.opacity(0.35))
 
             ScrollView(.horizontal, showsIndicators: true) {
-                Text(code)
-                    .font(.system(.body, design: .monospaced))
-                    .textSelection(.enabled)
+                HighlightedCodeText(language: language, code: code)
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -4467,6 +4465,42 @@ private struct CodeBlockView: View {
     private var languageLabel: String {
         let trimmed = language?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? "Code" : trimmed
+    }
+}
+
+private struct HighlightedCodeText: View {
+    var language: String?
+    var code: String
+
+    private var text: Text {
+        CodeSyntaxHighlighter.segments(in: code, language: language).reduce(Text("")) { partial, segment in
+            partial + Text(segment.text).foregroundStyle(color(for: segment.kind))
+        }
+    }
+
+    var body: some View {
+        text
+            .font(.system(.body, design: .monospaced))
+            .textSelection(.enabled)
+    }
+
+    private func color(for kind: CodeSyntaxTokenKind?) -> Color {
+        switch kind {
+        case .keyword:
+            return .purple
+        case .stringLiteral:
+            return .green
+        case .numberLiteral:
+            return .orange
+        case .comment:
+            return .secondary
+        case .function:
+            return .blue
+        case .typeName:
+            return .teal
+        case nil:
+            return .primary
+        }
     }
 }
 
