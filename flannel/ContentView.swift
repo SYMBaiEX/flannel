@@ -481,7 +481,7 @@ struct ContentView: View {
     private func exitSettingsMode(focusComposer: Bool = true) {
         withAnimation(.easeInOut(duration: 0.18)) {
             sidebarSurface = .conversation
-            columnVisibility = store.preferences.showsRightSidebar ? columnVisibilityBeforeSettings : .doubleColumn
+            columnVisibility = store.preferences.showsRightSidebar ? .all : .doubleColumn
         }
         if focusComposer {
             requestComposerFocus()
