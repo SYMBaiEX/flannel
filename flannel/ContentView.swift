@@ -3002,6 +3002,11 @@ private struct SidebarThreadRow: View {
     var assignFolder: (UUID?) -> Void
     var addTag: (String) -> Void
     var removeTag: (String) -> Void
+    @State private var isHovering = false
+
+    private var showsQuickActions: Bool {
+        isHovering || isSelected
+    }
 
     private var lastMessagePreview: String? {
         guard let lastMessage = thread.messages.last(where: { $0.role != .system }) else {
@@ -3038,7 +3043,7 @@ private struct SidebarThreadRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 9) {
+        HStack(alignment: .center, spacing: 6) {
             Button(action: choose) {
                 HStack(alignment: .top, spacing: 9) {
                     Image(systemName: isArchived ? "archivebox" : "bubble.left")
@@ -3089,11 +3094,28 @@ private struct SidebarThreadRow: View {
             .accessibilityValue(accessibilityValueText)
             .accessibilityAddTraits(isSelected ? .isSelected : [])
             .help(lastMessagePreview ?? thread.title)
+
+            HStack(spacing: 2) {
+                SidebarThreadQuickAction(
+                    title: isPinned ? "Remove from Favorites" : "Add to Favorites",
+                    systemImage: isPinned ? "star.fill" : "star",
+                    action: pinToggle
+                )
+                SidebarThreadQuickAction(
+                    title: isArchived ? "Restore" : "Archive",
+                    systemImage: isArchived ? "tray.and.arrow.up" : "archivebox",
+                    action: archiveToggle
+                )
+            }
+            .frame(width: 48)
+            .opacity(showsQuickActions ? 1 : 0)
+            .disabled(!showsQuickActions)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .onHover { isHovering = $0 }
         .accessibilityElement(children: .contain)
         .accessibilityAction(named: isPinned ? "Remove from Favorites" : "Add to Favorites", pinToggle)
         .accessibilityAction(named: isArchived ? "Restore" : "Archive", archiveToggle)
@@ -3141,6 +3163,26 @@ private struct SidebarThreadRow: View {
                 }
             }
         }
+    }
+}
+
+private struct SidebarThreadQuickAction: View {
+    var title: String
+    var systemImage: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.semibold))
+                .symbolRenderingMode(.hierarchical)
+                .frame(width: 22, height: 22)
+                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .help(title)
+        .accessibilityLabel(title)
     }
 }
 
