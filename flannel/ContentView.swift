@@ -2954,16 +2954,23 @@ private struct SidebarThreadRow: View {
                             }
                         }
 
+                        if let lastMessagePreview {
+                            Text(lastMessagePreview)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+
                         HStack(spacing: 4) {
                             Text(thread.updatedAt.formatted(date: .abbreviated, time: .shortened))
                             if let folder {
-                                Text("•")
+                                Text("-")
                                 Label(folder.title, systemImage: folder.symbolName)
                                     .labelStyle(.titleAndIcon)
                             }
                         }
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                         .lineLimit(1)
                     }
 
