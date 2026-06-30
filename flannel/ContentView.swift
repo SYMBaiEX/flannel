@@ -2075,10 +2075,6 @@ private struct AppSidebar: View {
                 .padding(.horizontal, 14)
                 .padding(.bottom, 10)
 
-            sidebarRefinementControl
-                .padding(.horizontal, 14)
-                .padding(.bottom, 10)
-
             List(selection: selectedThreadListBinding) {
                 if query.isEmpty {
                     if visibleThreads.isEmpty {
@@ -2881,7 +2877,6 @@ private struct SidebarThreadRow: View {
     var assignFolder: (UUID?) -> Void
     var addTag: (String) -> Void
     var removeTag: (String) -> Void
-    @State private var isHovering = false
 
     private var lastMessagePreview: String? {
         guard let lastMessage = thread.messages.last(where: { $0.role != .system }) else {
@@ -2924,13 +2919,6 @@ private struct SidebarThreadRow: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-
-                        if isSelected, let lastMessagePreview {
-                            Text(lastMessagePreview)
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
                     }
 
                     Spacer(minLength: 4)
@@ -2943,37 +2931,21 @@ private struct SidebarThreadRow: View {
             .accessibilityValue(lastMessagePreview ?? "")
             .accessibilityAddTraits(isSelected ? .isSelected : [])
             .help(lastMessagePreview ?? thread.title)
-
-            if isSelected || isHovering {
-                HStack(spacing: 2) {
-                    SidebarThreadQuickAction(
-                        title: isPinned ? "Remove from Favorites" : "Add to Favorites",
-                        systemImage: isPinned ? "star.fill" : "star",
-                        action: pinToggle
-                    )
-
-                    SidebarThreadQuickAction(
-                        title: isArchived ? "Restore" : "Archive",
-                        systemImage: isArchived ? "tray.and.arrow.up" : "archivebox",
-                        action: archiveToggle
-                    )
-                }
-                .transition(.opacity)
-            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-        .onHover { hovering in
-            isHovering = hovering
-        }
         .accessibilityElement(children: .contain)
         .accessibilityAction(named: isPinned ? "Remove from Favorites" : "Add to Favorites", pinToggle)
         .accessibilityAction(named: isArchived ? "Restore" : "Archive", archiveToggle)
         .contextMenu {
-            Button(isPinned ? "Remove from Favorites" : "Add to Favorites", action: pinToggle)
-            Button(isArchived ? "Restore" : "Archive", action: archiveToggle)
+            Button(action: pinToggle) {
+                Label(isPinned ? "Remove from Favorites" : "Add to Favorites", systemImage: isPinned ? "star.slash" : "star")
+            }
+            Button(action: archiveToggle) {
+                Label(isArchived ? "Restore" : "Archive", systemImage: isArchived ? "tray.and.arrow.up" : "archivebox")
+            }
 
             if !folders.isEmpty {
                 Divider()
@@ -3011,25 +2983,6 @@ private struct SidebarThreadRow: View {
                 }
             }
         }
-    }
-}
-
-private struct SidebarThreadQuickAction: View {
-    var title: String
-    var systemImage: String
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.caption.weight(.medium))
-                .frame(width: 20, height: 20)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.borderless)
-        .foregroundStyle(.secondary)
-        .help(title)
-        .accessibilityLabel(title)
     }
 }
 
