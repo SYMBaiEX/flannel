@@ -358,6 +358,12 @@ struct ContentView: View {
 
     private func runCommand(_ command: FlannelCommand) {
         guard command.isEnabled else { return }
+
+        if command.id == .openCommandPalette {
+            openCommandPalette()
+            return
+        }
+
         closeCommandPalette()
 
         if let routingPolicy = command.id.routingPolicy {
@@ -372,7 +378,7 @@ struct ContentView: View {
         case .importChat:
             importChat()
         case .openCommandPalette:
-            openCommandPalette()
+            break
         case .sendMessage:
             sendMessage()
         case .stopStreaming:
@@ -2037,10 +2043,17 @@ private struct AppSidebar: View {
         Binding(
             get: { store.selectedAssistantThreadID },
             set: { selectedThreadID in
-                guard let selectedThreadID,
-                      let thread = store.assistantThreads.first(where: { $0.id == selectedThreadID }) else {
+                guard let selectedThreadID else {
+                    store.selectedAssistantThreadID = nil
+                    persist()
                     return
                 }
+                guard let thread = store.assistantThreads.first(where: { $0.id == selectedThreadID }) else {
+                    store.selectedAssistantThreadID = nil
+                    persist()
+                    return
+                }
+
                 open(thread)
             }
         )
