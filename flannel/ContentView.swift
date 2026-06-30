@@ -2661,7 +2661,7 @@ private struct NativeSidebarSearchField: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSSearchField {
-        let searchField = NSSearchField()
+        let searchField = SidebarSearchField()
         searchField.placeholderString = placeholder
         searchField.delegate = context.coordinator
         searchField.sendsSearchStringImmediately = true
@@ -2670,6 +2670,10 @@ private struct NativeSidebarSearchField: NSViewRepresentable {
         searchField.font = .preferredFont(forTextStyle: .body)
         searchField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         searchField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        searchField.windowChangeHandler = { [weak coordinator = context.coordinator] in
+            coordinator?.focusIfPossible()
+        }
+        context.coordinator.searchField = searchField
         return searchField
     }
 
@@ -2681,19 +2685,46 @@ private struct NativeSidebarSearchField: NSViewRepresentable {
             searchField.stringValue = text
         }
 
-        guard context.coordinator.focusRequest != focusRequest else { return }
-        context.coordinator.focusRequest = focusRequest
-        DispatchQueue.main.async {
-            searchField.window?.makeFirstResponder(searchField)
+        guard focusRequest > 0 else { return }
+        context.coordinator.requestFocus(focusRequest, searchField: searchField)
+    }
+
+    final class SidebarSearchField: NSSearchField {
+        var windowChangeHandler: (() -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            windowChangeHandler?()
         }
     }
 
     final class Coordinator: NSObject, NSSearchFieldDelegate {
         var text: Binding<String>
-        var focusRequest = 0
+        weak var searchField: NSSearchField?
+        private var pendingFocusRequest = 0
+        private var handledFocusRequest = 0
 
         init(text: Binding<String>) {
             self.text = text
+        }
+
+        func requestFocus(_ focusRequest: Int, searchField: NSSearchField) {
+            guard focusRequest != handledFocusRequest else { return }
+            pendingFocusRequest = focusRequest
+            self.searchField = searchField
+            DispatchQueue.main.async { [weak self] in
+                self?.focusIfPossible()
+            }
+        }
+
+        func focusIfPossible() {
+            guard pendingFocusRequest != handledFocusRequest,
+                  let searchField,
+                  let window = searchField.window,
+                  window.makeFirstResponder(searchField) else {
+                return
+            }
+            handledFocusRequest = pendingFocusRequest
         }
 
         func controlTextDidChange(_ notification: Notification) {
