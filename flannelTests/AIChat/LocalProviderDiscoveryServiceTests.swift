@@ -76,12 +76,99 @@ struct LocalProviderDiscoveryServiceTests {
         #expect(model.contextWindowTokens == 16384)
         #expect(model.loadedInstanceCount == 1)
         #expect(model.sizeVRAMBytes == 2_147_483_648)
+        #expect(model.capabilities.contains(.chat))
+        #expect(model.capabilities.contains(.embeddings) == false)
         #expect(requests.map(\.url) == [
             "http://localhost:11434/api/tags",
             "http://localhost:11434/api/ps"
         ])
         #expect(requests.allSatisfy { $0.timeout == 9 })
         #expect(requests.allSatisfy { $0.acceptHeader == "application/json" })
+    }
+
+    @MainActor
+    @Test("Ollama discovery keeps chat and embedding models distinct")
+    func ollamaDiscoveryKeepsChatAndEmbeddingModelsDistinct() throws {
+        let data = Data(
+            """
+            {
+              "models": [
+                {
+                  "name": "nomic-embed-text",
+                  "model": "nomic-embed-text:latest",
+                  "details": {
+                    "family": "bert",
+                    "families": ["bert"],
+                    "parameter_size": "137M"
+                  }
+                },
+                {
+                  "name": "llama3.1",
+                  "model": "llama3.1:latest",
+                  "details": {
+                    "family": "llama",
+                    "parameter_size": "8B"
+                  }
+                }
+              ]
+            }
+            """.utf8
+        )
+
+        let models = try LocalProviderDiscoveryService.makeOllamaDescriptors(
+            from: data,
+            endpoint: "http://localhost:11434"
+        )
+        let chat = try #require(models.first)
+        let embedding = try #require(models.last)
+
+        #expect(models.map(\.name) == ["llama3.1:latest", "nomic-embed-text:latest"])
+        #expect(chat.capabilities.contains(.chat))
+        #expect(chat.capabilities.contains(.streaming))
+        #expect(chat.capabilities.contains(.toolCalling))
+        #expect(chat.capabilities.contains(.embeddings) == false)
+        #expect(embedding.capabilities == [.embeddings])
+    }
+
+    @MainActor
+    @Test("Ollama discovery keeps model list when running metadata is unavailable")
+    func ollamaDiscoveryKeepsModelListWhenRunningMetadataIsUnavailable() async throws {
+        let transport = LocalDiscoveryTransportRecorder(
+            responses: [
+                "http://localhost:11434/api/tags": .init(
+                    statusCode: 200,
+                    body: """
+                    {
+                      "models": [
+                        {
+                          "name": "llama3.1",
+                          "model": "llama3.1:latest",
+                          "details": {
+                            "family": "llama"
+                          }
+                        }
+                      ]
+                    }
+                    """
+                ),
+                "http://localhost:11434/api/ps": .init(
+                    statusCode: 500,
+                    body: #"{"error":"ps unavailable"}"#
+                )
+            ]
+        )
+        let service = LocalProviderDiscoveryService(
+            transport: { request in try await transport.send(request) }
+        )
+
+        let results = await service.discover(targets: [(.ollama, "http://localhost:11434")])
+        let result = try #require(results.first)
+        let model = try #require(result.models.first)
+
+        #expect(result.status == .ready)
+        #expect(model.name == "llama3.1:latest")
+        #expect(model.loadedInstanceCount == 0)
+        #expect(result.errorMessage == "Ollama running-model metadata unavailable: The provider returned HTTP 500: ps unavailable")
     }
 
     @MainActor
@@ -168,10 +255,94 @@ struct LocalProviderDiscoveryServiceTests {
         #expect(model.capabilities.contains(.toolCalling))
         #expect(model.capabilities.contains(.vision))
         #expect(model.capabilities.contains(.reasoning))
+        #expect(model.capabilities.contains(.embeddings) == false)
         #expect(requests.map(\.url) == [
             "http://localhost:1234/api/v1/models",
             "http://localhost:1234/v1/models"
         ])
+    }
+
+    @MainActor
+    @Test("LM Studio native discovery keeps chat and embedding models distinct")
+    func lmStudioNativeDiscoveryKeepsChatAndEmbeddingModelsDistinct() throws {
+        let data = Data(
+            """
+            {
+              "models": [
+                {
+                  "type": "embedding",
+                  "publisher": "Nomic",
+                  "key": "text-embedding-nomic-embed-text-v1.5",
+                  "display_name": "Nomic Embed Text v1.5",
+                  "architecture": "nomic-bert"
+                },
+                {
+                  "type": "llm",
+                  "publisher": "Qwen",
+                  "key": "qwen/qwen3-14b",
+                  "display_name": "Qwen 3 14B",
+                  "architecture": "qwen3",
+                  "loaded_instances": [
+                    {
+                      "id": "loaded-qwen",
+                      "config": {
+                        "context_length": 65536
+                      }
+                    }
+                  ],
+                  "capabilities": {
+                    "trained_for_tool_use": true
+                  }
+                }
+              ]
+            }
+            """.utf8
+        )
+
+        let models = try LocalProviderDiscoveryService.makeLMStudioDescriptors(
+            from: data,
+            endpoint: "http://localhost:1234"
+        )
+        let chat = try #require(models.first)
+        let embedding = try #require(models.last)
+
+        #expect(models.map(\.name) == ["qwen/qwen3-14b", "text-embedding-nomic-embed-text-v1.5"])
+        #expect(chat.contextWindowTokens == 65536)
+        #expect(chat.loadedInstanceCount == 1)
+        #expect(chat.capabilities.contains(.chat))
+        #expect(chat.capabilities.contains(.streaming))
+        #expect(chat.capabilities.contains(.toolCalling))
+        #expect(chat.capabilities.contains(.openAICompatible))
+        #expect(chat.capabilities.contains(.anthropicCompatible))
+        #expect(chat.capabilities.contains(.embeddings) == false)
+        #expect(embedding.capabilities == [.embeddings, .openAICompatible])
+    }
+
+    @MainActor
+    @Test("LM Studio discovery reports native and fallback failures")
+    func lmStudioDiscoveryReportsNativeAndFallbackFailures() async throws {
+        let transport = LocalDiscoveryTransportRecorder(
+            responses: [
+                "http://localhost:1234/api/v1/models": .init(
+                    statusCode: 404,
+                    body: #"{"error":"native catalog unavailable"}"#
+                ),
+                "http://localhost:1234/v1/models": .init(
+                    statusCode: 503,
+                    body: #"{"error":{"message":"fallback server warming up"}}"#
+                )
+            ]
+        )
+        let service = LocalProviderDiscoveryService(
+            transport: { request in try await transport.send(request) }
+        )
+
+        let results = await service.discover(targets: [(.lmStudio, "http://localhost:1234")])
+        let result = try #require(results.first)
+
+        #expect(result.status == .needsAttention)
+        #expect(result.models.isEmpty)
+        #expect(result.errorMessage == "LM Studio native discovery failed: The provider returned HTTP 404: native catalog unavailable OpenAI-compatible fallback failed: The provider returned HTTP 503: fallback server warming up")
     }
 
     @MainActor
@@ -195,7 +366,7 @@ struct LocalProviderDiscoveryServiceTests {
 
         #expect(result.status == .needsAttention)
         #expect(result.models.isEmpty)
-        #expect(result.errorMessage == "The provider returned HTTP 503.")
+        #expect(result.errorMessage == "The provider returned HTTP 503: starting")
         #expect(requests.map(\.url) == ["http://localhost:11434/api/tags"])
     }
 }

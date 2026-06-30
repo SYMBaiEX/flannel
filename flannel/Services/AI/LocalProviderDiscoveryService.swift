@@ -62,19 +62,25 @@ struct LocalProviderDiscoveryService: Sendable {
         do {
             let request = try makeRequest(endpoint: endpoint, appending: ["api", "tags"])
             let response: OllamaTagsDiscoveryResponse = try await decode(request)
-            let runningModels = await discoverRunningOllamaModels(endpoint: endpoint)
+            let runningDiscovery = await discoverRunningOllamaModels(endpoint: endpoint)
             let models = Self.makeOllamaDescriptors(
                 response: response,
-                runningModels: runningModels,
+                runningModels: runningDiscovery.models,
                 endpoint: endpoint
             )
-            return .init(providerKind: .ollama, endpoint: endpoint, status: .ready, models: models)
+            return .init(
+                providerKind: .ollama,
+                endpoint: endpoint,
+                status: .ready,
+                models: models,
+                errorMessage: runningDiscovery.errorMessage
+            )
         } catch {
             return .init(
                 providerKind: .ollama,
                 endpoint: endpoint,
                 status: .needsAttention,
-                errorMessage: error.localizedDescription
+                errorMessage: Self.discoveryErrorDescription(error)
             )
         }
     }
@@ -83,19 +89,22 @@ struct LocalProviderDiscoveryService: Sendable {
         do {
             let models = try await discoverLMStudioNative(endpoint: endpoint)
             return .init(providerKind: .lmStudio, endpoint: endpoint, status: .ready, models: models)
-        } catch {
+        } catch let nativeError {
             do {
                 let models = try await discoverOpenAICompatibleModels(
                     endpoint: endpoint,
                     providerKind: .lmStudio
                 )
                 return .init(providerKind: .lmStudio, endpoint: endpoint, status: .ready, models: models)
-            } catch {
+            } catch let fallbackError {
                 return .init(
                     providerKind: .lmStudio,
                     endpoint: endpoint,
                     status: .needsAttention,
-                    errorMessage: error.localizedDescription
+                    errorMessage: Self.combinedLMStudioDiscoveryError(
+                        nativeError: nativeError,
+                        fallbackError: fallbackError
+                    )
                 )
             }
         }
@@ -124,13 +133,16 @@ struct LocalProviderDiscoveryService: Sendable {
         )
     }
 
-    private func discoverRunningOllamaModels(endpoint: String) async -> [String: OllamaRunningModelDiscovery] {
+    private func discoverRunningOllamaModels(endpoint: String) async -> OllamaRunningModelsDiscovery {
         do {
             let request = try makeRequest(endpoint: endpoint, appending: ["api", "ps"])
             let response: OllamaRunningModelsDiscoveryResponse = try await decode(request)
-            return Self.runningOllamaModelLookup(response.models)
+            return .init(models: Self.runningOllamaModelLookup(response.models))
         } catch {
-            return [:]
+            return .init(
+                models: [:],
+                errorMessage: "Ollama running-model metadata unavailable: \(Self.discoveryErrorDescription(error))"
+            )
         }
     }
 
@@ -171,7 +183,7 @@ struct LocalProviderDiscoveryService: Sendable {
         runningModels: [String: OllamaRunningModelDiscovery],
         endpoint: String
     ) -> [LocalModelDescriptor] {
-        response.models.map { model in
+        sortedDescriptors(response.models.map { model in
             let runningModel = runningModel(for: model, in: runningModels)
             return LocalModelDescriptor(
                 name: model.model ?? model.name,
@@ -190,14 +202,14 @@ struct LocalProviderDiscoveryService: Sendable {
                 expiresAt: runningModel?.expiresAt,
                 capabilities: ollamaCapabilities(for: model)
             )
-        }
+        })
     }
 
     private static func makeLMStudioDescriptors(
         response: LMStudioNativeModelsDiscoveryResponse,
         endpoint: String
     ) -> [LocalModelDescriptor] {
-        response.models.map { model in
+        sortedDescriptors(response.models.map { model in
             LocalModelDescriptor(
                 name: model.key,
                 displayName: model.displayName ?? model.key,
@@ -217,7 +229,7 @@ struct LocalProviderDiscoveryService: Sendable {
                 selectedVariant: model.selectedVariant,
                 capabilities: lmStudioCapabilities(for: model)
             )
-        }
+        })
     }
 
     private static func makeOpenAICompatibleDescriptors(
@@ -225,7 +237,7 @@ struct LocalProviderDiscoveryService: Sendable {
         endpoint: String,
         providerKind: LLMProviderKind
     ) -> [LocalModelDescriptor] {
-        response.data.map { model in
+        sortedDescriptors(response.data.map { model in
             if providerKind == .lmStudio {
                 return makeLMStudioFallbackDescriptor(from: model, endpoint: endpoint)
             }
@@ -247,9 +259,9 @@ struct LocalProviderDiscoveryService: Sendable {
                 loadedInstanceCount: model.loadedInstances?.count,
                 sizeBytes: model.sizeBytes,
                 selectedVariant: model.selectedVariant,
-                capabilities: openAICompatibleCapabilities(for: model.id)
+                capabilities: openAICompatibleCapabilities(for: model)
             )
-        }
+        })
     }
 
     private static func makeLMStudioFallbackDescriptor(
@@ -301,46 +313,20 @@ struct LocalProviderDiscoveryService: Sendable {
     }
 
     private static func ollamaCapabilities(for model: OllamaTagsDiscoveryResponse.OllamaModel) -> [ModelCapability] {
-        let searchableName = [model.name, model.model, model.details?.family]
-            .compactMap { $0 }
-            .joined(separator: " ")
-            .lowercased()
-        if searchableName.contains("embed") || searchableName.contains("embedding") || searchableName.contains("nomic") {
+        if isEmbeddingModel(
+            modelType: nil,
+            identifiers: [model.name, model.model, model.details?.family] + (model.details?.families ?? [])
+        ) {
             return [.embeddings]
         }
-        return [.chat, .streaming, .toolCalling, .embeddings]
+        return [.chat, .streaming, .toolCalling]
     }
 
     private static func lmStudioCapabilities(for model: LMStudioNativeModelsDiscoveryResponse.Model) -> [ModelCapability] {
-        guard model.modelType != "embedding" else {
-            return [.embeddings]
-        }
-
-        var capabilities: Set<ModelCapability> = [.chat, .streaming, .embeddings, .openAICompatible, .anthropicCompatible]
-        if model.capabilities?.trainedForToolUse == true {
-            capabilities.insert(.toolCalling)
-        }
-        if model.capabilities?.vision == true {
-            capabilities.insert(.vision)
-        }
-        if model.capabilities?.reasoning != nil {
-            capabilities.insert(.reasoning)
-        }
-        return Array(capabilities).sorted { $0.rawValue < $1.rawValue }
-    }
-
-    private static func openAICompatibleCapabilities(for modelIdentifier: String) -> [ModelCapability] {
-        if isEmbeddingModelIdentifier(modelIdentifier) {
-            return [.embeddings, .openAICompatible]
-        }
-
-        return [.chat, .openAICompatible, .streaming]
-    }
-
-    private static func lmStudioFallbackCapabilities(
-        for model: OpenAICompatibleModelsDiscoveryResponse.Model
-    ) -> [ModelCapability] {
-        if model.modelType == "embedding" || isEmbeddingModelIdentifier(model.id) {
+        guard !isEmbeddingModel(
+            modelType: model.modelType,
+            identifiers: [model.key, model.displayName, model.architecture]
+        ) else {
             return [.embeddings, .openAICompatible]
         }
 
@@ -354,24 +340,126 @@ struct LocalProviderDiscoveryService: Sendable {
         if model.capabilities?.reasoning != nil {
             capabilities.insert(.reasoning)
         }
-        return Array(capabilities).sorted { $0.rawValue < $1.rawValue }
+        return sortedCapabilities(capabilities)
     }
 
-    private static func isEmbeddingModelIdentifier(_ modelIdentifier: String) -> Bool {
-        let normalizedIdentifier = modelIdentifier.lowercased()
-        let embeddingHints = [
+    private static func openAICompatibleCapabilities(
+        for model: OpenAICompatibleModelsDiscoveryResponse.Model
+    ) -> [ModelCapability] {
+        if isEmbeddingModel(
+            modelType: model.modelType,
+            identifiers: [model.id, model.displayName, model.architecture, model.publisher, model.ownedBy]
+        ) {
+            return [.embeddings, .openAICompatible]
+        }
+
+        return [.chat, .openAICompatible, .streaming]
+    }
+
+    private static func lmStudioFallbackCapabilities(
+        for model: OpenAICompatibleModelsDiscoveryResponse.Model
+    ) -> [ModelCapability] {
+        if isEmbeddingModel(
+            modelType: model.modelType,
+            identifiers: [model.id, model.displayName, model.architecture, model.publisher, model.ownedBy]
+        ) {
+            return [.embeddings, .openAICompatible]
+        }
+
+        var capabilities: Set<ModelCapability> = [.chat, .streaming, .openAICompatible, .anthropicCompatible]
+        if model.capabilities?.trainedForToolUse == true {
+            capabilities.insert(.toolCalling)
+        }
+        if model.capabilities?.vision == true {
+            capabilities.insert(.vision)
+        }
+        if model.capabilities?.reasoning != nil {
+            capabilities.insert(.reasoning)
+        }
+        return sortedCapabilities(capabilities)
+    }
+
+    private static func isEmbeddingModel(modelType: String?, identifiers: [String?]) -> Bool {
+        if let modelType {
+            let normalizedModelType = modelType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if normalizedModelType == "embedding"
+                || normalizedModelType == "embeddings"
+                || normalizedModelType == "text_embedding"
+                || normalizedModelType == "text-embedding" {
+                return true
+            }
+        }
+
+        let tokens = Set(
+            identifiers
+                .compactMap { $0?.lowercased() }
+                .flatMap { value in
+                    value.split { !$0.isLetter && !$0.isNumber }.map(String.init)
+                }
+        )
+
+        if !tokens.isDisjoint(with: [
+            "embed",
             "embedding",
-            "text-embedding",
-            "nomic-embed",
-            "bge-",
-            "/bge",
-            "gte-",
-            "/gte",
-            "e5-",
-            "/e5",
-            "embed"
-        ]
-        return embeddingHints.contains { normalizedIdentifier.contains($0) }
+            "embeddings",
+            "bge",
+            "gte",
+            "e5",
+            "minilm",
+            "nomic",
+            "rerank",
+            "reranker",
+            "bert"
+        ]) {
+            return true
+        }
+
+        return identifiers
+            .compactMap { $0?.lowercased() }
+            .contains { value in
+                value.contains("sentence-transformers")
+                    || value.contains("all-minilm")
+                    || value.contains("mxbai-embed")
+                    || value.contains("nomic-embed")
+                    || value.contains("snowflake-arctic-embed")
+                    || value.contains("text-embedding")
+            }
+    }
+
+    private static func sortedCapabilities(_ capabilities: Set<ModelCapability>) -> [ModelCapability] {
+        Array(capabilities).sorted { $0.rawValue < $1.rawValue }
+    }
+
+    private static func sortedDescriptors(_ models: [LocalModelDescriptor]) -> [LocalModelDescriptor] {
+        models.sorted { lhs, rhs in
+            let lhsSupportsChat = lhs.capabilities.contains(.chat)
+            let rhsSupportsChat = rhs.capabilities.contains(.chat)
+            if lhsSupportsChat != rhsSupportsChat {
+                return lhsSupportsChat
+            }
+
+            let lhsLoaded = lhs.loadedInstanceCount ?? 0
+            let rhsLoaded = rhs.loadedInstanceCount ?? 0
+            if lhsLoaded != rhsLoaded {
+                return lhsLoaded > rhsLoaded
+            }
+
+            let titleComparison = descriptorTitle(lhs).localizedCaseInsensitiveCompare(descriptorTitle(rhs))
+            if titleComparison != .orderedSame {
+                return titleComparison == .orderedAscending
+            }
+
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
+    private static func descriptorTitle(_ model: LocalModelDescriptor) -> String {
+        if let displayName = model.displayName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !displayName.isEmpty {
+            return displayName
+        }
+
+        return model.name
     }
 
     private func makeRequest(endpoint: String, appending pathComponents: [String]) throws -> URLRequest {
@@ -406,10 +494,84 @@ struct LocalProviderDiscoveryService: Sendable {
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
-            throw DiscoveryError.badStatus(httpResponse.statusCode)
+            throw DiscoveryError.badStatus(
+                httpResponse.statusCode,
+                Self.responseErrorMessage(from: data)
+            )
         }
 
-        return try JSONDecoder.discovery.decode(T.self, from: data)
+        do {
+            return try JSONDecoder.discovery.decode(T.self, from: data)
+        } catch {
+            throw DiscoveryError.decodingFailed(Self.discoveryErrorDescription(error))
+        }
+    }
+
+    private static func combinedLMStudioDiscoveryError(nativeError: Error, fallbackError: Error) -> String {
+        [
+            "LM Studio native discovery failed: \(discoveryErrorDescription(nativeError))",
+            "OpenAI-compatible fallback failed: \(discoveryErrorDescription(fallbackError))"
+        ].joined(separator: " ")
+    }
+
+    private static func discoveryErrorDescription(_ error: Error) -> String {
+        if let localizedError = error as? LocalizedError,
+           let description = localizedError.errorDescription?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !description.isEmpty {
+            return description
+        }
+
+        return error.localizedDescription
+    }
+
+    private static func responseErrorMessage(from data: Data) -> String? {
+        guard !data.isEmpty else { return nil }
+
+        if let object = try? JSONSerialization.jsonObject(with: data),
+           let message = responseErrorMessage(from: object) {
+            return message
+        }
+
+        guard let text = String(data: data, encoding: .utf8) else { return nil }
+        return compactMessage(text)
+    }
+
+    private static func responseErrorMessage(from object: Any) -> String? {
+        if let message = object as? String {
+            return compactMessage(message)
+        }
+
+        if let dictionary = object as? [String: Any] {
+            for key in ["error", "message", "detail"] {
+                if let value = dictionary[key],
+                   let message = responseErrorMessage(from: value) {
+                    return message
+                }
+            }
+        }
+
+        if let array = object as? [Any] {
+            return array.lazy.compactMap { responseErrorMessage(from: $0) }.first
+        }
+
+        return nil
+    }
+
+    private static func compactMessage(_ rawValue: String) -> String? {
+        let collapsed = rawValue
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !collapsed.isEmpty else { return nil }
+
+        let maxLength = 240
+        if collapsed.count <= maxLength {
+            return collapsed
+        }
+
+        return String(collapsed.prefix(maxLength - 1)) + "..."
     }
 
     private static func normalizedEndpoint(_ rawValue: String) -> String {
@@ -483,7 +645,8 @@ struct LocalProviderDiscoveryService: Sendable {
 private enum DiscoveryError: LocalizedError {
     case invalidEndpoint
     case badResponse
-    case badStatus(Int)
+    case badStatus(Int, String?)
+    case decodingFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -491,8 +654,14 @@ private enum DiscoveryError: LocalizedError {
             "The endpoint URL is invalid."
         case .badResponse:
             "The provider did not return an HTTP response."
-        case .badStatus(let statusCode):
-            "The provider returned HTTP \(statusCode)."
+        case .badStatus(let statusCode, let message):
+            if let message, !message.isEmpty {
+                "The provider returned HTTP \(statusCode): \(message)"
+            } else {
+                "The provider returned HTTP \(statusCode)."
+            }
+        case .decodingFailed(let message):
+            "Unable to decode provider response: \(message)"
         }
     }
 }
@@ -529,16 +698,23 @@ private struct OllamaTagsDiscoveryResponse: Decodable {
     struct Details: Decodable {
         var format: String?
         var family: String?
+        var families: [String]?
         var parameterSize: String?
         var quantizationLevel: String?
 
         enum CodingKeys: String, CodingKey {
             case format
             case family
+            case families
             case parameterSize = "parameter_size"
             case quantizationLevel = "quantization_level"
         }
     }
+}
+
+private struct OllamaRunningModelsDiscovery: Sendable {
+    var models: [String: OllamaRunningModelDiscovery]
+    var errorMessage: String?
 }
 
 private struct OllamaRunningModelsDiscoveryResponse: Decodable {
