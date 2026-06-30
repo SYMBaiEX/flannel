@@ -1068,6 +1068,11 @@ struct AIChatProviderRegistryTests {
         store.preferences.allowCloudProviders = true
         store.preferences.providerRoutingPolicy = .fastest
 
+        let openAIIndex = try #require(store.providerConfigurations.firstIndex(where: { $0.id == openAI.id }))
+        store.providerConfigurations[openAIIndex].secretReference = ProviderSetupService.shared
+            .canonicalSecretReferenceString(for: store.providerConfigurations[openAIIndex])
+        store.providerConfigurations[openAIIndex].connectionStatus = .ready
+
         let anthropicIndex = try #require(store.providerConfigurations.firstIndex(where: { $0.id == anthropicAPI.id }))
         store.providerConfigurations[anthropicIndex].secretReference = ProviderSetupService.shared
             .canonicalSecretReferenceString(for: store.providerConfigurations[anthropicIndex])
