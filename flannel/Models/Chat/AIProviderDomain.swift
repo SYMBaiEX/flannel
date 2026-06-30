@@ -509,7 +509,7 @@ struct AIProviderCatalogEntry: Identifiable, Hashable, Sendable {
 }
 
 enum AIKnownProviderCatalog {
-    static let entries: [AIProviderCatalogEntry] = [
+    nonisolated static let entries: [AIProviderCatalogEntry] = [
         AIProviderCatalogEntry(
             providerKind: .ollama,
             providerMode: .nativeAPI,
@@ -824,7 +824,7 @@ enum AIKnownProviderCatalog {
 }
 
 extension AIProviderKind {
-    init(_ providerKind: LLMProviderKind) {
+    nonisolated init(_ providerKind: LLMProviderKind) {
         switch providerKind {
         case .ollama:
             self = .ollama

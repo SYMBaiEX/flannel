@@ -170,7 +170,7 @@ enum ProviderRuntimeBoundary: String, Codable, CaseIterable, Hashable, Sendable 
         }
     }
 
-    var leavesDeviceDirectly: Bool {
+    nonisolated var leavesDeviceDirectly: Bool {
         self == .externalAPI
     }
 }
