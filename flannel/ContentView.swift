@@ -3016,6 +3016,10 @@ private struct SidebarThreadRow: View {
         return preview.isEmpty ? nil : preview
     }
 
+    private var updatedTimeText: String {
+        thread.updatedAt.formatted(date: .omitted, time: .shortened)
+    }
+
     private var accessibilityLabelText: String {
         var parts = [thread.title]
         if isPinned {
@@ -3047,12 +3051,13 @@ private struct SidebarThreadRow: View {
             Button(action: choose) {
                 HStack(alignment: .top, spacing: 9) {
                     Image(systemName: isArchived ? "archivebox" : "bubble.left")
-                        .font(.body)
+                        .font(.callout)
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(.secondary)
                         .frame(width: 18)
+                        .padding(.top, 1)
 
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 4) {
                             Text(thread.title)
                                 .font(.callout.weight(.medium))
@@ -3064,24 +3069,36 @@ private struct SidebarThreadRow: View {
                             }
                         }
 
-                        if let lastMessagePreview {
-                            Text(lastMessagePreview)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            if let lastMessagePreview {
+                                Text(lastMessagePreview)
+                                    .layoutPriority(1)
+                            } else {
+                                Text("Updated \(updatedTimeText)")
+                            }
 
-                        HStack(spacing: 4) {
-                            Text(thread.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                            if lastMessagePreview != nil {
+                                Text(updatedTimeText)
+                                    .foregroundStyle(.tertiary)
+                            }
+
                             if let folder {
-                                Text("-")
                                 Label(folder.title, systemImage: folder.symbolName)
                                     .labelStyle(.titleAndIcon)
+                                    .font(.caption2.weight(.medium))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1)
+                                    .background(.quaternary.opacity(0.55), in: Capsule())
+                                    .foregroundStyle(.secondary)
                             }
                         }
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel(metadataAccessibilityLabel)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .clipped()
                     }
 
                     Spacer(minLength: 4)
@@ -3095,7 +3112,7 @@ private struct SidebarThreadRow: View {
             .accessibilityAddTraits(isSelected ? .isSelected : [])
             .help(lastMessagePreview ?? thread.title)
 
-            HStack(spacing: 2) {
+            HStack(spacing: 0) {
                 SidebarThreadQuickAction(
                     title: isPinned ? "Remove from Favorites" : "Add to Favorites",
                     systemImage: isPinned ? "star.fill" : "star",
@@ -3107,12 +3124,12 @@ private struct SidebarThreadRow: View {
                     action: archiveToggle
                 )
             }
-            .frame(width: 48)
+            .frame(width: 56)
             .opacity(showsQuickActions ? 1 : 0)
             .disabled(!showsQuickActions)
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 7)
+        .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         .onHover { isHovering = $0 }
@@ -3164,6 +3181,17 @@ private struct SidebarThreadRow: View {
             }
         }
     }
+
+    private var metadataAccessibilityLabel: String {
+        var parts = [lastMessagePreview ?? "Updated \(updatedTimeText)"]
+        if let lastMessagePreview {
+            parts.append("Updated \(updatedTimeText)")
+        }
+        if let folder {
+            parts.append("Folder \(folder.title)")
+        }
+        return parts.joined(separator: ", ")
+    }
 }
 
 private struct SidebarThreadQuickAction: View {
@@ -3176,7 +3204,7 @@ private struct SidebarThreadQuickAction: View {
             Image(systemName: systemImage)
                 .font(.caption.weight(.semibold))
                 .symbolRenderingMode(.hierarchical)
-                .frame(width: 22, height: 22)
+                .frame(width: 28, height: 26)
                 .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.borderless)
