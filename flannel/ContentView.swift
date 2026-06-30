@@ -203,7 +203,10 @@ struct ContentView: View {
                     setInspectorVisibility(columnVisibility != .all)
                 } label: {
                     Label(columnVisibility == .all ? "Hide Artifacts" : "Show Artifacts", systemImage: "sidebar.right")
+                        .labelStyle(.iconOnly)
                 }
+                .help(columnVisibility == .all ? "Hide Artifacts" : "Show Artifacts")
+                .accessibilityLabel(columnVisibility == .all ? "Hide Artifacts" : "Show Artifacts")
             }
         }
     }
@@ -4666,11 +4669,10 @@ private struct ArtifactRailRevealTab: View {
 
     var body: some View {
         Button(action: open) {
-            Label("Artifacts", systemImage: "sidebar.right")
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 11)
-                .padding(.vertical, 8)
-                .contentShape(Capsule())
+            Image(systemName: "sidebar.right")
+                .font(.body.weight(.medium))
+                .frame(width: 34, height: 34)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .flannelGlassCapsule(.regular, interactive: true)
