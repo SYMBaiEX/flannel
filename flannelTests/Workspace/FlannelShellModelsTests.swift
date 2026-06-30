@@ -15,16 +15,19 @@ struct FlannelShellModelsTests {
         #expect(FlannelSidebarSurface.allCases == [.conversation, .settings])
     }
 
-    @Test("Settings mode replaces the conversation sidebar instead of extending it")
-    func settingsModeReplacesConversationSidebar() {
+    @Test("Conversation surface shows inspector and footer")
+    func conversationSurfaceShowsInspectorAndFooter() {
         #expect(FlannelSidebarSurface.conversation.showsConversationFooter)
         #expect(FlannelSidebarSurface.conversation.showsInspectorColumn)
+    }
 
+    @Test("Settings surface hides inspector and footer")
+    func settingsSurfaceHidesInspectorAndFooter() {
         #expect(FlannelSidebarSurface.settings.showsConversationFooter == false)
         #expect(FlannelSidebarSurface.settings.showsInspectorColumn == false)
     }
 
-    @Test("Settings mode uses a narrower native source-list width")
+    @Test("Settings surface is narrower than conversation surface")
     func settingsModeUsesNarrowerSidebarWidth() {
         let conversationWidth = FlannelSidebarSurface.conversation.columnWidth
         let settingsWidth = FlannelSidebarSurface.settings.columnWidth
@@ -34,8 +37,8 @@ struct FlannelShellModelsTests {
         #expect(settingsWidth.max < conversationWidth.max)
     }
 
-    @Test("Escape exits settings before collapsing the artifact rail")
-    func exitCommandPrioritizesSettingsMode() {
+    @Test("Escape exits settings surface")
+    func exitIntentMapsSettingsToExitSettings() {
         #expect(FlannelExitCommandIntent.resolve(
             sidebarSurface: .settings,
             isInspectorVisible: true
@@ -46,8 +49,8 @@ struct FlannelShellModelsTests {
         ) == .exitSettings)
     }
 
-    @Test("Escape collapses artifacts only in conversation mode")
-    func exitCommandCollapsesArtifactsInConversationMode() {
+    @Test("Escape collapses artifacts when conversation inspector is visible")
+    func exitIntentCollapsesArtifactsFromConversationWithVisibleInspector() {
         #expect(FlannelExitCommandIntent.resolve(
             sidebarSurface: .conversation,
             isInspectorVisible: true
