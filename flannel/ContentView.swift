@@ -4147,6 +4147,10 @@ private struct MessageBubble: View {
         isMessageRowHovering || isMessageActionMenuFocused || isActiveSearchMatch
     }
 
+    private var messageActionMenuOpacity: Double {
+        shouldRevealMessageActions ? 1 : 0.34
+    }
+
     private var trimmedText: String {
         message.text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -4208,8 +4212,8 @@ private struct MessageBubble: View {
                         fork: fork
                     )
                     .focused($isMessageActionMenuFocused)
-                    .opacity(shouldRevealMessageActions ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.12), value: shouldRevealMessageActions)
+                    .opacity(messageActionMenuOpacity)
+                    .animation(.easeInOut(duration: 0.12), value: messageActionMenuOpacity)
                 }
 
                 if !visibleAttachments.isEmpty {
