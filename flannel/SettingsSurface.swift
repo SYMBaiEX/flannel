@@ -287,7 +287,10 @@ struct SettingsSurface: View {
     private var modelsPane: some View {
         settingsForm {
             Section("Provider Modes") {
-                ProviderModeGuide(networkMode: networkAccessBinding.wrappedValue)
+                ProviderModeGuide(
+                    networkMode: networkAccessBinding.wrappedValue,
+                    providers: store.providerConfigurations
+                )
             }
 
             Section("Routing") {
@@ -2285,6 +2288,97 @@ private enum ProviderSettingsGroupKind: String, CaseIterable, Identifiable {
     }
 }
 
+private enum ProviderModeGuideKind: String, CaseIterable, Identifiable {
+    case localServer
+    case subscriptionCLI
+    case apiKey
+    case compatibleEndpoint
+    case aiSDKBridge
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .localServer:
+            "Local servers"
+        case .subscriptionCLI:
+            "Subscription CLIs"
+        case .apiKey:
+            "API key routes"
+        case .compatibleEndpoint:
+            "OpenAI-compatible endpoints"
+        case .aiSDKBridge:
+            "Local bridge"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .localServer:
+            "Use loopback model servers such as Ollama or LM Studio. These routes stay on this Mac and do not use provider API keys."
+        case .subscriptionCLI:
+            "Use a locally authenticated CLI session such as ChatGPT/Codex or Claude Code. Subscription sign-in is separate from BYOK API access."
+        case .apiKey:
+            "Use the provider's official hosted API. Each route needs its own Keychain-backed API credential before remote requests can run."
+        case .compatibleEndpoint:
+            "Use a custom OpenAI-compatible endpoint, or an Anthropic-compatible endpoint when that route mode is selected. These routes always need an endpoint and model id, and they may stay local or go remote depending on the endpoint."
+        case .aiSDKBridge:
+            "Use the optional local AI SDK bridge service. The bridge owns downstream provider/runtime selection outside this app."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .localServer:
+            "server.rack"
+        case .subscriptionCLI:
+            "terminal"
+        case .apiKey:
+            "key"
+        case .compatibleEndpoint:
+            "arrow.left.arrow.right"
+        case .aiSDKBridge:
+            "point.3.connected.trianglepath.dotted"
+        }
+    }
+
+    var emptyStateExamples: String {
+        switch self {
+        case .localServer:
+            "Examples: Ollama, LM Studio"
+        case .subscriptionCLI:
+            "Examples: ChatGPT/Codex CLI, Claude Code"
+        case .apiKey:
+            "Examples: OpenAI, Anthropic, Gemini, xAI, Mistral, Groq, OpenRouter, Perplexity"
+        case .compatibleEndpoint:
+            "Examples: local LM Studio-compatible servers, custom remote OpenAI-compatible APIs, Anthropic-compatible endpoints"
+        case .aiSDKBridge:
+            "Example: Vercel AI SDK bridge"
+        }
+    }
+
+    func matches(_ provider: ProviderConfiguration) -> Bool {
+        switch self {
+        case .localServer:
+            provider.accessMode == .localServer
+        case .subscriptionCLI:
+            provider.accessMode == .subscriptionCLI
+        case .apiKey:
+            provider.accessMode == .apiKey
+        case .compatibleEndpoint:
+            provider.accessMode == .openAICompatible || provider.accessMode == .anthropicCompatible
+        case .aiSDKBridge:
+            provider.accessMode == .aiSDKBridge
+        }
+    }
+}
+
+private struct ProviderModeGuideAvailability {
+    var title: String
+    var tone: FlannelStatusTone
+    var systemImage: String
+}
+
 private struct SettingsSidebarRow: View {
     var tab: SettingsTab
 
@@ -2498,6 +2592,7 @@ private enum SettingsNetworkAccess: String, CaseIterable, Identifiable {
 
 private struct ProviderModeGuide: View {
     var networkMode: SettingsNetworkAccess
+    var providers: [ProviderConfiguration]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2516,11 +2611,15 @@ private struct ProviderModeGuide: View {
                 }
             }
 
-            ForEach(ProviderSettingsGroupKind.allCases) { kind in
-                ProviderModeGuideRow(kind: kind, networkMode: networkMode)
+            ForEach(ProviderModeGuideKind.allCases) { kind in
+                ProviderModeGuideRow(
+                    kind: kind,
+                    networkMode: networkMode,
+                    providers: providers
+                )
             }
 
-            Text("OpenAI API and ChatGPT/Codex CLI are separate routes. Anthropic API and Claude Code CLI are separate routes. Subscription sign-in does not fill a BYOK API key.")
+            Text("Capabilities shown here come from the configured routes and their selected or discovered models. OpenAI API and ChatGPT/Codex CLI are separate routes, and Anthropic API and Claude Code CLI are separate routes.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -2530,8 +2629,151 @@ private struct ProviderModeGuide: View {
 }
 
 private struct ProviderModeGuideRow: View {
-    var kind: ProviderSettingsGroupKind
+    var kind: ProviderModeGuideKind
     var networkMode: SettingsNetworkAccess
+    var providers: [ProviderConfiguration]
+
+    private var configuredProviders: [ProviderConfiguration] {
+        providers.filter(kind.matches)
+    }
+
+    private var configuredRouteCount: Int {
+        configuredProviders.count
+    }
+
+    private var configuredModelCount: Int {
+        configuredProviders.filter {
+            !$0.modelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }.count
+    }
+
+    private var capabilitySummary: String {
+        let capabilities = Set(configuredProviders.flatMap(\.capabilities))
+        guard !capabilities.isEmpty else {
+            return configuredProviders.isEmpty
+                ? "Add a route here to surface its model capabilities in Settings."
+                : "Choose a model or run Local Discovery to surface capabilities for this route type."
+        }
+
+        let orderedTitles = ModelCapability.allCases
+            .filter { capabilities.contains($0) }
+            .map(\.title)
+        return "Capabilities: \(orderedTitles.joined(separator: ", "))"
+    }
+
+    private var configuredProviderSummary: String {
+        guard !configuredProviders.isEmpty else { return kind.emptyStateExamples }
+
+        let names = configuredProviders.prefix(4).map(\.displayName)
+        let remainingCount = configuredProviders.count - names.count
+        let suffix = remainingCount > 0 ? " +\(remainingCount) more" : ""
+        return "Configured: \(names.joined(separator: ", "))\(suffix)"
+    }
+
+    private var routeSummary: String {
+        guard !configuredProviders.isEmpty else { return "No routes configured yet." }
+
+        let modelSummary = "\(configuredModelCount)/\(configuredRouteCount) models selected"
+
+        switch kind {
+        case .compatibleEndpoint:
+            let localCount = configuredProviders.filter { $0.runtimeBoundary == .localServer }.count
+            let remoteCount = configuredProviders.filter { $0.runtimeBoundary == .externalAPI }.count
+            let localDetail = localCount > 0 ? "\(localCount) local" : nil
+            let remoteDetail = remoteCount > 0 ? "\(remoteCount) remote" : nil
+            let boundaryDetail = [localDetail, remoteDetail]
+                .compactMap { $0 }
+                .joined(separator: " • ")
+            if boundaryDetail.isEmpty {
+                return "\(configuredRouteCount) routes • \(modelSummary)"
+            }
+            return "\(configuredRouteCount) routes • \(modelSummary) • \(boundaryDetail)"
+        case .aiSDKBridge:
+            return "\(configuredRouteCount) routes • \(modelSummary) • bridge-managed runtime"
+        case .subscriptionCLI:
+            return "\(configuredRouteCount) routes • \(modelSummary) • local terminal auth"
+        case .apiKey:
+            return "\(configuredRouteCount) routes • \(modelSummary) • Keychain API credentials"
+        case .localServer:
+            return "\(configuredRouteCount) routes • \(modelSummary) • loopback runtime"
+        }
+    }
+
+    private var availability: ProviderModeGuideAvailability {
+        switch kind {
+        case .localServer:
+            return ProviderModeGuideAvailability(
+                title: "Always available",
+                tone: .success,
+                systemImage: "lock"
+            )
+        case .subscriptionCLI:
+            return networkMode == .localOnly
+                ? ProviderModeGuideAvailability(
+                    title: "Blocked by privacy mode",
+                    tone: .warning,
+                    systemImage: "hand.raised"
+                )
+                : ProviderModeGuideAvailability(
+                    title: "Allowed in current privacy mode",
+                    tone: .info,
+                    systemImage: "terminal"
+                )
+        case .apiKey:
+            return networkMode == .allowCloudProviders
+                ? ProviderModeGuideAvailability(
+                    title: "Allowed in current privacy mode",
+                    tone: .warning,
+                    systemImage: "network"
+                )
+                : ProviderModeGuideAvailability(
+                    title: "Blocked until cloud providers are allowed",
+                    tone: .warning,
+                    systemImage: "hand.raised"
+                )
+        case .compatibleEndpoint:
+            let hasLocalRoutes = configuredProviders.contains { $0.runtimeBoundary == .localServer }
+            let hasRemoteRoutes = configuredProviders.contains { $0.runtimeBoundary == .externalAPI }
+            if networkMode == .allowCloudProviders {
+                return ProviderModeGuideAvailability(
+                    title: "Local and remote-compatible routes allowed",
+                    tone: .info,
+                    systemImage: "arrow.left.arrow.right"
+                )
+            }
+            if hasLocalRoutes && hasRemoteRoutes {
+                return ProviderModeGuideAvailability(
+                    title: "Local routes allowed; remote routes blocked",
+                    tone: .info,
+                    systemImage: "arrow.left.arrow.right"
+                )
+            }
+            if hasRemoteRoutes && !hasLocalRoutes {
+                return ProviderModeGuideAvailability(
+                    title: "Remote-compatible routes blocked",
+                    tone: .warning,
+                    systemImage: "hand.raised"
+                )
+            }
+            return ProviderModeGuideAvailability(
+                title: "Local-compatible routes allowed",
+                tone: .success,
+                systemImage: "lock"
+            )
+        case .aiSDKBridge:
+            return networkMode == .allowCloudProviders
+                ? ProviderModeGuideAvailability(
+                    title: "Allowed in current privacy mode",
+                    tone: .info,
+                    systemImage: "point.3.connected.trianglepath.dotted"
+                )
+                : ProviderModeGuideAvailability(
+                    title: "Blocked until cloud providers are allowed",
+                    tone: .warning,
+                    systemImage: "hand.raised"
+                )
+        }
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -2544,12 +2786,30 @@ private struct ProviderModeGuideRow: View {
                     Text(kind.title)
                         .font(.subheadline.weight(.medium))
                     Spacer()
-                    Text(kind.isAllowed(in: networkMode) ? "Allowed" : "Blocked")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(kind.isAllowed(in: networkMode) ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
+                    FlannelStatusChip(
+                        availability.title,
+                        systemImage: availability.systemImage,
+                        tone: availability.tone,
+                        prominence: .tinted
+                    )
                 }
 
                 Text(kind.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(routeSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(configuredProviderSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(capabilitySummary)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
