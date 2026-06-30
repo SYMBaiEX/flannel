@@ -140,6 +140,7 @@ struct ContentView: View {
             selectedComparisonRunID: $selectedComparisonRunID,
             selectedComparisonResultID: $selectedComparisonResultID,
             composerFocusRequest: composerFocusRequest,
+            isArtifactsVisible: columnVisibility == .all,
             isDiscoveringModels: isDiscoveringModels,
             isStreamingResponse: isStreamingResponse,
             isRunningComparison: isRunningComparison,
@@ -161,6 +162,9 @@ struct ContentView: View {
             },
             openModelSetup: {
                 enterSettingsMode(.models, returnFocus: .composer)
+            },
+            showArtifacts: {
+                setInspectorVisibility(true, focusChromeWhenShown: true)
             },
             exitSettings: { exitSettingsMode() },
             importChat: importChat,
@@ -3573,6 +3577,7 @@ private struct MainSurface: View {
     @Binding var selectedComparisonRunID: UUID?
     @Binding var selectedComparisonResultID: UUID?
     var composerFocusRequest: Int
+    var isArtifactsVisible: Bool
     var isDiscoveringModels: Bool
     var isStreamingResponse: Bool
     var isRunningComparison: Bool
@@ -3591,6 +3596,7 @@ private struct MainSurface: View {
     var discoverModels: () -> Void
     var continueAfterToolResult: (LocalToolExecutionResult, AIToolCallRecord?) -> Void
     var openModelSetup: () -> Void
+    var showArtifacts: () -> Void
     var exitSettings: () -> Void
     var importChat: () -> Void
     var exportWorkspaceSnapshot: () -> Void
@@ -3601,24 +3607,36 @@ private struct MainSurface: View {
         Group {
             switch sidebarSurface {
             case .conversation:
-                ChatSurface(
-                    store: store,
-                    composerText: $composerText,
-                    composerAttachments: $composerAttachments,
-                    composerFocusRequest: composerFocusRequest,
-                    isStreamingResponse: isStreamingResponse,
-                    sendMessage: sendMessage,
-                    cancelStreaming: cancelStreaming,
-                    compareCurrentPrompt: compareCurrentPrompt,
-                    toggleMessagePin: toggleMessagePin,
-                    copyMessage: copyMessage,
-                    retryFromMessage: retryFromMessage,
-                    editMessage: editMessage,
-                    forkThreadFromMessage: forkThreadFromMessage,
-                    continueAfterToolResult: continueAfterToolResult,
-                    openModelSetup: openModelSetup,
-                    persist: persist
-                )
+                ZStack(alignment: .trailing) {
+                    ChatSurface(
+                        store: store,
+                        composerText: $composerText,
+                        composerAttachments: $composerAttachments,
+                        composerFocusRequest: composerFocusRequest,
+                        isStreamingResponse: isStreamingResponse,
+                        sendMessage: sendMessage,
+                        cancelStreaming: cancelStreaming,
+                        compareCurrentPrompt: compareCurrentPrompt,
+                        toggleMessagePin: toggleMessagePin,
+                        copyMessage: copyMessage,
+                        retryFromMessage: retryFromMessage,
+                        editMessage: editMessage,
+                        forkThreadFromMessage: forkThreadFromMessage,
+                        continueAfterToolResult: continueAfterToolResult,
+                        openModelSetup: openModelSetup,
+                        persist: persist
+                    )
+
+                    if !isArtifactsVisible {
+                        CollapsedArtifactsRail(
+                            store: store,
+                            isRunningComparison: isRunningComparison,
+                            showArtifacts: showArtifacts
+                        )
+                        .padding(.trailing, 10)
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    }
+                }
             case .settings:
                 SettingsSurface(
                     store: store,
@@ -3633,6 +3651,130 @@ private struct MainSurface: View {
                 )
             }
         }
+    }
+}
+
+private struct CollapsedArtifactsRail: View {
+    @Bindable var store: WorkspaceStore
+    var isRunningComparison: Bool
+    var showArtifacts: () -> Void
+
+    private var currentCitations: [AIChatCitation] {
+        store.currentAssistantThread?.messages.flatMap(\.citations) ?? []
+    }
+
+    private var currentThreadToolResultIDs: Set<UUID> {
+        Set(store.currentAssistantThread?.messages.flatMap(\.referencedEntityIDs) ?? [])
+    }
+
+    private var currentThreadToolResultCount: Int {
+        store.toolExecutionResults.filter { currentThreadToolResultIDs.contains($0.id) }.count
+    }
+
+    private var comparisonCount: Int {
+        max(store.modelComparisonRuns.count, isRunningComparison ? 1 : 0)
+    }
+
+    private var artifactSummaries: [CollapsedArtifactSummary] {
+        [
+            CollapsedArtifactSummary(
+                title: "Sources",
+                systemImage: FlannelInspectorSection.sources.icon,
+                count: currentCitations.count
+            ),
+            CollapsedArtifactSummary(
+                title: "Compare",
+                systemImage: FlannelInspectorSection.compare.icon,
+                count: comparisonCount
+            ),
+            CollapsedArtifactSummary(
+                title: "Tools",
+                systemImage: FlannelInspectorSection.tools.icon,
+                count: currentThreadToolResultCount
+            )
+        ]
+        .filter { $0.count > 0 }
+    }
+
+    private var accessibilitySummary: String {
+        guard !artifactSummaries.isEmpty else {
+            return "No artifacts yet"
+        }
+
+        return artifactSummaries
+            .map { "\($0.title): \($0.count)" }
+            .joined(separator: ", ")
+    }
+
+    var body: some View {
+        VStack {
+            Spacer(minLength: 0)
+
+            Button(action: showArtifacts) {
+                VStack(spacing: 8) {
+                    Image(systemName: "sidebar.right")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 24, height: 24)
+
+                    if artifactSummaries.isEmpty {
+                        Image(systemName: "tray")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 24, height: 20)
+                    } else {
+                        FlannelSeparator(opacity: 0.38)
+                            .frame(width: 24)
+
+                        ForEach(artifactSummaries) { summary in
+                            CollapsedArtifactBadge(summary: summary)
+                        }
+                    }
+                }
+                .padding(7)
+                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .flannelChromePanel(cornerRadius: 18, interactive: true)
+            .help("Show Artifacts")
+            .accessibilityLabel("Show Artifacts")
+            .accessibilityValue(accessibilitySummary)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxHeight: .infinity)
+    }
+}
+
+private struct CollapsedArtifactSummary: Identifiable {
+    var title: String
+    var systemImage: String
+    var count: Int
+
+    var id: String { title }
+}
+
+private struct CollapsedArtifactBadge: View {
+    var summary: CollapsedArtifactSummary
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Image(systemName: summary.systemImage)
+                .font(.caption.weight(.semibold))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
+
+            Text(summary.count.formatted())
+                .font(.caption2.monospacedDigit().weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(width: 24)
+        .frame(minHeight: 26)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(summary.title)
+        .accessibilityValue(summary.count.formatted())
     }
 }
 
