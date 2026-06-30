@@ -293,13 +293,6 @@ struct ContentView: View {
         )
     }
 
-    private var exitCommandIntent: FlannelExitCommandIntent {
-        FlannelExitCommandIntent.resolve(
-            sidebarSurface: sidebarSurface,
-            isInspectorVisible: columnVisibility == .all
-        )
-    }
-
     private var shouldShowArtifactRevealTab: Bool {
         sidebarSurface.showsInspectorColumn
             && columnVisibility != .all
@@ -320,21 +313,22 @@ struct ContentView: View {
     }
 
     private func handleExitCommand() {
-        if isCommandPalettePresented {
+        let action = FlannelExitCommandAction.resolve(
+            isCommandPalettePresented: isCommandPalettePresented,
+            sidebarSurface: sidebarSurface,
+            isInspectorVisible: columnVisibility == .all,
+            isStreamingResponse: isStreamingResponse
+        )
+
+        switch action {
+        case .closeCommandPalette:
             closeCommandPalette()
-            return
-        }
-
-        if isStreamingResponse {
-            cancelStreaming()
-            return
-        }
-
-        switch exitCommandIntent {
         case .exitSettings:
             exitSettingsMode()
         case .collapseArtifacts:
             setInspectorVisibility(false)
+        case .cancelStreaming:
+            cancelStreaming()
         case .none:
             break
         }

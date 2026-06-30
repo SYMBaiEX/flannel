@@ -61,6 +61,34 @@ struct FlannelShellModelsTests {
         ) == .none)
     }
 
+    @Test("Escape closes visible shell surfaces before canceling streams")
+    func exitActionPrioritizesVisibleShellSurfacesBeforeStreaming() {
+        #expect(FlannelExitCommandAction.resolve(
+            isCommandPalettePresented: true,
+            sidebarSurface: .settings,
+            isInspectorVisible: true,
+            isStreamingResponse: true
+        ) == .closeCommandPalette)
+        #expect(FlannelExitCommandAction.resolve(
+            isCommandPalettePresented: false,
+            sidebarSurface: .settings,
+            isInspectorVisible: true,
+            isStreamingResponse: true
+        ) == .exitSettings)
+        #expect(FlannelExitCommandAction.resolve(
+            isCommandPalettePresented: false,
+            sidebarSurface: .conversation,
+            isInspectorVisible: true,
+            isStreamingResponse: true
+        ) == .collapseArtifacts)
+        #expect(FlannelExitCommandAction.resolve(
+            isCommandPalettePresented: false,
+            sidebarSurface: .conversation,
+            isInspectorVisible: false,
+            isStreamingResponse: true
+        ) == .cancelStreaming)
+    }
+
     @Test("Inspector sections stay stable when a chat has no artifacts yet")
     func inspectorSectionsRemainAvailableWithoutArtifacts() {
         #expect(FlannelInspectorSection.availableSections(

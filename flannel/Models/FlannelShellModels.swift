@@ -49,6 +49,43 @@ nonisolated enum FlannelExitCommandIntent: Hashable, Sendable {
     }
 }
 
+nonisolated enum FlannelExitCommandAction: Hashable, Sendable {
+    case closeCommandPalette
+    case exitSettings
+    case collapseArtifacts
+    case cancelStreaming
+    case none
+
+    static func resolve(
+        isCommandPalettePresented: Bool,
+        sidebarSurface: FlannelSidebarSurface,
+        isInspectorVisible: Bool,
+        isStreamingResponse: Bool
+    ) -> FlannelExitCommandAction {
+        if isCommandPalettePresented {
+            return .closeCommandPalette
+        }
+
+        switch FlannelExitCommandIntent.resolve(
+            sidebarSurface: sidebarSurface,
+            isInspectorVisible: isInspectorVisible
+        ) {
+        case .exitSettings:
+            return .exitSettings
+        case .collapseArtifacts:
+            return .collapseArtifacts
+        case .none:
+            break
+        }
+
+        if isStreamingResponse {
+            return .cancelStreaming
+        }
+
+        return .none
+    }
+}
+
 nonisolated struct FlannelSidebarColumnWidth: Hashable, Sendable {
     var min: CGFloat
     var ideal: CGFloat
