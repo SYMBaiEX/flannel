@@ -1655,6 +1655,23 @@ private struct OpenAICompatibleChatStreamChunk: Decodable {
     struct FunctionDelta: Decodable {
         var name: String?
         var arguments: String?
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            name = try container.decodeIfPresent(String.self, forKey: .name)
+            if let rawArguments = try? container.decodeIfPresent(String.self, forKey: .arguments) {
+                arguments = rawArguments
+            } else if let jsonArguments = try? container.decodeIfPresent(JSONValue.self, forKey: .arguments) {
+                arguments = jsonArguments.jsonString
+            } else {
+                arguments = nil
+            }
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name
+            case arguments
+        }
     }
 
     struct Usage: Decodable {

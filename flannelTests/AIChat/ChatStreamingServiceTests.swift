@@ -91,6 +91,27 @@ struct ChatStreamingServiceTests {
         #expect(toolCall.argumentsFragment == #"{"query":"local"#)
     }
 
+    @Test("OpenAI-compatible parser accepts tool-call arguments encoded as JSON object")
+    func openAICompatibleParserAcceptsToolCallArgumentsAsObject() throws {
+        let line = #"data: {"id":"chatcmpl-local","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_json_obj","type":"function","function":{"name":"workspace_search","arguments":{"query":"local","limit":3}}]},"finish_reason":null}]}"#
+
+        let event = try ChatStreamingService.parseOpenAICompatibleEvent(line)
+        guard case .toolCallDelta(let toolCall) = event else {
+            Issue.record("Expected OpenAI-compatible tool call event")
+            return
+        }
+
+        #expect(toolCall.index == 0)
+        #expect(toolCall.id == "call_json_obj")
+        #expect(toolCall.type == "function")
+        #expect(toolCall.name == "workspace_search")
+
+        let argsData = try #require(toolCall.argumentsFragment.data(using: .utf8))
+        let args = try #require(JSONSerialization.jsonObject(with: argsData) as? [String: Any])
+        #expect(args["query"] as? String == "local")
+        #expect(args["limit"] as? Int == 3)
+    }
+
     @Test("OpenAI-compatible parser preserves multiple streamed tool call deltas")
     func openAICompatibleParserExtractsMultipleToolCallDeltas() throws {
         let line = #"data: {"id":"chatcmpl-local","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"workspace_search","arguments":"{\"query\":\"local\"}"}},{"index":1,"id":"call_b","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"docs\"}"}}]},"finish_reason":null}]}"#
