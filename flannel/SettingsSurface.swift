@@ -1721,16 +1721,14 @@ struct SettingsSurface: View {
     }
 
     private func validateProvider(_ providerID: UUID) {
-        guard let report = store.validateProviderSetup(providerID) else { return }
+        guard let provider = store.providerConfigurations.first(where: { $0.id == providerID }),
+              let report = store.validateProviderSetup(providerID) else { return }
         providerSetupReports[providerID] = report
         providerReadinessValidations[providerID] = nil
-        if report.hasBlockingIssues {
-            providerSetupMessages[providerID] = report.diagnostics.first(where: \.isBlocking)?.message
-        } else if report.routingEligibility != .eligible {
-            providerSetupMessages[providerID] = report.diagnostics.first?.message
-        } else {
-            providerSetupMessages[providerID] = "Provider setup looks ready."
-        }
+        providerSetupMessages[providerID] = ProviderSettingsMessaging.preflightSetupMessage(
+            for: provider,
+            report: report
+        )
     }
 
     private func invalidateProviderReadiness(_ providerID: UUID) {
@@ -1745,7 +1743,9 @@ struct SettingsSurface: View {
 
         validateProvider(providerID)
         validatingProviderIDs.insert(providerID)
-        providerSetupMessages[providerID] = "Checking endpoint and selected model..."
+        providerSetupMessages[providerID] = ProviderSettingsMessaging.pendingReadinessMessage(
+            for: provider
+        )
 
         Task {
             let validation = await ProviderSetupService.shared.validateReadiness(
@@ -1758,15 +1758,10 @@ struct SettingsSurface: View {
                 providerReadinessValidations[providerID] = validation
                 providerSetupReports[providerID] = validation.report
                 _ = store.applyProviderReadinessValidation(validation, providerID: providerID)
-
-                if validation.isReady {
-                    let modelCount = validation.availableModels.isEmpty ? "provider metadata" : "\(validation.availableModels.count) model\(validation.availableModels.count == 1 ? "" : "s")"
-                    providerSetupMessages[providerID] = "Ready. Checked \(modelCount)."
-                } else if let errorMessage = validation.errorMessage {
-                    providerSetupMessages[providerID] = errorMessage
-                } else {
-                    providerSetupMessages[providerID] = "Provider needs attention before chat routing."
-                }
+                providerSetupMessages[providerID] = ProviderSettingsMessaging.setupMessage(
+                    for: provider,
+                    validation: validation
+                )
 
                 persist()
             }
@@ -1811,7 +1806,9 @@ struct SettingsSurface: View {
                 }
 
                 providerReadinessBatchMessage = "Checking \(offset + 1) of \(providerIDs.count): \(provider.displayName)"
-                providerSetupMessages[providerID] = "Checking endpoint and selected model..."
+                providerSetupMessages[providerID] = ProviderSettingsMessaging.pendingReadinessMessage(
+                    for: provider
+                )
 
                 let validation = await ProviderSetupService.shared.validateReadiness(
                     for: provider,

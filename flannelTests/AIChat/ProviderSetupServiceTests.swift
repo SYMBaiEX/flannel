@@ -972,6 +972,38 @@ struct ProviderSetupServiceTests {
 
         #expect(message == "Found 1 model across 1 local provider route. Needs attention: Ollama: Connection refused.")
     }
+
+    @Test("Preflight and pending readiness messaging stay route-specific")
+    func preflightAndPendingMessagingStayRouteSpecific() {
+        let localProvider = ProviderConfiguration(
+            kind: .lmStudio,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "LM Studio",
+            endpoint: "http://localhost:1234",
+            modelIdentifier: "local-chat"
+        )
+        let cliProvider = ProviderConfiguration(
+            kind: .claudeCodeCLI,
+            accessMode: .subscriptionCLI,
+            privacyScope: .localCLI,
+            displayName: "Claude Code CLI",
+            endpoint: "claude -p --output-format stream-json --verbose",
+            modelIdentifier: "claude-subscription"
+        )
+        let report = ProviderSetupReport(
+            normalizedEndpoint: "http://localhost:1234",
+            normalizedModelIdentifier: "local-chat",
+            canonicalSecretReference: nil,
+            routingEligibility: .eligible,
+            diagnostics: []
+        )
+
+        #expect(ProviderSettingsMessaging.preflightSetupMessage(for: localProvider, report: report) == "Setup looks complete. Run discovery or readiness to confirm the selected local model.")
+        #expect(ProviderSettingsMessaging.preflightSetupMessage(for: cliProvider, report: report) == "Setup looks complete. Run readiness to confirm the local CLI account can answer a smoke check.")
+        #expect(ProviderSettingsMessaging.pendingReadinessMessage(for: localProvider) == "Checking local server and selected model...")
+        #expect(ProviderSettingsMessaging.pendingReadinessMessage(for: cliProvider) == "Running local CLI smoke check...")
+    }
 }
 
 private actor ProviderReadinessTransportRecorder {

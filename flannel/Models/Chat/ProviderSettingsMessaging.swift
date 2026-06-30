@@ -8,6 +8,53 @@
 import Foundation
 
 enum ProviderSettingsMessaging {
+    static func preflightSetupMessage(
+        for provider: ProviderConfiguration,
+        report: ProviderSetupReport
+    ) -> String {
+        if report.hasBlockingIssues {
+            return report.diagnostics.first(where: \.isBlocking)?.message
+                ?? fallbackNeedsAttentionMessage(for: provider)
+        }
+
+        if report.routingEligibility != .eligible {
+            return report.diagnostics.first?.message
+                ?? fallbackNeedsAttentionMessage(for: provider)
+        }
+
+        switch provider.accessMode {
+        case .localServer:
+            return "Setup looks complete. Run discovery or readiness to confirm the selected local model."
+        case .subscriptionCLI:
+            return "Setup looks complete. Run readiness to confirm the local CLI account can answer a smoke check."
+        case .apiKey, .anthropicCompatible:
+            return "Setup looks complete. Run readiness to confirm the endpoint, credentials, and selected model."
+        case .openAICompatible:
+            return provider.runtimeBoundary == .localServer
+                ? "Setup looks complete. Run readiness to confirm the compatible local endpoint and selected model."
+                : "Setup looks complete. Run readiness to confirm the compatible endpoint and selected model."
+        case .aiSDKBridge:
+            return "Setup looks complete. Run readiness to confirm bridge health and the selected model."
+        }
+    }
+
+    static func pendingReadinessMessage(for provider: ProviderConfiguration) -> String {
+        switch provider.accessMode {
+        case .localServer:
+            return "Checking local server and selected model..."
+        case .subscriptionCLI:
+            return "Running local CLI smoke check..."
+        case .apiKey, .anthropicCompatible:
+            return "Checking endpoint, credentials, and selected model..."
+        case .openAICompatible:
+            return provider.runtimeBoundary == .localServer
+                ? "Checking compatible local endpoint and selected model..."
+                : "Checking compatible endpoint and selected model..."
+        case .aiSDKBridge:
+            return "Checking bridge health and selected model..."
+        }
+    }
+
     static func setupMessage(
         for provider: ProviderConfiguration,
         validation: ProviderReadinessValidation
