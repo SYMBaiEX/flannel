@@ -54,6 +54,9 @@ struct ContentView: View {
 
     var body: some View {
         rootSplitView
+            .background {
+                FlannelShellBackdrop()
+            }
             .navigationSplitViewStyle(.balanced)
             .toolbar {
                 primaryToolbar
@@ -3200,7 +3203,7 @@ private struct SidebarThreadRow: View {
 
     private var metadataAccessibilityLabel: String {
         var parts = [lastMessagePreview ?? "Updated \(updatedTimeText)"]
-        if let lastMessagePreview {
+        if lastMessagePreview != nil {
             parts.append("Updated \(updatedTimeText)")
         }
         if let folder {
@@ -3667,8 +3670,9 @@ private struct ChatSurface: View {
                 selectNextTranscriptSearchMatch: selectNextTranscriptSearchMatch,
                 clearTranscriptSearch: clearTranscriptSearch
             )
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
+            .padding(.horizontal, FlannelSpacing.shellInset)
+            .padding(.top, 12)
+            .padding(.bottom, 10)
 
             FlannelSeparator(opacity: 0.36)
 
@@ -3699,8 +3703,8 @@ private struct ChatSurface: View {
                             denyToolResult: { resolveToolApproval($0, approve: false) }
                         )
                         .frame(maxWidth: 880)
-                        .padding(.horizontal, 28)
-                        .padding(.vertical, 22)
+                        .padding(.horizontal, 32)
+                        .padding(.vertical, 26)
                         .frame(maxWidth: .infinity)
 
                         transcriptBottomSentinel
@@ -3733,6 +3737,7 @@ private struct ChatSurface: View {
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
                                 .flannelGlassCapsule(.regular, interactive: true)
+                                .frame(maxWidth: 860, alignment: .trailing)
                                 .padding(.bottom, 8)
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                                 .help("Scroll to the newest message.")
@@ -3754,15 +3759,14 @@ private struct ChatSurface: View {
                                 compare: compareCurrentPrompt
                             )
                             .frame(maxWidth: 860)
-                            .padding(10)
-                            .flannelFloatingDockSurface(cornerRadius: 24)
+                            .padding(12)
+                            .flannelFloatingDockSurface(cornerRadius: 28)
                             .padding(.horizontal, 28)
-                            .padding(.bottom, 14)
+                            .padding(.bottom, 16)
                             .frame(maxWidth: .infinity)
                         }
-                        .padding(.top, 12)
+                        .padding(.top, 14)
                     }
-                    .background(.bar)
                 }
                 .onChange(of: visibleMessages.count) { _, _ in
                     if shouldFollowLatestMessage {
@@ -4121,17 +4125,12 @@ private struct ChatThreadHeader: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                HStack(spacing: 8) {
-                    Label(privacyTitle, systemImage: privacyIcon)
-                    Text("•")
-                        .accessibilityHidden(true)
-                    Text(messageCountText)
+                FlowLayout(spacing: 6) {
+                    CapsuleLabel(privacyTitle, icon: privacyIcon, tint: store.preferences.localOnlyMode ?? true ? .green : nil)
+                    CapsuleLabel(messageCountText, icon: "text.bubble")
                     FlannelStatusChip(routeStatusText, systemImage: routeStatusIcon, tone: routeStatusTone)
-                        .frame(maxWidth: 240)
+                        .frame(maxWidth: 250)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("\(privacyTitle), \(messageCountText), route \(routeStatusText)")
             }
@@ -4147,7 +4146,7 @@ private struct ChatThreadHeader: View {
                 clear: clearTranscriptSearch
             )
         }
-        .frame(minHeight: 46)
+        .frame(minHeight: 54)
     }
 }
 
@@ -4197,6 +4196,7 @@ private struct ChatTranscriptFindBar: View {
                 .buttonStyle(.borderless)
                 .frame(width: 26, height: 24)
                 .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .flannelGlassCapsule(.clear, interactive: true)
                 .disabled(matchCount == 0)
                 .help("Previous match")
                 .accessibilityLabel("Previous chat search match")
@@ -4207,6 +4207,7 @@ private struct ChatTranscriptFindBar: View {
                 .buttonStyle(.borderless)
                 .frame(width: 26, height: 24)
                 .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .flannelGlassCapsule(.clear, interactive: true)
                 .disabled(matchCount == 0)
                 .help("Next match")
                 .accessibilityLabel("Next chat search match")
@@ -4218,6 +4219,7 @@ private struct ChatTranscriptFindBar: View {
                 .buttonStyle(.borderless)
                 .frame(width: 26, height: 24)
                 .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .flannelGlassCapsule(.clear, interactive: true)
                 .foregroundStyle(.secondary)
                 .help("Clear chat search")
                 .accessibilityLabel("Clear chat search")
@@ -4225,11 +4227,7 @@ private struct ChatTranscriptFindBar: View {
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(.separator.opacity(0.22), lineWidth: FlannelSpacing.hairline)
-        }
+        .flannelChromePanel(cornerRadius: 14)
     }
 }
 
@@ -5081,15 +5079,15 @@ private struct Composer: View {
                     .font(.body)
                     .scrollContentBackground(.hidden)
                     .frame(height: editorHeight)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
                     .focused($isEditorFocused)
                     .background(
-                        FlannelSystemColor.separator.opacity(isEditorFocused ? 0.08 : 0.045),
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        FlannelSystemColor.chromeFill.opacity(isEditorFocused ? 1 : 0.82),
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
                     )
                     .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .stroke(
                                 composerEditorStrokeColor,
                                 lineWidth: isDropTargeted ? 2 : FlannelSpacing.hairline
@@ -5155,6 +5153,7 @@ private struct Composer: View {
                 }
                 .buttonStyle(.borderless)
                 .controlSize(.regular)
+                .flannelGlassCapsule(.clear, interactive: true)
                 .disabled(isStreamingResponse)
                 .help(attachHelpText)
                 .accessibilityLabel("Attach files")
@@ -5170,6 +5169,7 @@ private struct Composer: View {
                 }
                 .buttonStyle(.borderless)
                 .controlSize(.regular)
+                .flannelGlassCapsule(.clear, interactive: true)
                 .disabled(isStreamingResponse || !canComparePrompt)
                 .help(compareHelpText)
                 .accessibilityLabel("Compare with multiple models")
@@ -5453,7 +5453,7 @@ private struct AttachmentChipGrid: View {
                 .padding(.vertical, 6)
                 .padding(.leading, 9)
                 .padding(.trailing, 6)
-                .flannelPaneSurface(.subtle, cornerRadius: FlannelRadius.md)
+                .flannelChromePanel(cornerRadius: FlannelRadius.md)
             }
         }
     }
@@ -8596,6 +8596,9 @@ private struct InspectorSurface: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Artifacts")
                             .font(.headline)
+                        Text("Thread detail, sources, tool traces, and comparisons")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
 
                     Spacer(minLength: 8)
@@ -8606,6 +8609,7 @@ private struct InspectorSurface: View {
                     }
                     .buttonStyle(.borderless)
                     .controlSize(.small)
+                    .flannelGlassCapsule(.clear, interactive: true)
                     .focused($isCollapseButtonFocused)
                     .help("Collapse Artifacts")
                     .accessibilityLabel("Collapse Artifacts")
@@ -8631,7 +8635,6 @@ private struct InspectorSurface: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 18)
         }
-        .background(.bar)
         .onAppear(perform: ensureActiveSectionIsAvailable)
         .onAppear(perform: focusCollapseButtonIfRequested)
         .onChange(of: availableSectionIDs) { _, _ in
@@ -8768,6 +8771,8 @@ private struct InspectorSectionSelector: View {
             .labelsHidden()
             .accessibilityLabel("Artifact section")
         }
+        .padding(4)
+        .flannelChromePanel(cornerRadius: 14)
     }
 }
 
@@ -8961,7 +8966,7 @@ private struct InspectorCompactEmptySummary: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .flannelChromePanel(cornerRadius: 10)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(text)
     }
