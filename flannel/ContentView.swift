@@ -4064,18 +4064,6 @@ private struct ChatThreadHeader: View {
         }
     }
 
-    private var privacyTone: FlannelStatusTone {
-        if store.preferences.localOnlyMode ?? true {
-            return .accent
-        }
-
-        if activeProvider?.privacyScope == .externalAPI {
-            return (store.preferences.allowCloudProviders ?? false) ? .warning : .danger
-        }
-
-        return activeProvider == nil ? .warning : .neutral
-    }
-
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 5) {
@@ -4085,10 +4073,16 @@ private struct ChatThreadHeader: View {
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
-                    FlannelStatusChip(privacyTitle, systemImage: privacyIcon, tone: privacyTone)
-                    FlannelStatusChip(messageCountText, systemImage: "text.bubble", tone: .neutral)
+                    Label(privacyTitle, systemImage: privacyIcon)
+                    Text("•")
+                        .accessibilityHidden(true)
+                    Text(messageCountText)
                     FlannelStatusChip(routeStatusText, systemImage: routeStatusIcon, tone: routeStatusTone)
+                        .frame(maxWidth: 240)
                 }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("\(privacyTitle), \(messageCountText), route \(routeStatusText)")
             }
@@ -4138,8 +4132,9 @@ private struct ChatTranscriptFindBar: View {
             TextField("Find in chat", text: $text)
                 .textFieldStyle(.plain)
                 .font(.callout)
-                .frame(width: 168)
+                .frame(minWidth: 220, idealWidth: 240, maxWidth: 280)
                 .onSubmit(next)
+                .accessibilityLabel("Find in chat")
 
             if hasQuery {
                 Text(resultLabel)
@@ -4150,7 +4145,9 @@ private struct ChatTranscriptFindBar: View {
                 Button(action: previous) {
                     Image(systemName: "chevron.up")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
+                .frame(width: 26, height: 24)
+                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 .disabled(matchCount == 0)
                 .help("Previous match")
                 .accessibilityLabel("Previous chat search match")
@@ -4158,7 +4155,9 @@ private struct ChatTranscriptFindBar: View {
                 Button(action: next) {
                     Image(systemName: "chevron.down")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
+                .frame(width: 26, height: 24)
+                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 .disabled(matchCount == 0)
                 .help("Next match")
                 .accessibilityLabel("Next chat search match")
@@ -4167,18 +4166,20 @@ private struct ChatTranscriptFindBar: View {
                     Image(systemName: "xmark.circle.fill")
                         .symbolRenderingMode(.hierarchical)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
+                .frame(width: 26, height: 24)
+                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 .foregroundStyle(.secondary)
                 .help("Clear chat search")
                 .accessibilityLabel("Clear chat search")
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(.separator.opacity(0.28), lineWidth: 1)
+                .stroke(.separator.opacity(0.22), lineWidth: FlannelSpacing.hairline)
         }
     }
 }
