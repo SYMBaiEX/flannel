@@ -2975,6 +2975,28 @@ final class WorkspaceStore {
         return isProviderRunnableForChat(providerConfigurations[index])
     }
 
+    @discardableResult
+    func selectPreferredProviderModelForChat(
+        providerID: UUID,
+        modelIdentifier rawModelIdentifier: String
+    ) -> Bool {
+        guard let index = providerConfigurations.firstIndex(where: { $0.id == providerID }) else {
+            return false
+        }
+
+        let modelIdentifier = rawModelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !modelIdentifier.isEmpty else { return false }
+
+        providerConfigurations[index].modelIdentifier = modelIdentifier
+        providerConfigurations[index].availableModels = Self.sortedUniqueModelNames(
+            providerConfigurations[index].availableModels + [modelIdentifier]
+        )
+        providerConfigurations[index].isEnabled = true
+        preferences.preferredProviderID = providerID
+        preferences.providerRoutingPolicy = .selectedProvider
+        return isProviderRunnableForChat(providerConfigurations[index])
+    }
+
     var runnableComparisonProviders: [ProviderConfiguration] {
         providerConfigurations
             .filter { isProviderRunnableForChat($0) }

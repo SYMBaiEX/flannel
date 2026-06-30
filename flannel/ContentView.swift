@@ -9150,15 +9150,52 @@ private struct ProviderRoutingPicker: View {
                         }
 
                         ForEach(familyProviders) { provider in
-                            Button {
-                                select(provider)
-                            } label: {
-                                ProviderRoutingMenuRow(
-                                    provider: provider,
-                                    readiness: readiness(for: provider),
-                                    isPreferred: preferredProvider?.id == provider.id,
-                                    isActive: store.activeProvider?.id == provider.id
-                                )
+                            let modelNames = selectableModelNames(for: provider)
+                            if modelNames.isEmpty {
+                                Button {
+                                    select(provider)
+                                } label: {
+                                    ProviderRoutingMenuRow(
+                                        provider: provider,
+                                        readiness: readiness(for: provider),
+                                        isPreferred: preferredProvider?.id == provider.id,
+                                        isActive: store.activeProvider?.id == provider.id
+                                    )
+                                }
+                            } else {
+                                Menu {
+                                    Button {
+                                        select(provider)
+                                    } label: {
+                                        Label(
+                                            currentModelMenuTitle(for: provider),
+                                            systemImage: preferredProvider?.id == provider.id ? "checkmark" : provider.privacyScope.icon
+                                        )
+                                    }
+
+                                    Section("Models") {
+                                        ForEach(modelNames, id: \.self) { modelName in
+                                            Button {
+                                                select(provider, modelIdentifier: modelName)
+                                            } label: {
+                                                ProviderModelRoutingMenuRow(
+                                                    modelName: modelName,
+                                                    provider: provider,
+                                                    isSelected: provider.modelIdentifier == modelName,
+                                                    isActive: store.activeProvider?.id == provider.id
+                                                        && store.activeProvider?.modelIdentifier == modelName
+                                                )
+                                            }
+                                        }
+                                    }
+                                } label: {
+                                    ProviderRoutingMenuRow(
+                                        provider: provider,
+                                        readiness: readiness(for: provider),
+                                        isPreferred: preferredProvider?.id == provider.id,
+                                        isActive: store.activeProvider?.id == provider.id
+                                    )
+                                }
                             }
                         }
                     }
@@ -9215,6 +9252,14 @@ private struct ProviderRoutingPicker: View {
         persist()
     }
 
+    private func select(_ provider: ProviderConfiguration, modelIdentifier: String) {
+        _ = store.selectPreferredProviderModelForChat(
+            providerID: provider.id,
+            modelIdentifier: modelIdentifier
+        )
+        persist()
+    }
+
     private func select(_ model: LocalModelDescriptor) {
         guard store.selectDiscoveredLocalModelForChat(model) != nil else {
             return
@@ -9231,6 +9276,22 @@ private struct ProviderRoutingPicker: View {
         selectedProvider?.kind == model.providerKind
             && selectedProvider?.endpoint == model.endpoint
             && selectedProvider?.modelIdentifier == model.name
+    }
+
+    private func selectableModelNames(for provider: ProviderConfiguration) -> [String] {
+        let candidates = provider.availableModels
+            + provider.discoveredModelNames
+            + [provider.modelIdentifier]
+        return Array(Set(candidates.compactMap { candidate in
+            let modelName = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+            return modelName.isEmpty ? nil : modelName
+        }))
+        .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    private func currentModelMenuTitle(for provider: ProviderConfiguration) -> String {
+        let modelName = provider.modelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        return modelName.isEmpty ? "Use current route" : "Use current model: \(modelName)"
     }
 
     private func readiness(for provider: ProviderConfiguration) -> ProviderRouteReadiness {
@@ -9378,6 +9439,38 @@ private struct ProviderRoutingMenuRow: View {
             }
         } icon: {
             Image(systemName: provider.privacyScope.icon)
+        }
+    }
+}
+
+private struct ProviderModelRoutingMenuRow: View {
+    var modelName: String
+    var provider: ProviderConfiguration
+    var isSelected: Bool
+    var isActive: Bool
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(modelName)
+                    if isSelected {
+                        Text("Selected")
+                            .font(.caption2)
+                    }
+                    if isActive {
+                        Text("Active")
+                            .font(.caption2)
+                    }
+                }
+
+                Text("\(provider.providerModeBoundaryBadge) • \(provider.runtimeBoundary.title) • \(modelName)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        } icon: {
+            Image(systemName: isSelected ? "checkmark" : "memorychip")
         }
     }
 }

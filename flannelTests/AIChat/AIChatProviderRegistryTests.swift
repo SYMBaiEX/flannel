@@ -929,6 +929,26 @@ struct AIChatProviderRegistryTests {
     }
 
     @MainActor
+    @Test("Selecting a provider model from the chat picker updates the preferred route")
+    func selectingProviderModelFromChatPickerUpdatesPreferredRoute() throws {
+        let (_, store) = try makeLoadedStore()
+        let provider = try #require(store.providerConfigurations.first(where: { $0.kind == .openAI }))
+
+        store.preferences.providerRoutingPolicy = .fastest
+        _ = store.selectPreferredProviderModelForChat(
+            providerID: provider.id,
+            modelIdentifier: " gpt-5.5-mini "
+        )
+
+        let updatedProvider = try #require(store.providerConfigurations.first(where: { $0.id == provider.id }))
+        #expect(updatedProvider.isEnabled)
+        #expect(updatedProvider.modelIdentifier == "gpt-5.5-mini")
+        #expect(updatedProvider.availableModels.contains("gpt-5.5-mini"))
+        #expect(store.preferences.preferredProviderID == provider.id)
+        #expect(store.preferences.providerRoutingPolicy == .selectedProvider)
+    }
+
+    @MainActor
     @Test("Cheapest routing prefers zero marginal cost local providers")
     func cheapestRoutingPrefersLocalProviderCost() throws {
         let (_, store) = try makeLoadedStore()
