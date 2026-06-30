@@ -9601,14 +9601,12 @@ private struct ProviderRoutingPicker: View {
     var body: some View {
         Menu {
             Section("Current Route") {
-                Button { } label: {
-                    ProviderRoutingCurrentMenuRow(
-                        selectedProvider: selectedProvider,
-                        routingPolicy: store.preferences.providerRoutingPolicy,
-                        readiness: selectedReadiness
-                    )
-                }
-                .disabled(true)
+                ProviderRoutingCurrentMenuRow(
+                    selectedProvider: selectedProvider,
+                    routingPolicy: store.preferences.providerRoutingPolicy,
+                    readiness: selectedReadiness,
+                    isDiscoveringModels: isDiscoveringModels
+                )
 
                 Button(action: openProviderSetup) {
                     Label("Open Models & Providers", systemImage: "slider.horizontal.3")
@@ -9628,30 +9626,6 @@ private struct ProviderRoutingPicker: View {
                     }
                     .help(policy.detail)
                 }
-            }
-
-            Section("Privacy") {
-                Button {
-                    store.preferences.localOnlyMode = !(store.preferences.localOnlyMode ?? true)
-                    persist()
-                } label: {
-                    Label(
-                        (store.preferences.localOnlyMode ?? true) ? "Local-only Active" : "Local-only Disabled",
-                        systemImage: (store.preferences.localOnlyMode ?? true) ? "checkmark.shield" : "shield"
-                    )
-                }
-                .help("Keep routing on local servers and local CLI providers.")
-
-                Button {
-                    store.preferences.allowCloudProviders = !(store.preferences.allowCloudProviders ?? false)
-                    persist()
-                } label: {
-                    Label(
-                        (store.preferences.allowCloudProviders ?? false) ? "Cloud APIs Allowed" : "Cloud APIs Blocked",
-                        systemImage: (store.preferences.allowCloudProviders ?? false) ? "network" : "network.slash"
-                    )
-                }
-                .help("Allow or block external API-key providers from becoming active.")
             }
 
             Section("Local Discovery") {
@@ -9763,7 +9737,8 @@ private struct ProviderRoutingPicker: View {
                 activeProvider: store.activeProvider,
                 preferredProvider: preferredProvider,
                 routingPolicy: store.preferences.providerRoutingPolicy,
-                readiness: selectedReadiness
+                readiness: selectedReadiness,
+                isDiscoveringModels: isDiscoveringModels
             )
         }
         .menuStyle(.borderlessButton)
@@ -9903,12 +9878,13 @@ private struct ProviderRoutingCurrentMenuRow: View {
     var selectedProvider: ProviderConfiguration?
     var routingPolicy: ProviderRoutingPolicy
     var readiness: ProviderRouteReadiness?
+    var isDiscoveringModels: Bool
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Image(systemName: selectedProvider?.accessMode.icon ?? "cpu")
+            Image(systemName: isDiscoveringModels ? "arrow.triangle.2.circlepath" : selectedProvider?.accessMode.icon ?? "cpu")
                 .frame(width: 16)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isDiscoveringModels ? Color.accentColor : .secondary)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(selectedProvider?.modeBoundaryTitle ?? "Choose provider")
@@ -9925,6 +9901,10 @@ private struct ProviderRoutingCurrentMenuRow: View {
             return "Open Models & Providers to configure a chat route."
         }
 
+        if isDiscoveringModels {
+            return "Discovering local models • \(selectedProvider.providerPickerRouteSummary)"
+        }
+
         return selectedProvider.providerPickerStatusLine(
             readinessText: readiness?.text ?? "Check setup",
             routingPolicy: routingPolicy
@@ -9938,12 +9918,13 @@ private struct ProviderRoutingPickerLabel: View {
     var preferredProvider: ProviderConfiguration?
     var routingPolicy: ProviderRoutingPolicy
     var readiness: ProviderRouteReadiness?
+    var isDiscoveringModels: Bool
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: selectedProvider?.accessMode.icon ?? "cpu")
+            Image(systemName: isDiscoveringModels ? "arrow.triangle.2.circlepath" : selectedProvider?.accessMode.icon ?? "cpu")
                 .frame(width: 16)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isDiscoveringModels ? Color.accentColor : .secondary)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(selectedProvider?.modeBoundaryTitle ?? "Choose provider")
@@ -9985,6 +9966,10 @@ private struct ProviderRoutingPickerLabel: View {
         let readinessText = readiness?.text ?? statusText
         guard let selectedProvider else { return readinessText }
 
+        if isDiscoveringModels {
+            return "Discovering local models"
+        }
+
         return selectedProvider.providerPickerStatusLine(
             readinessText: readinessText,
             routingPolicy: routingPolicy
@@ -9999,6 +9984,9 @@ private struct ProviderRoutingPickerLabel: View {
     }
 
     private var statusTint: Color {
+        if isDiscoveringModels {
+            return Color.accentColor
+        }
         guard let selectedProvider else { return .secondary }
         if activeProvider?.id == selectedProvider.id {
             return .green
@@ -10010,6 +9998,9 @@ private struct ProviderRoutingPickerLabel: View {
     }
 
     private var statusIcon: String {
+        if isDiscoveringModels {
+            return "arrow.triangle.2.circlepath"
+        }
         guard let selectedProvider else { return "circle" }
         if activeProvider?.id == selectedProvider.id {
             return "checkmark.circle.fill"
