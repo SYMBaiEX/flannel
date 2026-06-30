@@ -3193,6 +3193,7 @@ private struct CommandPaletteOverlay: View {
     var run: (FlannelCommand) -> Void
     @FocusState private var isSearchFocused: Bool
     @State private var selectedID: FlannelCommandID?
+    @State private var announcesSelectionChanges = false
 
     private var filteredCommands: [FlannelCommand] {
         commands.filter { $0.matches(query) }
@@ -3266,9 +3267,15 @@ private struct CommandPaletteOverlay: View {
         .onAppear {
             selectedID = filteredCommands.first(where: \.isEnabled)?.id ?? filteredCommands.first?.id
             isSearchFocused = true
+            DispatchQueue.main.async {
+                announcesSelectionChanges = true
+            }
         }
         .onChange(of: query) { _, _ in
             reconcileSelection()
+        }
+        .onChange(of: selectedID) { _, _ in
+            announceSelectedCommandIfNeeded()
         }
         .onMoveCommand { direction in
             moveSelection(direction)
@@ -3310,6 +3317,17 @@ private struct CommandPaletteOverlay: View {
         if !selectedIDIsVisible || selectedCommand == nil || selectedCommand?.isEnabled == false {
             selectedID = filteredCommands.first(where: \.isEnabled)?.id ?? filteredCommands.first?.id
         }
+    }
+
+    private func announceSelectedCommandIfNeeded() {
+        guard announcesSelectionChanges,
+              let selectedCommand else { return }
+        let availability = selectedCommand.isEnabled ? "" : " Unavailable."
+        NSAccessibility.post(
+            element: NSApp as Any,
+            notification: .announcementRequested,
+            userInfo: [.announcement: "\(selectedCommand.title). \(selectedCommand.subtitle).\(availability)"]
+        )
     }
 }
 
@@ -3366,6 +3384,10 @@ private struct CommandPaletteRow: View {
         }
         .buttonStyle(.plain)
         .disabled(!command.isEnabled)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(command.accessibilityLabel)
+        .accessibilityHint(commandAccessibilityHint)
+        .accessibilityValue(isSelected ? "Selected" : "")
         .background {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(isSelected ? AnyShapeStyle(Color.accentColor.opacity(0.12)) : AnyShapeStyle(.clear))
@@ -3376,6 +3398,13 @@ private struct CommandPaletteRow: View {
                     .strokeBorder(Color.accentColor.opacity(0.22), lineWidth: FlannelSpacing.hairline)
             }
         }
+    }
+
+    private var commandAccessibilityHint: String {
+        guard command.isEnabled else {
+            return "\(command.accessibilityHint) This command is unavailable in the current context."
+        }
+        return command.accessibilityHint
     }
 }
 
