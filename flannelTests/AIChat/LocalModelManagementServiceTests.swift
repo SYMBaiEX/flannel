@@ -313,7 +313,7 @@ struct LocalModelManagementServiceTests {
         #expect(embedding.displayName == "Nomic Embed Text v1.5")
         #expect(embedding.publisher == "nomic")
         #expect(embedding.contextWindowTokens == 2048)
-        #expect(embedding.capabilities == [.embeddings])
+        #expect(embedding.capabilities == [.embeddings, .openAICompatible])
     }
 
     @Test("LM Studio native discovery tolerates partial loaded instance metadata")
