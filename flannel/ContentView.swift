@@ -3797,6 +3797,7 @@ private struct ChatTranscriptBottomYPreferenceKey: PreferenceKey {
 private struct ChatSurface: View {
     private static let transcriptScrollCoordinateSpace = "flannel.chat.transcript.scroll"
     private static let transcriptBottomAnchorID = "flannel.chat.transcript.bottom"
+    private static let chatContentMaxWidth: CGFloat = 880
 
     @Bindable var store: WorkspaceStore
     @Binding var composerText: String
@@ -3869,7 +3870,7 @@ private struct ChatSurface: View {
                             approveToolResult: { resolveToolApproval($0, approve: true) },
                             denyToolResult: { resolveToolApproval($0, approve: false) }
                         )
-                        .frame(maxWidth: 880)
+                        .frame(maxWidth: Self.chatContentMaxWidth)
                         .padding(.horizontal, 32)
                         .padding(.vertical, 26)
                         .frame(maxWidth: .infinity)
@@ -3904,7 +3905,7 @@ private struct ChatSurface: View {
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
                                 .flannelGlassCapsule(.regular, interactive: true)
-                                .frame(maxWidth: 860, alignment: .trailing)
+                                .frame(maxWidth: Self.chatContentMaxWidth, alignment: .trailing)
                                 .padding(.bottom, 8)
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                                 .help("Scroll to the newest message.")
@@ -3923,7 +3924,7 @@ private struct ChatSurface: View {
                                 cancel: cancelStreaming,
                                 compare: compareCurrentPrompt
                             )
-                            .frame(maxWidth: 860)
+                            .frame(maxWidth: Self.chatContentMaxWidth)
                             .padding(12)
                             .flannelFloatingDockSurface(cornerRadius: 28)
                             .padding(.horizontal, 28)
