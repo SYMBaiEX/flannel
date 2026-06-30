@@ -79,13 +79,13 @@ struct AssistantRuntime: Sendable {
                 status: AssistantProviderStatus(
                     availability: .localOnly,
                     badge: "Local Only",
-                    detail: "No provider is selected. The assistant ran only local deterministic tools.",
+                    detail: "No provider is selected. This secondary assistant ran only local workspace tools.",
                     requestWasSent: false
                 ),
                 trace: AssistantTraceStep(
                     id: "resolve-provider",
                     title: "Resolve provider",
-                    detail: "No provider selected. No external request path exists for this run.",
+                    detail: "No provider selected. This local tool run did not create a model request.",
                     state: .completed
                 )
             )
@@ -117,7 +117,7 @@ struct AssistantRuntime: Sendable {
                 trace: AssistantTraceStep(
                     id: "resolve-provider",
                     title: "Resolve provider",
-                    detail: "\(provider.displayName) needs \(missingRequirement) before a live transport can exist.",
+                    detail: "\(provider.displayName) needs \(missingRequirement) before this local tool run can reference it.",
                     state: .failed
                 )
             )
@@ -127,13 +127,13 @@ struct AssistantRuntime: Sendable {
             status: AssistantProviderStatus(
                 availability: .configured,
                 badge: "\(provider.displayName) Configured",
-                detail: "\(provider.displayName) is configured in \(provider.accessMode.title) mode with \(model), but this runtime is still deterministic and did not send a request.",
+                detail: "\(provider.displayName) is configured in \(provider.accessMode.title) mode with \(model). This secondary local tool run did not send a model request.",
                 requestWasSent: false
             ),
             trace: AssistantTraceStep(
                 id: "resolve-provider",
                 title: "Resolve provider",
-                detail: "Detected a complete \(provider.displayName) configuration. Live streaming transport is planned but not used by this local deterministic runtime.",
+                detail: "Detected a complete \(provider.displayName) configuration. Primary chat uses live streaming; this secondary assistant path only records provider context for local tools.",
                 state: .completed
             )
         )
@@ -262,17 +262,17 @@ struct AssistantRuntime: Sendable {
         switch providerStatus.availability {
         case .localOnly:
             return """
-            No provider is active. The assistant can still inspect local workspace context and run deterministic tools, but no model request path exists yet.
+            No provider is active. This secondary assistant can still inspect local workspace context and run local tools.
             """
         case .configured:
             return """
             \(providerStatus.detail)
-            To enable live inference later, keep the runtime contract and replace only the transport boundary.
+            Use the main chat surface for live model streaming with this provider.
             """
         case .unavailable:
             return """
             \(providerStatus.detail)
-            Fix the missing configuration first, then wire a transport without changing the local tool contract.
+            Fix the missing configuration before expecting the main chat surface to route live model output through this provider.
             """
         }
     }
@@ -310,9 +310,9 @@ struct AssistantRuntime: Sendable {
         return """
         Tool: local.workspace.inspect
         Inputs: prompt text, selected context chips, assistant context snapshot, optional provider configuration.
-        Outputs: provider status, ordered trace steps, deterministic tool results, assistant-visible response text.
-        Failure handling: reject empty prompts, mark provider setup as unavailable when configuration is incomplete, and keep response generation local when transport is absent.
-        UI contract: show selected chips, show every trace step in order, and display that no external request was sent unless a transport explicitly records one.
+        Outputs: provider status, ordered trace steps, local tool results, assistant-visible response text.
+        Failure handling: reject empty prompts, mark provider setup as unavailable when configuration is incomplete, and keep this secondary tool response local.
+        UI contract: show selected chips, show every trace step in order, and display that this local tool run did not send a model request.
         Current grounding target: \(projectLine).
         """
     }
@@ -322,7 +322,7 @@ struct AssistantRuntime: Sendable {
         providerStatus: AssistantProviderStatus
     ) -> String {
         if providerStatus.availability == .unavailable {
-            return "Next action: fix the provider configuration before expecting live model output. Until then, use the local tools for grounded workspace inspection."
+            return "Next action: fix the provider configuration before expecting live model output in main chat. Until then, use local tools for grounded workspace inspection."
         }
 
         if context.draft != nil {
@@ -352,7 +352,7 @@ struct AssistantRuntime: Sendable {
         .joined(separator: "\n\n")
 
         return """
-        Local assistant runtime completed. No external model request was sent.
+        Local assistant tool run completed. No model request was sent from this secondary path.
 
         Prompt focus: \(prompt)
         Provider status: \(providerStatus.badge)
@@ -390,7 +390,7 @@ struct AssistantRuntime: Sendable {
                 AssistantTraceStep(
                     id: "tool-\(tool.id)",
                     title: tool.title,
-                    detail: "Executed locally with deterministic workspace data.",
+                    detail: "Executed locally with saved workspace context.",
                     state: .completed
                 )
             }

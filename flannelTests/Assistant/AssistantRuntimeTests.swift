@@ -39,7 +39,7 @@ struct AssistantRuntimeTests {
         #expect(result.usedFallback == false)
         #expect(result.providerBadge == "Local Ollama Configured")
         #expect(result.providerStatus.requestWasSent == false)
-        #expect(result.responseText.contains("No external model request was sent"))
+        #expect(result.responseText.contains("No model request was sent from this secondary path"))
         #expect(result.responseText.contains("Selected context chips: Project: Creator OS Launch"))
         #expect(result.toolActivity.contains { $0.id == "tool-workspace-summary" })
     }
@@ -91,7 +91,7 @@ struct AssistantRuntimeTests {
 
         #expect(result.usedFallback == false)
         #expect(result.providerBadge == "OpenAI Configured")
-        #expect(result.note.contains("did not send a request"))
+        #expect(result.note.contains("did not send a model request"))
         #expect(result.providerStatus.requestWasSent == false)
         #expect(result.toolActivity.contains {
             $0.id == "resolve-provider" && $0.state == .completed

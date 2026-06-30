@@ -189,7 +189,7 @@ final class WorkspaceAssistantStore {
 
         if transcript.isEmpty {
             workspaceStore.appendAssistantMessage(
-                "Flannel Assistant runs local deterministic tools against workspace context. It records explicit provider status and never claims a remote request happened unless a real transport is added.",
+                "Flannel Assistant runs local workspace tools against the current context. Main chat owns live model streaming; this secondary path records provider status without sending model requests.",
                 role: .system
             )
             syncTranscript()
