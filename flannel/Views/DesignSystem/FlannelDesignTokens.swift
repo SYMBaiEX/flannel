@@ -46,13 +46,13 @@ enum FlannelSystemColor {
     static let separator = Color(nsColor: .separatorColor)
     static let hairline = Color(nsColor: .separatorColor).opacity(0.55)
     static let quietStroke = Color(nsColor: .separatorColor).opacity(0.42)
-    static let chromeStroke = Color.white.opacity(0.18)
-    static let chromeStrokeStrong = Color.white.opacity(0.28)
-    static let chromeFill = Color.white.opacity(0.05)
-    static let sidebarSelectionTint = Color.accentColor.opacity(0.14)
+    static let chromeStroke = Color.white.opacity(0.12)
+    static let chromeStrokeStrong = Color.white.opacity(0.18)
+    static let chromeFill = Color.white.opacity(0.025)
+    static let sidebarSelectionTint = Color.accentColor.opacity(0.10)
 }
 
 enum FlannelShadow {
-    static let floatingPrimary = Color.black.opacity(0.12)
-    static let floatingSecondary = Color.black.opacity(0.05)
+    static let floatingPrimary = Color.black.opacity(0.10)
+    static let floatingSecondary = Color.black.opacity(0.035)
 }

@@ -117,14 +117,15 @@ private struct FlannelFloatingDockSurfaceModifier: ViewModifier {
 
         content
             .glassEffect(.regular.tint(tint).interactive(true), in: shape)
+            .background(.ultraThinMaterial, in: shape)
             .overlay {
                 shape.strokeBorder(
                     FlannelSystemColor.chromeStrokeStrong,
                     lineWidth: FlannelSpacing.hairline
                 )
             }
-            .shadow(color: FlannelShadow.floatingPrimary, radius: 22, x: 0, y: 14)
-            .shadow(color: FlannelShadow.floatingSecondary, radius: 4, x: 0, y: 1)
+            .shadow(color: FlannelShadow.floatingPrimary, radius: 16, x: 0, y: 10)
+            .shadow(color: FlannelShadow.floatingSecondary, radius: 3, x: 0, y: 1)
     }
 }
 
@@ -137,7 +138,8 @@ private struct FlannelChromePanelModifier: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
 
         content
-            .glassEffect(.regular.tint(tint).interactive(interactive), in: shape)
+            .glassEffect(.clear.tint(tint).interactive(interactive), in: shape)
+            .background(.ultraThinMaterial, in: shape)
             .background(FlannelSystemColor.chromeFill, in: shape)
             .overlay {
                 shape.strokeBorder(

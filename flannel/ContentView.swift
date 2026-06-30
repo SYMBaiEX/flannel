@@ -2036,6 +2036,27 @@ private struct AppSidebar: View {
         return activeAdvancedFilterSummary
     }
 
+    private var sidebarHeaderTitle: String {
+        if !query.isEmpty {
+            return "Search"
+        }
+        return scope == .archived ? "Archived Chats" : "Chats"
+    }
+
+    private var sidebarHeaderDetail: String {
+        if !query.isEmpty {
+            let matchCount = visibleSearchResults.count
+            return matchCount == 1 ? "1 match" : "\(matchCount) matches"
+        }
+
+        let chatCount = visibleThreads.count
+        let chatSummary = chatCount == 1 ? "1 chat" : "\(chatCount) chats"
+        if activeSidebarRefinementCount == 0 {
+            return chatSummary
+        }
+        return "\(chatSummary) • \(sidebarRefinementSummary)"
+    }
+
     private var folderRows: [(folder: ChatFolder, depth: Int)] {
         flattenedFolders(parentID: nil, depth: 0)
     }
@@ -2125,15 +2146,29 @@ private struct AppSidebar: View {
 
     private var conversationSidebar: some View {
         VStack(spacing: 0) {
-            VStack(spacing: FlannelSpacing.sidebarSectionSpacing) {
-                AppIdentity()
-                newChatControl
+            VStack(alignment: .leading, spacing: FlannelSpacing.sidebarSectionSpacing) {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(sidebarHeaderTitle)
+                            .font(.title3.weight(.semibold))
+
+                        Text(sidebarHeaderDetail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    newChatControl
+                }
                 sidebarSearchField
                 sidebarRefinementControl
             }
             .padding(FlannelSpacing.sidebarInset)
             .padding(.top, FlannelSpacing.sidebarInset)
-            .padding(.bottom, 8)
+            .padding(.bottom, 10)
 
             List(selection: selectedThreadListBinding) {
                 if query.isEmpty {
@@ -2197,10 +2232,7 @@ private struct AppSidebar: View {
             placeholder: "Search chats",
             focusRequest: searchFocusRequest
         )
-        .frame(height: 30)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .flannelChromePanel(cornerRadius: 14)
+        .frame(height: 28)
         .accessibilityLabel("Search chats")
     }
 
@@ -2210,13 +2242,10 @@ private struct AppSidebar: View {
             Button {
                 createChat()
             } label: {
-                SidebarCommandLabel(title: "New Chat", systemImage: "plus")
+                SidebarCommandLabel(title: "New Chat", systemImage: "square.and.pencil")
             }
-            .buttonStyle(.plain)
-            .controlSize(.regular)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .flannelChromePanel(cornerRadius: 16, tint: Color.accentColor.opacity(0.06), interactive: true)
+            .buttonStyle(.borderless)
+            .controlSize(.small)
             .help("New Chat")
             .accessibilityLabel("New Chat")
         } else {
@@ -2237,13 +2266,10 @@ private struct AppSidebar: View {
                     }
                 }
             } label: {
-                SidebarCommandLabel(title: "New Chat", systemImage: "plus")
+                SidebarCommandLabel(title: "New Chat", systemImage: "square.and.pencil")
             }
             .menuStyle(.borderlessButton)
-            .controlSize(.regular)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .flannelChromePanel(cornerRadius: 16, tint: Color.accentColor.opacity(0.06), interactive: true)
+            .controlSize(.small)
             .help("New Chat")
             .accessibilityLabel("New Chat")
         }
@@ -2380,17 +2406,18 @@ private struct AppSidebar: View {
 
             Spacer(minLength: 6)
 
-            if activeSidebarRefinementCount > 0 {
-                CapsuleLabel("\(activeSidebarRefinementCount)", icon: "line.3.horizontal.decrease.circle")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-            }
-
             Text(sidebarRefinementSummary)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
+
+            if activeSidebarRefinementCount > 0 {
+                Text(activeSidebarRefinementCount.formatted())
+                    .font(.caption2.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
 
             if activeSidebarRefinementCount > 0 {
                 Button {
@@ -2407,9 +2434,7 @@ private struct AppSidebar: View {
             }
         }
         .font(.caption)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .flannelChromePanel(cornerRadius: 14)
+        .padding(.horizontal, 2)
     }
 
     private func threadRow(_ thread: AssistantThread) -> some View {
@@ -2617,36 +2642,37 @@ private struct SettingsSidebar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 Button(action: exitSettings) {
-                    Label("Exit Settings", systemImage: "chevron.left")
+                    Label("Back to Chats", systemImage: "chevron.left")
                         .font(.callout.weight(.medium))
                         .labelStyle(.titleAndIcon)
                         .symbolRenderingMode(.hierarchical)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .padding(.horizontal, 2)
+                        .padding(.vertical, 4)
+                        .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
                 .buttonStyle(.borderless)
-                .controlSize(.regular)
+                .controlSize(.small)
                 .focused($isExitSettingsFocused)
                 .keyboardShortcut(.escape, modifiers: [])
                 .help("Return to chat")
-                .accessibilityLabel("Exit Settings")
+                .accessibilityLabel("Back to Chats")
                 .accessibilityHint("Returns the sidebar to chat history and restores the chat surface.")
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Settings")
-                        .font(.callout.weight(.semibold))
-                    Text("Routes, providers, privacy")
-                        .font(.caption2)
+                        .font(.title3.weight(.semibold))
+                    Text("Choose a settings route in this sidebar.")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
             .padding(.horizontal, 14)
             .padding(.top, 14)
             .padding(.bottom, 12)
+            .flannelSeparator(edge: .bottom, inset: 14, opacity: 0.4)
 
             List(selection: selection) {
                 ForEach(SettingsNavigationSection.allCases) { section in
@@ -2656,6 +2682,7 @@ private struct SettingsSidebar: View {
                 }
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
         }
         .frame(maxHeight: .infinity)
         .onAppear(perform: focusExitSettingsIfRequested)
@@ -2804,10 +2831,10 @@ private struct SidebarCommandLabel: View {
             .font(.callout.weight(.medium))
             .labelStyle(.titleAndIcon)
             .symbolRenderingMode(.hierarchical)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .background(Color.primary.opacity(0.05), in: Capsule())
+            .contentShape(Capsule())
     }
 }
 
@@ -2874,117 +2901,133 @@ private struct SidebarFooter: View {
         return provider == nil ? .warning : .neutral
     }
 
+    private var footerHint: String {
+        if localOnlyMode {
+            return "Local-only routing"
+        }
+        return allowCloudProviders ? "Cloud routes available" : "Cloud routes blocked"
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
+            SidebarFooterRow(
+                title: "Models & Providers",
+                detail: providerStatusTitle,
+                caption: providerStatusDetail,
+                systemImage: provider == nil ? "exclamationmark.triangle" : "cpu",
+                tint: provider == nil ? .orange : .secondary,
+                action: openModels
+            ) {
+                FlannelStatusChip(
+                    privacyTitle,
+                    systemImage: privacyIcon,
+                    tone: privacyTone,
+                    prominence: .subtle
+                )
+            }
+
+            SidebarFooterRow(
+                title: "Settings",
+                detail: "General, privacy, tools",
+                caption: "Routes stay in this sidebar",
+                systemImage: "gearshape",
+                tint: .secondary,
+                action: openSettings
+            )
+
             HStack(spacing: 8) {
-                Button(action: openModels) {
-                    Label {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(providerStatusTitle)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-
-                            HStack(spacing: 5) {
-                                Label(privacyTitle, systemImage: privacyIcon)
-                                    .foregroundStyle(privacyTone.color)
-
-                                Text(providerStatusDetail)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                            .font(.caption2)
-                        }
-                    } icon: {
-                        Image(systemName: provider == nil ? "exclamationmark.triangle" : "cpu")
-                            .font(.callout.weight(.semibold))
-                            .frame(width: 18)
-                            .foregroundStyle(provider == nil ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
-                    }
-                    .symbolRenderingMode(.hierarchical)
-                    .labelStyle(.titleAndIcon)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                Button(action: openProfile) {
+                    Label("Profile", systemImage: "person.crop.circle")
+                        .font(.caption.weight(.medium))
+                        .symbolRenderingMode(.hierarchical)
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
-                .help("Open Models & Providers. \(providerStatusTitle), \(privacyTitle), \(providerStatusDetail)")
-                .accessibilityLabel("Provider and privacy status")
-                .accessibilityValue("\(providerStatusTitle), \(privacyTitle), \(providerStatusDetail)")
-                .accessibilityHint("Opens Models and Providers settings inside this window.")
-
-                SidebarFooterIconButton(
-                    title: "Profile",
-                    systemImage: "person.crop.circle",
-                    action: openProfile
-                )
                 .help("Open profile and workspace settings")
                 .accessibilityHint("Opens General settings inside this window.")
 
-                SidebarFooterIconButton(
-                    title: "Settings",
-                    systemImage: "gearshape",
-                    action: openSettings
-                )
-                .help("Open Settings")
-                .accessibilityHint("Opens Settings inside this window.")
+                Spacer(minLength: 8)
+
+                Text(footerHint)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
-            .padding(8)
-            .flannelChromePanel(cornerRadius: 16)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
         }
+        .padding(10)
+        .flannelPaneSurface(.subtle, cornerRadius: 18)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
     }
 }
 
-private struct SidebarFooterIconButton: View {
+private struct SidebarFooterRow<Trailing: View>: View {
     var title: String
+    var detail: String
+    var caption: String
     var systemImage: String
+    var tint: Color
     var action: () -> Void
+    private let trailing: Trailing
+
+    init(
+        title: String,
+        detail: String,
+        caption: String,
+        systemImage: String,
+        tint: Color = .secondary,
+        action: @escaping () -> Void,
+        @ViewBuilder trailing: () -> Trailing = { EmptyView() }
+    ) {
+        self.title = title
+        self.detail = detail
+        self.caption = caption
+        self.systemImage = systemImage
+        self.tint = tint
+        self.action = action
+        self.trailing = trailing()
+    }
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.callout.weight(.medium))
-                .symbolRenderingMode(.hierarchical)
-                .frame(width: 30, height: 30)
-                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.callout.weight(.medium))
+                    .frame(width: 18)
+                    .foregroundStyle(tint)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(detail)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Text(caption)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+
+                Spacer(minLength: 8)
+
+                trailing
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 2)
+            .padding(.vertical, 4)
         }
         .buttonStyle(.borderless)
-        .controlSize(.small)
-        .foregroundStyle(.secondary)
-        .flannelGlassCapsule(.clear, interactive: true)
+        .help(title)
         .accessibilityLabel(title)
-    }
-}
-
-private struct AppIdentity: View {
-    var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: "sparkles.square.filled.on.square")
-                .font(.title3.weight(.semibold))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 28, height: 28)
-                .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Flannel")
-                .font(.headline)
-                Text("Local-first AI chat")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 8)
-
-            FlannelStatusChip("Desktop", systemImage: "macwindow", tone: .neutral)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityValue("\(detail), \(caption)")
     }
 }
 
@@ -9377,8 +9420,28 @@ private struct ProviderRoutingPicker: View {
         }
     }
 
+    private var selectedReadiness: ProviderRouteReadiness? {
+        selectedProvider.map(readiness(for:))
+    }
+
     var body: some View {
         Menu {
+            Section("Current Route") {
+                Button { } label: {
+                    ProviderRoutingCurrentMenuRow(
+                        selectedProvider: selectedProvider,
+                        routingPolicy: store.preferences.providerRoutingPolicy,
+                        readiness: selectedReadiness
+                    )
+                }
+                .disabled(true)
+
+                Button(action: openProviderSetup) {
+                    Label("Open Models & Providers", systemImage: "slider.horizontal.3")
+                }
+                .help("Open the in-window Models and Providers settings.")
+            }
+
             Section("Routing Policy") {
                 ForEach(ProviderRoutingPolicy.allCases) { policy in
                     Button {
@@ -9390,40 +9453,6 @@ private struct ProviderRoutingPicker: View {
                         )
                     }
                     .help(policy.detail)
-                }
-            }
-
-            Divider()
-
-            Section("Local Discovery") {
-                Button {
-                    discoverModels()
-                } label: {
-                    Label(
-                        isDiscoveringModels ? "Discovering Ollama and LM Studio" : "Discover Ollama and LM Studio",
-                        systemImage: isDiscoveringModels ? "arrow.triangle.2.circlepath" : "dot.radiowaves.left.and.right"
-                    )
-                }
-                .disabled(isDiscoveringModels)
-
-                Button(action: openProviderSetup) {
-                    Label("\(discoveredLocalModelCount) Local Models", systemImage: "desktopcomputer")
-                }
-                .help("Open model settings to inspect discovered local models.")
-            }
-
-            ForEach(discoveredLocalChatResults) { result in
-                Section("\(result.providerKind.title) Models") {
-                    ForEach(result.models) { model in
-                        Button {
-                            select(model)
-                        } label: {
-                            LocalModelRoutingMenuRow(
-                                model: model,
-                                isSelected: isSelected(model)
-                            )
-                        }
-                    }
                 }
             }
 
@@ -9451,7 +9480,42 @@ private struct ProviderRoutingPicker: View {
                 .help("Allow or block external API-key providers from becoming active.")
             }
 
-            Divider()
+            Section("Local Discovery") {
+                Button {
+                    discoverModels()
+                } label: {
+                    Label(
+                        isDiscoveringModels ? "Discovering Ollama and LM Studio" : "Discover Ollama and LM Studio",
+                        systemImage: isDiscoveringModels ? "arrow.triangle.2.circlepath" : "dot.radiowaves.left.and.right"
+                    )
+                }
+                .disabled(isDiscoveringModels)
+
+                Button(action: openProviderSetup) {
+                    Label(
+                        discoveredLocalModelCount == 1
+                            ? "1 Local Model in Settings"
+                            : "\(discoveredLocalModelCount) Local Models in Settings",
+                        systemImage: "desktopcomputer"
+                    )
+                }
+                .help("Open model settings to inspect discovered local models.")
+            }
+
+            ForEach(discoveredLocalChatResults) { result in
+                Section("\(result.providerKind.title) Models") {
+                    ForEach(result.models) { model in
+                        Button {
+                            select(model)
+                        } label: {
+                            LocalModelRoutingMenuRow(
+                                model: model,
+                                isSelected: isSelected(model)
+                            )
+                        }
+                    }
+                }
+            }
 
             ForEach(ProviderModeFamily.allCases) { family in
                 let familyProviders = providers(in: family)
@@ -9519,22 +9583,16 @@ private struct ProviderRoutingPicker: View {
                     }
                 }
             }
-
-            Divider()
-
-            Button(action: openProviderSetup) {
-                Label("Open Provider Setup", systemImage: "slider.horizontal.3")
-            }
         } label: {
             ProviderRoutingPickerLabel(
                 selectedProvider: selectedProvider,
                 activeProvider: store.activeProvider,
                 preferredProvider: preferredProvider,
                 routingPolicy: store.preferences.providerRoutingPolicy,
-                readiness: selectedProvider.map(readiness(for:))
+                readiness: selectedReadiness
             )
         }
-        .menuStyle(.button)
+        .menuStyle(.borderlessButton)
         .help("Choose provider mode for this chat")
         .accessibilityLabel("Provider routing")
         .accessibilityValue(providerRoutingAccessibilityValue)
@@ -9667,6 +9725,43 @@ private struct ProviderModeFamilyPromptMenuRow: View {
     }
 }
 
+private struct ProviderRoutingCurrentMenuRow: View {
+    var selectedProvider: ProviderConfiguration?
+    var routingPolicy: ProviderRoutingPolicy
+    var readiness: ProviderRouteReadiness?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: selectedProvider?.accessMode.icon ?? "cpu")
+                .frame(width: 16)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(selectedProvider?.providerModeChoiceTitle ?? "Choose provider")
+                Text(detailText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+    }
+
+    private var detailText: String {
+        guard let selectedProvider else {
+            return "Open Models & Providers to configure a chat route."
+        }
+
+        var parts = [selectedProvider.accessMode.title]
+        if routingPolicy != .selectedProvider {
+            parts.append(routingPolicy.title)
+        }
+        if let readiness {
+            parts.append(readiness.text)
+        }
+        return parts.joined(separator: " • ")
+    }
+}
+
 private struct ProviderRoutingPickerLabel: View {
     var selectedProvider: ProviderConfiguration?
     var activeProvider: ProviderConfiguration?
@@ -9675,31 +9770,32 @@ private struct ProviderRoutingPickerLabel: View {
     var readiness: ProviderRouteReadiness?
 
     var body: some View {
-        HStack(spacing: 8) {
-            Label {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(selectedProvider?.providerModeChoiceTitle ?? "Choose provider")
-                        .font(.callout.weight(.medium))
-                        .lineLimit(1)
-                    Text(labelDetail)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            } icon: {
-                Image(systemName: selectedProvider?.accessMode.icon ?? "cpu")
-                    .frame(width: 18)
+        HStack(spacing: 10) {
+            Image(systemName: selectedProvider?.accessMode.icon ?? "cpu")
+                .frame(width: 16)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(selectedProvider?.providerModeChoiceTitle ?? "Choose provider")
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
+                Text(labelDetail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            .labelStyle(.titleAndIcon)
-            .frame(maxWidth: 220, alignment: .leading)
+            .frame(minWidth: 200, alignment: .leading)
 
             Image(systemName: statusIcon)
                 .font(.caption)
                 .foregroundStyle(statusTint)
             Image(systemName: "chevron.up.chevron.down")
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.tertiary)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .flannelChromePanel(cornerRadius: 16, interactive: true)
         .help(selectedProvider?.modeBoundaryDetail ?? "Choose a provider route for chat.")
         .accessibilityLabel(accessibilityLabel)
     }
