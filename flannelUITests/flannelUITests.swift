@@ -150,10 +150,6 @@ final class flannelUITests: XCTestCase {
         return app.staticTexts[label]
     }
 
-    private func sidebarModeTabExists(_ label: String) -> Bool {
-        app.segmentedControls.buttons[label].exists
-    }
-
     private func openSettingsRoute(_ route: String) {
         XCTAssertTrue(settingsRouteLabels.contains(route), "Unknown settings route label: \(route)")
 
@@ -176,8 +172,5 @@ final class flannelUITests: XCTestCase {
 
     private func assertNoModeTabs() {
         XCTAssertEqual(app.segmentedControls.count, 0)
-        XCTAssertFalse(sidebarModeTabExists("Chat"))
-        XCTAssertFalse(sidebarModeTabExists("Cowork"))
-        XCTAssertFalse(sidebarModeTabExists("Code"))
     }
 }
