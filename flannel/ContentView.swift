@@ -312,6 +312,16 @@ struct ContentView: View {
     }
 
     private func handleExitCommand() {
+        if isCommandPalettePresented {
+            closeCommandPalette()
+            return
+        }
+
+        if isStreamingResponse {
+            cancelStreaming()
+            return
+        }
+
         switch exitCommandIntent {
         case .exitSettings:
             exitSettingsMode()
