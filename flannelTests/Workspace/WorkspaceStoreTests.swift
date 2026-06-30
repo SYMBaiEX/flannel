@@ -4039,6 +4039,7 @@ struct WorkspaceStoreTests {
 
         #expect(store.archiveThread(threadID))
         #expect(store.archivedAssistantThreadIDs.contains(threadID))
+        #expect(store.assistantThreads.first(where: { $0.id == threadID })?.isArchived == true)
         #expect(store.activeAssistantThreads.contains(where: { $0.id == threadID }) == false)
         #expect(store.archivedAssistantThreads.contains(where: { $0.id == threadID }))
         #expect(store.selectedAssistantThreadID == replacementThread.id)
@@ -4231,6 +4232,7 @@ struct WorkspaceStoreTests {
 
         #expect(reloadedStore.isMessagePinned(messageID, in: threadID))
         #expect(reloadedStore.assistantThreads.first(where: { $0.id == threadID })?.isPinned == true)
+        #expect(reloadedStore.assistantThreads.first(where: { $0.id == threadID })?.isArchived == true)
         #expect(reloadedStore.assistantThreads.first(where: { $0.id == threadID })?.tagNames == ["deep-research"])
         #expect(reloadedStore.tags.contains { $0.name == "deep-research" && $0.usageCount == 1 })
         #expect(reloadedStore.searchChats("Persist").contains { $0.threadID == threadID && $0.isPinned })
@@ -4239,6 +4241,48 @@ struct WorkspaceStoreTests {
         #expect(reloadedStore.assistantThreads.first(where: { $0.id == threadID })?.tagNames.isEmpty == true)
         #expect(reloadedStore.archivedAssistantThreadIDs.contains(threadID))
         #expect(reloadedStore.archivedAssistantThreads.contains { $0.id == threadID })
+    }
+
+    @MainActor
+    @Test("Legacy thread archive flags hydrate into canonical archive state and can be cleared")
+    func legacyThreadArchiveFlagsHydrateIntoCanonicalArchiveStateAndCanBeCleared() throws {
+        let archivedThreadID = UUID()
+        let container = try ModelContainer(
+            for: Item.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let item = Item(
+            assistantThreads: [
+                AssistantThread(
+                    id: archivedThreadID,
+                    title: "Legacy archived chat",
+                    isArchived: true
+                )
+            ],
+            archivedAssistantThreadIDs: []
+        )
+        context.insert(item)
+        try context.save()
+
+        let store = WorkspaceStore()
+        try store.loadOrCreate(in: context)
+
+        #expect(store.archivedAssistantThreadIDs.contains(archivedThreadID))
+        #expect(store.archivedAssistantThreads.contains { $0.id == archivedThreadID })
+        #expect(store.assistantThreads.first(where: { $0.id == archivedThreadID })?.isArchived == true)
+
+        #expect(store.unarchiveThread(archivedThreadID))
+        #expect(store.archivedAssistantThreadIDs.contains(archivedThreadID) == false)
+        #expect(store.assistantThreads.first(where: { $0.id == archivedThreadID })?.isArchived == false)
+
+        try store.persist(in: context)
+
+        let reloadedStore = WorkspaceStore()
+        try reloadedStore.loadOrCreate(in: context)
+
+        #expect(reloadedStore.archivedAssistantThreadIDs.contains(archivedThreadID) == false)
+        #expect(reloadedStore.assistantThreads.first(where: { $0.id == archivedThreadID })?.isArchived == false)
     }
 
     @MainActor

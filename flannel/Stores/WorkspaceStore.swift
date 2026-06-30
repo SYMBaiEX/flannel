@@ -1581,11 +1581,12 @@ final class WorkspaceStore {
     @discardableResult
     func archiveThread(_ threadID: UUID? = nil) -> Bool {
         guard let resolvedThreadID = threadID ?? selectedAssistantThreadID,
-              assistantThreads.contains(where: { $0.id == resolvedThreadID }) else {
+              let index = assistantThreads.firstIndex(where: { $0.id == resolvedThreadID }) else {
             return false
         }
 
         archivedAssistantThreadIDs.insert(resolvedThreadID)
+        assistantThreads[index].isArchived = true
 
         if selectedAssistantThreadID == resolvedThreadID {
             selectedAssistantThreadID = activeAssistantThreads.first?.id
@@ -1596,11 +1597,12 @@ final class WorkspaceStore {
 
     @discardableResult
     func unarchiveThread(_ threadID: UUID) -> Bool {
-        guard assistantThreads.contains(where: { $0.id == threadID }),
+        guard let index = assistantThreads.firstIndex(where: { $0.id == threadID }),
               archivedAssistantThreadIDs.remove(threadID) != nil else {
             return false
         }
 
+        assistantThreads[index].isArchived = false
         selectedAssistantThreadID = threadID
         selectedDestination = .home
         return true
@@ -5272,8 +5274,16 @@ final class WorkspaceStore {
         let threadIDs = Set(assistantThreads.map(\.id))
         let folderIDs = Set(chatFolders.map(\.id))
         let knowledgeSourceIDs = Set(knowledgeSources.map(\.id))
-        archivedAssistantThreadIDs = archivedAssistantThreadIDs.intersection(threadIDs)
+        let legacyArchivedThreadIDs = Set(
+            assistantThreads
+                .filter(\.isArchived)
+                .map(\.id)
+        )
+        archivedAssistantThreadIDs = archivedAssistantThreadIDs
+            .union(legacyArchivedThreadIDs)
+            .intersection(threadIDs)
         for index in assistantThreads.indices {
+            assistantThreads[index].isArchived = archivedAssistantThreadIDs.contains(assistantThreads[index].id)
             if let folderID = assistantThreads[index].folderID,
                !folderIDs.contains(folderID) {
                 assistantThreads[index].folderID = nil
