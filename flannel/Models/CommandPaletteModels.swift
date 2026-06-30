@@ -152,6 +152,8 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
     var systemImage: String
     var keywords: [String]
     var keyEquivalent: String?
+    var accessibilityLabel: String
+    var accessibilityHint: String
     var isEnabled: Bool
 
     init(
@@ -162,6 +164,8 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
         systemImage: String,
         keywords: [String] = [],
         keyEquivalent: String? = nil,
+        accessibilityLabel: String? = nil,
+        accessibilityHint: String? = nil,
         isEnabled: Bool = true
     ) {
         self.id = id
@@ -171,6 +175,8 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
         self.systemImage = systemImage
         self.keywords = keywords
         self.keyEquivalent = keyEquivalent
+        self.accessibilityLabel = accessibilityLabel ?? title
+        self.accessibilityHint = accessibilityHint ?? subtitle
         self.isEnabled = isEnabled
     }
 
@@ -181,7 +187,7 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
 
         guard !terms.isEmpty else { return true }
 
-        let haystack = ([title, subtitle, category] + keywords)
+        let haystack = ([title, subtitle, category, accessibilityLabel, accessibilityHint] + keywords)
             .joined(separator: " ")
 
         return terms.allSatisfy { term in
@@ -316,19 +322,23 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
             ),
             FlannelCommand(
                 id: .openModels,
-                title: "Open Model Settings",
-                subtitle: "Configure BYOK providers, local servers, and routing.",
-                category: "Navigate",
+                title: "Open Models & Providers",
+                subtitle: "Provider routing, BYOK keys, subscription CLIs, local servers, and model defaults.",
+                category: "Settings",
                 systemImage: "cpu",
-                keywords: ["provider", "api", "ollama", "lm studio", "settings"]
+                keywords: ["provider", "api", "ollama", "lm studio", "settings", "sidebar"],
+                accessibilityLabel: "Open Models & Providers settings",
+                accessibilityHint: "Opens Models & Providers in the Settings sidebar."
             ),
             FlannelCommand(
                 id: .openKnowledge,
-                title: "Open Knowledge Settings",
-                subtitle: "Manage RAG sources, indexes, and retrieval.",
-                category: "Navigate",
+                title: "Open Knowledge",
+                subtitle: "Local retrieval sources, indexing state, and grounded context.",
+                category: "Settings",
                 systemImage: "books.vertical",
-                keywords: ["rag", "index", "documents", "search", "settings"]
+                keywords: ["rag", "index", "documents", "search", "settings", "sidebar"],
+                accessibilityLabel: "Open Knowledge settings",
+                accessibilityHint: "Opens Knowledge in the Settings sidebar."
             ),
             FlannelCommand(
                 id: .rebuildQueuedKnowledge,
@@ -350,36 +360,44 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
             ),
             FlannelCommand(
                 id: .openTools,
-                title: "Open Tool Settings",
-                subtitle: "Review tool permissions and local action results.",
-                category: "Navigate",
+                title: "Open Tools",
+                subtitle: "Tool permissions, local actions, and recent execution results.",
+                category: "Settings",
                 systemImage: "wrench.and.screwdriver",
-                keywords: ["permissions", "approval", "agents", "settings"]
+                keywords: ["permissions", "approval", "actions", "settings", "sidebar"],
+                accessibilityLabel: "Open Tools settings",
+                accessibilityHint: "Opens Tools in the Settings sidebar."
             ),
             FlannelCommand(
                 id: .openAgents,
-                title: "Open Agent Settings",
-                subtitle: "Review multi-step workflows, traces, and approval gates.",
-                category: "Navigate",
+                title: "Open Agents",
+                subtitle: "Workflow defaults, safety controls, and agent trace queues.",
+                category: "Settings",
                 systemImage: "flowchart",
-                keywords: ["workflows", "plans", "runs", "settings"]
+                keywords: ["workflows", "plans", "runs", "settings", "sidebar"],
+                accessibilityLabel: "Open Agents settings",
+                accessibilityHint: "Opens Agents in the Settings sidebar."
             ),
             FlannelCommand(
                 id: .openPrompts,
-                title: "Open Prompt Settings",
-                subtitle: "Edit system profiles, templates, and prompt variables.",
-                category: "Navigate",
+                title: "Open Prompts",
+                subtitle: "System prompt profiles and reusable assistant personalities.",
+                category: "Settings",
                 systemImage: "text.cursor",
-                keywords: ["library", "templates", "system prompt", "settings"]
+                keywords: ["library", "templates", "system prompt", "settings", "sidebar"],
+                accessibilityLabel: "Open Prompts settings",
+                accessibilityHint: "Opens Prompts in the Settings sidebar."
             ),
             FlannelCommand(
                 id: .openSettings,
-                title: "Open Settings",
-                subtitle: "Adjust privacy, storage, provider defaults, and developer settings.",
-                category: "Navigate",
+                title: "Open General Settings",
+                subtitle: "Startup, history, and folders.",
+                category: "Settings",
                 systemImage: "gearshape",
-                keywords: ["preferences", "privacy", "storage"],
-                keyEquivalent: "⌘,"
+                keywords: ["preferences", "workspace", "settings", "sidebar"],
+                keyEquivalent: "⌘,",
+                accessibilityLabel: "Open General settings",
+                accessibilityHint: "Opens General in the Settings sidebar."
             ),
             FlannelCommand(
                 id: .focusChat,

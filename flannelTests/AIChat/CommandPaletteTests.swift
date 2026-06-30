@@ -148,6 +148,75 @@ struct CommandPaletteTests {
         #expect(allRebuild.matches("rebuild embeddings"))
     }
 
+    @Test("Settings route commands mirror the sidebar destinations")
+    func settingsRouteCommandsMirrorSidebarDestinations() throws {
+        let context = FlannelCommandContext(
+            hasCurrentThread: true,
+            canSendMessage: false,
+            isStreaming: false,
+            isDiscoveringModels: false,
+            canCompareCurrentPrompt: false,
+            canRunComparison: false,
+            localOnlyMode: true,
+            inspectorVisible: true
+        )
+
+        let expectations: [(FlannelCommandID, SettingsTab, String, String)] = [
+            (.openModels, .models, "Open Models & Providers", "Open Models & Providers settings"),
+            (.openKnowledge, .knowledge, "Open Knowledge", "Open Knowledge settings"),
+            (.openTools, .tools, "Open Tools", "Open Tools settings"),
+            (.openAgents, .agents, "Open Agents", "Open Agents settings"),
+            (.openPrompts, .prompts, "Open Prompts", "Open Prompts settings"),
+            (.openSettings, .general, "Open General Settings", "Open General settings")
+        ]
+
+        for (id, tab, title, accessibilityLabel) in expectations {
+            let command = try #require(FlannelCommand.defaultCommand(id, context: context))
+
+            #expect(command.title == title)
+            #expect(command.subtitle == tab.detail)
+            #expect(command.category == "Settings")
+            #expect(command.systemImage == tab.systemImage)
+            #expect(command.accessibilityLabel == accessibilityLabel)
+            #expect(command.accessibilityHint == "Opens \(tab.title) in the Settings sidebar.")
+            #expect(command.matches("\(tab.title) sidebar"))
+        }
+    }
+
+    @Test("Settings route commands do not mention removed shell tabs")
+    func settingsRouteCommandsAvoidRemovedShellTabConcepts() throws {
+        let context = FlannelCommandContext(
+            hasCurrentThread: true,
+            canSendMessage: false,
+            isStreaming: false,
+            isDiscoveringModels: false,
+            canCompareCurrentPrompt: false,
+            canRunComparison: false,
+            localOnlyMode: true,
+            inspectorVisible: true
+        )
+        let settingsCommandIDs: [FlannelCommandID] = [
+            .openModels,
+            .openKnowledge,
+            .openTools,
+            .openAgents,
+            .openPrompts,
+            .openSettings
+        ]
+
+        for id in settingsCommandIDs {
+            let command = try #require(FlannelCommand.defaultCommand(id, context: context))
+            let commandText = ([command.title, command.subtitle, command.category, command.accessibilityLabel, command.accessibilityHint] + command.keywords)
+                .joined(separator: " ")
+                .lowercased()
+
+            #expect(commandText.contains("chat tab") == false)
+            #expect(commandText.contains("cowork") == false)
+            #expect(commandText.contains("code tab") == false)
+            #expect(commandText.contains("mode tab") == false)
+        }
+    }
+
     @Test("Local-only command title reflects the current privacy mode")
     func localOnlyCommandReflectsPrivacyMode() throws {
         let enabledContext = FlannelCommandContext(
@@ -301,7 +370,8 @@ struct CommandPaletteTests {
         #expect(paletteCommand.keyEquivalent == "⌘K")
         #expect(paletteCommand.matches("keyboard actions"))
         #expect(settingsCommand.keyEquivalent == "⌘,")
-        #expect(settingsCommand.matches("preferences privacy"))
+        #expect(settingsCommand.title == "Open General Settings")
+        #expect(settingsCommand.matches("preferences workspace"))
         #expect(localOnlyCommand.keyEquivalent == "⌥⌘L")
         #expect(localOnlyCommand.matches("privacy network"))
         #expect(cloudProviderCommand.keyEquivalent == "⌥⌘C")
