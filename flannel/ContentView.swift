@@ -5031,7 +5031,7 @@ private struct Composer: View {
 
     private var editorHeight: CGFloat {
         let lineCount = max(1, text.split(separator: "\n", omittingEmptySubsequences: false).count)
-        return min(160, max(92, CGFloat(lineCount) * 22 + 46))
+        return min(150, max(76, CGFloat(lineCount) * 22 + 34))
     }
 
     var body: some View {
@@ -5048,8 +5048,8 @@ private struct Composer: View {
                     .font(.body)
                     .scrollContentBackground(.hidden)
                     .frame(height: editorHeight)
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 9)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
                     .focused($isEditorFocused)
                     .background(
                         FlannelSystemColor.separator.opacity(isEditorFocused ? 0.08 : 0.045),
@@ -5075,8 +5075,8 @@ private struct Composer: View {
                     Text("Message Flannel...")
                         .font(.body)
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 17)
+                        .padding(.horizontal, 15)
+                        .padding(.vertical, 14)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
@@ -5127,54 +5127,41 @@ private struct Composer: View {
                 .accessibilityLabel("Attach files")
                 .accessibilityHint(attachHelpText)
 
-                if !isStreamingResponse {
-                    Button {
-                        compare()
-                    } label: {
-                        Image(systemName: "rectangle.split.3x1")
-                            .font(.body)
-                            .frame(width: 30, height: 28)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.borderless)
-                    .controlSize(.regular)
-                    .disabled(!canComparePrompt)
-                    .help(compareHelpText)
-                    .accessibilityLabel("Compare with multiple models")
-                    .accessibilityHint(compareHelpText)
+                Button {
+                    compare()
+                } label: {
+                    Image(systemName: "rectangle.split.3x1")
+                        .font(.body)
+                        .frame(width: 30, height: 28)
+                        .contentShape(Rectangle())
                 }
-
-                if isStreamingResponse {
-                    Button {
-                        cancel()
-                    } label: {
-                        Image(systemName: "stop.fill")
-                            .font(.body)
-                            .frame(width: 30, height: 28)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.borderless)
-                    .controlSize(.regular)
-                    .foregroundStyle(.red)
-                    .help("Stop response")
-                    .accessibilityLabel("Stop response")
-                }
+                .buttonStyle(.borderless)
+                .controlSize(.regular)
+                .disabled(isStreamingResponse || !canComparePrompt)
+                .help(compareHelpText)
+                .accessibilityLabel("Compare with multiple models")
+                .accessibilityHint(compareHelpText)
 
                 Button {
-                    send()
+                    if isStreamingResponse {
+                        cancel()
+                    } else {
+                        send()
+                    }
                 } label: {
-                    Image(systemName: "arrow.up")
+                    Image(systemName: isStreamingResponse ? "stop.fill" : "arrow.up")
                         .font(.body.weight(.semibold))
-                        .frame(width: 32, height: 28)
+                        .frame(width: 34, height: 28)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.regular)
+                .tint(isStreamingResponse ? .red : .accentColor)
                 .keyboardShortcut(.return, modifiers: [.command])
-                .disabled(isStreamingResponse || !canSubmit)
-                .help(sendHelpText)
-                .accessibilityLabel("Send message")
-                .accessibilityHint(sendHelpText)
+                .disabled(!isStreamingResponse && !canSubmit)
+                .help(primaryActionHelpText)
+                .accessibilityLabel(primaryActionLabel)
+                .accessibilityHint(primaryActionHelpText)
             }
         }
         .dropDestination(for: URL.self) { urls, _ in
@@ -5223,12 +5210,19 @@ private struct Composer: View {
     }
 
     private var compareHelpText: String {
-        canComparePrompt ? "Compare the current prompt across multiple runnable models." : "Type a prompt before comparing models."
+        if isStreamingResponse {
+            return "Wait for the current response to finish before comparing models."
+        }
+        return canComparePrompt ? "Compare the current prompt across multiple runnable models." : "Type a prompt before comparing models."
     }
 
-    private var sendHelpText: String {
+    private var primaryActionLabel: String {
+        isStreamingResponse ? "Stop response" : "Send message"
+    }
+
+    private var primaryActionHelpText: String {
         if isStreamingResponse {
-            return "Stop the current response before sending another message."
+            return "Stop the current response. Keyboard shortcut Command Return."
         }
         if canSubmit {
             return "Send the composer text and attachments. Keyboard shortcut Command Return."
@@ -5277,20 +5271,13 @@ private struct ComposerStatusStrip: View {
                 isStreamingResponse ? "Responding" : provider?.displayName ?? "Local fallback",
                 icon: isStreamingResponse ? "dot.radiowaves.left.and.right" : "cpu"
             )
+            .help(providerStatusHelpText)
 
             CapsuleLabel(
                 privacyLabel,
                 icon: privacyIcon,
                 tint: privacyTint
             )
-
-            if let provider {
-                CapsuleLabel(provider.providerModeBoundaryBadge, icon: provider.accessMode.icon)
-                    .help(provider.modeBoundaryDetail)
-                if !provider.modelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    CapsuleLabel(provider.modelIdentifier, icon: "memorychip")
-                }
-            }
 
             if let contextBudget {
                 CapsuleLabel(
@@ -5327,6 +5314,19 @@ private struct ComposerStatusStrip: View {
             return .green
         }
         return provider?.privacyScope == .externalAPI ? .orange : .green
+    }
+
+    private var providerStatusHelpText: String {
+        guard let provider else {
+            return "No runnable provider is selected. Open Models and Providers settings to choose one."
+        }
+
+        let modelDetail = provider.modelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        if modelDetail.isEmpty {
+            return provider.modeBoundaryDetail
+        }
+
+        return "\(provider.modeBoundaryDetail) Model: \(modelDetail)."
     }
 }
 
