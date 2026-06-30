@@ -10,6 +10,11 @@ import Testing
 @testable import flannel
 
 struct FlannelShellModelsTests {
+    @Test("Sidebar surfaces only expose conversation and settings")
+    func sidebarSurfacesOnlyExposeConversationAndSettings() {
+        #expect(FlannelSidebarSurface.allCases == [.conversation, .settings])
+    }
+
     @Test("Settings mode replaces the conversation sidebar instead of extending it")
     func settingsModeReplacesConversationSidebar() {
         #expect(FlannelSidebarSurface.conversation.showsConversationFooter)

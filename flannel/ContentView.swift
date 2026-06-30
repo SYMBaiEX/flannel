@@ -4764,6 +4764,7 @@ private struct Composer: View {
                             )
                     }
                     .accessibilityLabel("Message composer")
+                    .accessibilityHint("Type a message to Flannel. Press Command Return to send.")
                     .dropDestination(for: URL.self) { urls, _ in
                         importAttachments(from: urls)
                         return true
@@ -4778,6 +4779,7 @@ private struct Composer: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 17)
                         .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                 }
             }
 
@@ -4786,6 +4788,8 @@ private struct Composer: View {
                     Label(attachmentImportError, systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(.orange)
+                        .accessibilityLabel(attachmentImportError)
+                        .accessibilityAddTraits(.isStaticText)
                     Spacer(minLength: 8)
                     Button {
                         self.attachmentImportError = nil
@@ -4796,8 +4800,6 @@ private struct Composer: View {
                     .help("Dismiss attachment error")
                     .accessibilityLabel("Dismiss attachment error")
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityAddTraits(.isStaticText)
             }
 
             HStack(alignment: .center, spacing: 8) {

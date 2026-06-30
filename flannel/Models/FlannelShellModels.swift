@@ -8,7 +8,7 @@
 import CoreGraphics
 import Foundation
 
-nonisolated enum FlannelSidebarSurface: String, Hashable, Sendable {
+nonisolated enum FlannelSidebarSurface: String, CaseIterable, Hashable, Sendable {
     case conversation
     case settings
 
