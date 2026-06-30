@@ -171,6 +171,26 @@ final class flannelUITests: XCTestCase {
     }
 
     private func assertNoModeTabs() {
-        XCTAssertEqual(app.segmentedControls.count, 0)
+        let scope = app.windows.firstMatch
+        let forbiddenTabs = ["Chat", "Cowork", "Code", "Chat tab", "Cowork tab", "Code tab"]
+
+        for label in forbiddenTabs {
+            assertNoElement(in: scope, withLabel: label)
+        }
+
+        for label in forbiddenTabs.prefix(3) {
+            XCTAssertEqual(
+                scope.segmentedControls.buttons.matching(NSPredicate(format: "label == %@", label)).count,
+                0,
+                "Removed mode tab still exposed: \(label)"
+            )
+        }
+    }
+
+    private func assertNoElement(in scope: XCUIElement, withLabel label: String) {
+        let expected = "Removed mode tab UI should not be present: \(label)"
+        XCTAssertEqual(scope.buttons.matching(NSPredicate(format: "label == %@", label)).count, 0, expected)
+        XCTAssertEqual(scope.staticTexts.matching(NSPredicate(format: "label == %@", label)).count, 0, expected)
+        XCTAssertEqual(scope.otherElements.matching(NSPredicate(format: "label == %@", label)).count, 0, expected)
     }
 }

@@ -504,6 +504,48 @@ struct AIChatProviderRegistryTests {
     }
 
     @MainActor
+    @Test("Provider route wording uses explicit route-oriented language")
+    func providerRouteWordingUsesExplicitRouteLanguage() throws {
+        let (_, store) = try makeLoadedStore()
+
+        let openAIAPI = try #require(store.providerConfigurations.first(where: { $0.kind == .openAI }))
+        let chatGPTCLI = try #require(store.providerConfigurations.first(where: { $0.kind == .chatGPTCLI }))
+        let claudeCLI = try #require(store.providerConfigurations.first(where: { $0.kind == .claudeCodeCLI }))
+        let ollama = try #require(store.providerConfigurations.first(where: { $0.kind == .ollama }))
+        let lmStudio = try #require(store.providerConfigurations.first(where: { $0.kind == .lmStudio }))
+        let customEndpoint = try #require(store.providerConfigurations.first(where: { $0.kind == .customOpenAICompatible }))
+
+        #expect(openAIAPI.providerModeSelectionTitle == "Use OpenAI API key")
+        #expect(openAIAPI.providerModeSelectionDetail.contains("Official OpenAI API route"))
+        #expect(openAIAPI.modeBoundaryTitle == "OpenAI API key")
+        #expect(openAIAPI.modeBoundaryDetail.contains("Official OpenAI API mode"))
+
+        #expect(chatGPTCLI.providerModeSelectionTitle == "Use ChatGPT/Codex subscription CLI")
+        #expect(chatGPTCLI.providerModeSelectionDetail.contains("Local authenticated CLI route"))
+        #expect(chatGPTCLI.modeBoundaryTitle == "ChatGPT/Codex subscription CLI")
+        #expect(chatGPTCLI.modeBoundaryDetail.contains("Local ChatGPT/Codex subscription mode"))
+
+        #expect(claudeCLI.providerModeSelectionTitle == "Use Claude Code subscription CLI")
+        #expect(claudeCLI.providerModeSelectionDetail.contains("Local authenticated CLI route"))
+        #expect(claudeCLI.modeBoundaryTitle == "Claude Code subscription CLI")
+        #expect(claudeCLI.modeBoundaryDetail.contains("Local Claude subscription mode"))
+
+        #expect(ollama.providerModeSelectionTitle == "Use Ollama local server")
+        #expect(ollama.providerModeSelectionDetail.contains("Local Ollama chat route"))
+        #expect(ollama.modeBoundaryTitle == "Ollama local server")
+        #expect(ollama.modeBoundaryDetail.contains("Local Ollama server mode"))
+
+        #expect(lmStudio.providerModeSelectionTitle == "Use LM Studio local server")
+        #expect(lmStudio.providerModeSelectionDetail.contains("Local LM Studio route"))
+        #expect(lmStudio.modeBoundaryTitle == "LM Studio local server")
+
+        #expect(customEndpoint.providerModeSelectionTitle == "Use OpenAI-compatible endpoint")
+        #expect(customEndpoint.providerModeSelectionDetail.contains("Custom OpenAI-compatible base URL"))
+        #expect(customEndpoint.modeBoundaryTitle == "OpenAI-compatible endpoint")
+        #expect(customEndpoint.modeBoundaryDetail.contains("OpenAI-compatible endpoint mode"))
+    }
+
+    @MainActor
     @Test("Provider runtime policy centralizes readiness and chat transport modes")
     func providerRuntimePolicyCentralizesModeMatrix() throws {
         let (_, store) = try makeLoadedStore()
