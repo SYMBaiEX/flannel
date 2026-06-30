@@ -2600,6 +2600,7 @@ private struct ProviderSettingsStatusChip: Identifiable {
     var systemImage: String
     var tone: FlannelStatusTone
     var prominence: FlannelStatusChipProminence
+    var detail: String?
 
     var id: String {
         "\(systemImage)-\(title)"
@@ -2638,7 +2639,7 @@ private struct ProviderSettingsChipStrip: View {
                             tone: chip.tone,
                             prominence: chip.prominence
                         )
-                        .help(chip.title)
+                        .help(chip.detail ?? chip.title)
                     }
                 }
             }
@@ -2994,7 +2995,7 @@ private struct ProviderSettingsRow: View {
     private var primaryStatusChips: [ProviderSettingsStatusChip] {
         var chips = [
             routeModeChip,
-            privacyChip,
+            runtimeBoundaryChip,
             credentialChip,
             modelChip,
             readinessChip,
@@ -3042,14 +3043,15 @@ private struct ProviderSettingsRow: View {
         )
     }
 
-    private var privacyChip: ProviderSettingsStatusChip {
+    private var runtimeBoundaryChip: ProviderSettingsStatusChip {
         switch report.routingEligibility {
         case .eligible:
             ProviderSettingsStatusChip(
-                title: provider.privacyScope.title,
-                systemImage: provider.privacyScope.settingsSystemImage,
-                tone: provider.privacyScope.settingsTone,
-                prominence: .subtle
+                title: provider.runtimeBoundary.title,
+                systemImage: provider.runtimeBoundary.systemImage,
+                tone: provider.runtimeBoundary.settingsTone,
+                prominence: .subtle,
+                detail: provider.runtimeBoundary.detail
             )
         case .blockedByLocalOnlyMode, .blockedByCloudPreference:
             ProviderSettingsStatusChip(
@@ -3943,28 +3945,15 @@ private extension ProviderAccessMode {
     }
 }
 
-private extension ProviderPrivacyScope {
-    var settingsSystemImage: String {
-        switch self {
-        case .localOnly:
-            "lock"
-        case .externalAPI:
-            "network"
-        case .localCLI:
-            "terminal"
-        case .bridgeService:
-            "point.3.connected.trianglepath.dotted"
-        }
-    }
-
+private extension ProviderRuntimeBoundary {
     var settingsTone: FlannelStatusTone {
         switch self {
-        case .localOnly:
+        case .localServer:
             .success
+        case .localCLI, .localBridge:
+            .info
         case .externalAPI:
             .warning
-        case .localCLI, .bridgeService:
-            .info
         }
     }
 }
