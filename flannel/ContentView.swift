@@ -8416,51 +8416,31 @@ private struct InspectorSectionSelector: View {
     var summary: (FlannelInspectorSection) -> String
     var select: (FlannelInspectorSection) -> Void
 
+    private var selection: Binding<FlannelInspectorSection> {
+        Binding(
+            get: { activeSection },
+            set: select
+        )
+    }
+
     var body: some View {
-        VStack(spacing: 5) {
-            ForEach(sections) { section in
-                Button {
-                    select(section)
-                } label: {
-                    HStack(spacing: 9) {
-                        Image(systemName: section.icon)
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(activeSection == section ? Color.accentColor : Color.secondary)
-                            .frame(width: 18)
-
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(section.title)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            Text(summary(section))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-
-                        Spacer(minLength: 8)
-
-                        Text("\(count(section))")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 7)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        VStack(alignment: .leading, spacing: 6) {
+            Picker("Artifact section", selection: selection) {
+                ForEach(sections) { section in
+                    Label(section.title, systemImage: section.icon)
+                        .tag(section)
                 }
-                .buttonStyle(.plain)
-                .background(
-                    activeSection == section ? Color.primary.opacity(0.07) : Color.clear,
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                )
-                .accessibilityLabel(section.title)
-                .accessibilityValue(activeSection == section ? "Selected" : "\(count(section)) items")
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .accessibilityLabel("Artifact section")
+
+            Text("\(activeSection.title) - \(summary(activeSection)) - \(count(activeSection)) item\(count(activeSection) == 1 ? "" : "s")")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
-        .padding(6)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
