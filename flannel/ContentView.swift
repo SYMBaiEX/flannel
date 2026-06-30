@@ -46,7 +46,6 @@ struct ContentView: View {
     @SceneStorage("flannel.sidebar.surface") private var sidebarSurfaceRawValue = FlannelSidebarSurface.conversation.rawValue
     @SceneStorage("flannel.settings.route") private var selectedSettingsTabRawValue = SettingsTab.general.rawValue
     @SceneStorage("flannel.settings.search") private var settingsSearchText = ""
-    @State private var columnVisibilityBeforeSettings: NavigationSplitViewVisibility = .all
     @State private var sidebarSearchFocusRequest = 0
     @State private var settingsSidebarFocusRequest = 0
     @State private var composerFocusRequest = 0
@@ -461,7 +460,6 @@ struct ContentView: View {
         selectedSettingsTab = tab
         let isEnteringSettings = sidebarSurface != .settings
         if isEnteringSettings {
-            columnVisibilityBeforeSettings = columnVisibility
             settingsReturnFocus = returnFocus
         }
         withAnimation(.easeInOut(duration: 0.18)) {
@@ -477,12 +475,11 @@ struct ContentView: View {
     }
 
     private func exitSettingsMode(focusComposer: Bool = true) {
-        let restoredVisibility = columnVisibilityBeforeSettings
+        let restoredVisibility: NavigationSplitViewVisibility = store.preferences.showsRightSidebar ? .all : .doubleColumn
         let returnFocus = settingsReturnFocus
         withAnimation(.easeInOut(duration: 0.18)) {
             sidebarSurface = .conversation
             columnVisibility = restoredVisibility
-            store.preferences.showsRightSidebar = restoredVisibility == .all
             persistQuietly()
         }
         if focusComposer {
