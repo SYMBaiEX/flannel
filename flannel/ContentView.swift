@@ -52,9 +52,6 @@ struct ContentView: View {
             .toolbar {
                 primaryToolbar
             }
-            .overlay(alignment: .trailing) {
-                artifactRailRevealOverlay
-            }
             .overlay {
                 commandPaletteOverlay
             }
@@ -228,22 +225,6 @@ struct ContentView: View {
         }
     }
 
-    @ViewBuilder
-    private var artifactRailRevealOverlay: some View {
-        if shouldShowArtifactRevealTab {
-            VStack {
-                Spacer()
-                ArtifactRailRevealTab {
-                    setInspectorVisibility(true)
-                }
-                .padding(.bottom, 132)
-            }
-            .padding(.trailing, 12)
-            .frame(maxHeight: .infinity)
-            .transition(.opacity.combined(with: .move(edge: .trailing)))
-        }
-    }
-
     private var sidebarSurface: FlannelSidebarSurface {
         get { FlannelSidebarSurface(rawValue: sidebarSurfaceRawValue) ?? .conversation }
         nonmutating set { sidebarSurfaceRawValue = newValue.rawValue }
@@ -293,12 +274,6 @@ struct ContentView: View {
             },
             providerRoutingPolicy: store.preferences.providerRoutingPolicy
         )
-    }
-
-    private var shouldShowArtifactRevealTab: Bool {
-        sidebarSurface.showsInspectorColumn
-            && columnVisibility != .all
-            && !isCommandPalettePresented
     }
 
     private func openCommandPalette() {
@@ -4958,24 +4933,6 @@ private struct IconOnlyButton: View {
         .buttonStyle(.borderless)
         .help(title)
         .accessibilityLabel(title)
-    }
-}
-
-private struct ArtifactRailRevealTab: View {
-    var open: () -> Void
-
-    var body: some View {
-        Button(action: open) {
-            Image(systemName: "sidebar.right")
-                .font(.body.weight(.medium))
-                .frame(width: 34, height: 34)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .flannelGlassCapsule(.regular, interactive: true)
-        .help("Show Artifacts")
-        .accessibilityLabel("Show Artifacts")
-        .accessibilityHint("Opens the artifact rail with sources, comparisons, tool traces, and chat details.")
     }
 }
 
