@@ -1984,7 +1984,7 @@ enum SettingsTab: String, CaseIterable, Hashable, Identifiable {
     }
 }
 
-private enum SettingsNavigationSection: String, CaseIterable, Identifiable {
+enum SettingsNavigationSection: String, CaseIterable, Identifiable {
     case workspace
     case ai
     case system

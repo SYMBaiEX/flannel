@@ -2605,12 +2605,10 @@ private struct SettingsSidebar: View {
             .padding(.bottom, 12)
 
             List(selection: selection) {
-                Section("Workspace") {
-                    settingsRows([.general, .models, .knowledge, .memory, .prompts])
-                }
-
-                Section("Safety & System") {
-                    settingsRows([.tools, .agents, .privacy, .storage, .advanced])
+                ForEach(SettingsNavigationSection.allCases) { section in
+                    Section(section.title) {
+                        settingsRows(section.tabs)
+                    }
                 }
             }
             .listStyle(.sidebar)
