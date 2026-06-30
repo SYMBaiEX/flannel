@@ -34,6 +34,14 @@ enum FlannelStatusTone {
             color
         }
     }
+
+    var isNeutral: Bool {
+        if case .neutral = self {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 enum FlannelStatusChipProminence {
@@ -85,23 +93,55 @@ private struct FlannelStatusChipBackground: ViewModifier {
     var prominence: FlannelStatusChipProminence
 
     func body(content: Content) -> some View {
-        switch prominence {
-        case .subtle:
-            content
-                .background(Material.thin, in: Capsule())
-                .overlay {
-                    Capsule().strokeBorder(FlannelSystemColor.quietStroke, lineWidth: FlannelSpacing.hairline)
-                }
-        case .tinted:
-            content
-                .background(tone.color.opacity(0.13), in: Capsule())
-                .overlay {
-                    Capsule().strokeBorder(tone.color.opacity(0.24), lineWidth: FlannelSpacing.hairline)
-                }
-        case .glass:
-            content
-                .glassEffect(Glass.regular.tint(tone.color.opacity(0.12)), in: Capsule())
-        }
+        let capsule = Capsule()
+
+        content
+            .flannelGlassCapsule(
+                prominence.glassSurface,
+                tint: prominence.tintColor(for: tone)
+            )
+            .overlay {
+                capsule.strokeBorder(
+                    prominence.strokeStyle(for: tone),
+                    lineWidth: FlannelSpacing.hairline
+                )
+            }
     }
 }
 
+private extension FlannelStatusChipProminence {
+    var glassSurface: FlannelGlassSurface {
+        switch self {
+        case .subtle:
+            .clear
+        case .tinted, .glass:
+            .regular
+        }
+    }
+
+    func tintColor(for tone: FlannelStatusTone) -> Color? {
+        switch self {
+        case .subtle:
+            tone.isNeutral ? nil : tone.color.opacity(0.08)
+        case .tinted:
+            tone.color.opacity(0.14)
+        case .glass:
+            tone.color.opacity(0.20)
+        }
+    }
+
+    func strokeStyle(for tone: FlannelStatusTone) -> AnyShapeStyle {
+        switch self {
+        case .subtle:
+            if tone.isNeutral {
+                AnyShapeStyle(FlannelSystemColor.quietStroke)
+            } else {
+                AnyShapeStyle(tone.color.opacity(0.18))
+            }
+        case .tinted:
+            AnyShapeStyle(tone.color.opacity(0.24))
+        case .glass:
+            AnyShapeStyle(tone.color.opacity(0.30))
+        }
+    }
+}
