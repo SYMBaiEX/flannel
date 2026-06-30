@@ -279,6 +279,343 @@ struct AIProviderHealth: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+enum AIProviderCredentialRequirement: String, Codable, CaseIterable, Hashable, Sendable {
+    case none
+    case requiredAPIKey
+    case optionalAPIKey
+    case subscriptionCLI
+    case localBridge
+
+    var title: String {
+        switch self {
+        case .none:
+            "No credential"
+        case .requiredAPIKey:
+            "API key required"
+        case .optionalAPIKey:
+            "Optional API key"
+        case .subscriptionCLI:
+            "Subscription CLI"
+        case .localBridge:
+            "Local bridge"
+        }
+    }
+
+    var requiresKeychainSecret: Bool {
+        self == .requiredAPIKey
+    }
+
+    var supportsKeychainSecret: Bool {
+        self == .requiredAPIKey || self == .optionalAPIKey
+    }
+
+    var isSubscriptionBacked: Bool {
+        self == .subscriptionCLI
+    }
+}
+
+enum AIProviderModelDiscoveryStrategy: String, Codable, CaseIterable, Hashable, Sendable {
+    case localServer
+    case openAICompatibleModels
+    case staticCatalog
+    case cliSession
+    case bridgeHealth
+
+    var title: String {
+        switch self {
+        case .localServer:
+            "Local server discovery"
+        case .openAICompatibleModels:
+            "OpenAI-compatible model list"
+        case .staticCatalog:
+            "Manual catalog"
+        case .cliSession:
+            "CLI session"
+        case .bridgeHealth:
+            "Bridge health"
+        }
+    }
+}
+
+struct AIProviderCatalogEntry: Identifiable, Hashable, Sendable {
+    var providerKind: AIProviderKind
+    var providerMode: AIProviderMode
+    var accessMode: ProviderAccessMode
+    var privacyScope: ProviderPrivacyScope
+    var displayName: String
+    var endpoint: String?
+    var defaultModelIdentifier: String
+    var recommendedModelIdentifiers: [String]
+    var capabilities: [ModelCapability]
+    var credentialRequirement: AIProviderCredentialRequirement
+    var modelDiscoveryStrategy: AIProviderModelDiscoveryStrategy
+    var requestBoundary: ProviderRuntimeBoundary
+
+    var id: String {
+        "\(providerKind.rawValue):\(providerMode.rawValue):\(accessMode.rawValue)"
+    }
+
+    var leavesDeviceDirectly: Bool {
+        requestBoundary.leavesDeviceDirectly
+    }
+
+    var requiresKeychainSecret: Bool {
+        credentialRequirement.requiresKeychainSecret
+    }
+
+    var supportsOptionalKeychainSecret: Bool {
+        credentialRequirement == .optionalAPIKey
+    }
+
+    var supportsSubscriptionCLI: Bool {
+        credentialRequirement.isSubscriptionBacked
+    }
+
+    var normalizedRecommendedModelIdentifiers: [String] {
+        Self.normalizedModelIdentifiers(recommendedModelIdentifiers + [defaultModelIdentifier])
+    }
+
+    var modelDescriptors: [AIModelDescriptor] {
+        normalizedRecommendedModelIdentifiers.map { modelIdentifier in
+            AIModelDescriptor(
+                providerKind: providerKind,
+                providerMode: providerMode,
+                identifier: modelIdentifier,
+                displayName: modelIdentifier,
+                publisher: providerKind.displayName,
+                isAvailableLocally: requestBoundary == .localServer,
+                capabilities: Set(capabilities.compactMap(\.aiModelCapability))
+            )
+        }
+    }
+
+    private static func normalizedModelIdentifiers(_ modelIdentifiers: [String]) -> [String] {
+        var seen = Set<String>()
+        var normalized: [String] = []
+        for modelIdentifier in modelIdentifiers {
+            let trimmed = modelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let key = trimmed.lowercased()
+            guard seen.insert(key).inserted else { continue }
+            normalized.append(trimmed)
+        }
+        return normalized
+    }
+}
+
+enum AIKnownProviderCatalog {
+    static let entries: [AIProviderCatalogEntry] = [
+        AIProviderCatalogEntry(
+            providerKind: .ollama,
+            providerMode: .nativeAPI,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "Local Ollama",
+            endpoint: "http://localhost:11434",
+            defaultModelIdentifier: "llama3.1",
+            recommendedModelIdentifiers: ["llama3.1", "qwen3:14b", "mistral-nemo", "nomic-embed-text"],
+            capabilities: [.chat, .streaming, .toolCalling, .embeddings],
+            credentialRequirement: .none,
+            modelDiscoveryStrategy: .localServer,
+            requestBoundary: .localServer
+        ),
+        AIProviderCatalogEntry(
+            providerKind: .lmStudio,
+            providerMode: .openAICompatible,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "LM Studio",
+            endpoint: "http://localhost:1234",
+            defaultModelIdentifier: "",
+            recommendedModelIdentifiers: [],
+            capabilities: [.chat, .streaming, .toolCalling, .embeddings, .openAICompatible, .anthropicCompatible],
+            credentialRequirement: .none,
+            modelDiscoveryStrategy: .localServer,
+            requestBoundary: .localServer
+        ),
+        AIProviderCatalogEntry(
+            providerKind: .openAI,
+            providerMode: .apiKey,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "OpenAI API",
+            endpoint: "https://api.openai.com/v1",
+            defaultModelIdentifier: "gpt-5.5",
+            recommendedModelIdentifiers: ["gpt-5.5", "gpt-5.5-mini"],
+            capabilities: [.chat, .streaming, .toolCalling, .vision, .reasoning, .structuredOutput],
+            credentialRequirement: .requiredAPIKey,
+            modelDiscoveryStrategy: .openAICompatibleModels,
+            requestBoundary: .externalAPI
+        ),
+        AIProviderCatalogEntry(
+            providerKind: .anthropic,
+            providerMode: .apiKey,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "Anthropic API",
+            endpoint: "https://api.anthropic.com",
+            defaultModelIdentifier: "claude-opus-4.7",
+            recommendedModelIdentifiers: ["claude-opus-4.7", "claude-sonnet-4-5"],
+            capabilities: [.chat, .streaming, .toolCalling, .vision, .reasoning],
+            credentialRequirement: .requiredAPIKey,
+            modelDiscoveryStrategy: .staticCatalog,
+            requestBoundary: .externalAPI
+        ),
+        AIProviderCatalogEntry(
+            providerKind: .gemini,
+            providerMode: .openAICompatible,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "Google Gemini API",
+            endpoint: "https://generativelanguage.googleapis.com/v1beta/openai",
+            defaultModelIdentifier: "gemini-2.5-pro",
+            recommendedModelIdentifiers: ["gemini-2.5-pro", "gemini-2.5-flash"],
+            capabilities: [.chat, .streaming, .toolCalling, .vision, .openAICompatible],
+            credentialRequirement: .requiredAPIKey,
+            modelDiscoveryStrategy: .openAICompatibleModels,
+            requestBoundary: .externalAPI
+        ),
+        AIProviderCatalogEntry(
+            providerKind: .xAI,
+            providerMode: .openAICompatible,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "xAI API",
+            endpoint: "https://api.x.ai/v1",
+            defaultModelIdentifier: "grok-4.3",
+            recommendedModelIdentifiers: ["grok-4.3"],
+            capabilities: [.chat, .streaming, .toolCalling, .reasoning, .openAICompatible],
+            credentialRequirement: .requiredAPIKey,
+            modelDiscoveryStrategy: .openAICompatibleModels,
+            requestBoundary: .externalAPI
+        ),
+        AIProviderCatalogEntry(
+            providerKind: .mistral,
+            providerMode: .openAICompatible,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "Mistral API",
+            endpoint: "https://api.mistral.ai/v1",
+            defaultModelIdentifier: "mistral-large-latest",
+            recommendedModelIdentifiers: ["mistral-large-latest", "codestral-latest"],
+            capabilities: [.chat, .streaming, .toolCalling, .openAICompatible],
+            credentialRequirement: .requiredAPIKey,
+            modelDiscoveryStrategy: .openAICompatibleModels,
+            requestBoundary: .externalAPI
+        ),
+        AIProviderCatalogEntry(
+            providerKind: .groq,
+            providerMode: .openAICompatible,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "Groq API",
+            endpoint: "https://api.groq.com/openai/v1",
+            defaultModelIdentifier: "llama-3.3-70b-versatile",
+            recommendedModelIdentifiers: ["llama-3.3-70b-versatile", "deepseek-r1-distill-llama-70b"],
+            capabilities: [.chat, .streaming, .toolCalling, .openAICompatible],
+            credentialRequirement: .requiredAPIKey,
+            modelDiscoveryStrategy: .openAICompatibleModels,
+            requestBoundary: .externalAPI
+        ),
+        AIProviderCatalogEntry(
+            providerKind: .openRouter,
+            providerMode: .openAICompatible,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "OpenRouter",
+            endpoint: "https://openrouter.ai/api/v1",
+            defaultModelIdentifier: "openai/gpt-5.5",
+            recommendedModelIdentifiers: ["openai/gpt-5.5", "anthropic/claude-sonnet-4-5"],
+            capabilities: [.chat, .streaming, .toolCalling, .openAICompatible],
+            credentialRequirement: .requiredAPIKey,
+            modelDiscoveryStrategy: .openAICompatibleModels,
+            requestBoundary: .externalAPI
+        ),
+        AIProviderCatalogEntry(
+            providerKind: .perplexity,
+            providerMode: .openAICompatible,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "Perplexity API",
+            endpoint: "https://api.perplexity.ai",
+            defaultModelIdentifier: "sonar-pro",
+            recommendedModelIdentifiers: ["sonar-pro", "sonar"],
+            capabilities: [.chat, .streaming, .webSearch, .openAICompatible],
+            credentialRequirement: .requiredAPIKey,
+            modelDiscoveryStrategy: .openAICompatibleModels,
+            requestBoundary: .externalAPI
+        ),
+        AIProviderCatalogEntry(
+            providerKind: .customOpenAICompatible,
+            providerMode: .openAICompatible,
+            accessMode: .openAICompatible,
+            privacyScope: .externalAPI,
+            displayName: "Custom OpenAI-compatible",
+            endpoint: "http://localhost:8080/v1",
+            defaultModelIdentifier: "",
+            recommendedModelIdentifiers: [],
+            capabilities: [.chat, .streaming, .toolCalling, .openAICompatible],
+            credentialRequirement: .optionalAPIKey,
+            modelDiscoveryStrategy: .openAICompatibleModels,
+            requestBoundary: .externalAPI
+        ),
+        AIProviderCatalogEntry(
+            providerKind: .chatGPTCLI,
+            providerMode: .subscriptionCLI,
+            accessMode: .subscriptionCLI,
+            privacyScope: .localCLI,
+            displayName: "ChatGPT/Codex CLI",
+            endpoint: nil,
+            defaultModelIdentifier: "chatgpt-subscription",
+            recommendedModelIdentifiers: ["chatgpt-subscription"],
+            capabilities: [.chat, .streaming],
+            credentialRequirement: .subscriptionCLI,
+            modelDiscoveryStrategy: .cliSession,
+            requestBoundary: .localCLI
+        ),
+        AIProviderCatalogEntry(
+            providerKind: .claudeCodeCLI,
+            providerMode: .subscriptionCLI,
+            accessMode: .subscriptionCLI,
+            privacyScope: .localCLI,
+            displayName: "Claude Code CLI",
+            endpoint: nil,
+            defaultModelIdentifier: "claude-subscription",
+            recommendedModelIdentifiers: ["claude-subscription"],
+            capabilities: [.chat, .streaming],
+            credentialRequirement: .subscriptionCLI,
+            modelDiscoveryStrategy: .cliSession,
+            requestBoundary: .localCLI
+        ),
+        AIProviderCatalogEntry(
+            providerKind: .vercelAISDKBridge,
+            providerMode: .aiSDKBridge,
+            accessMode: .aiSDKBridge,
+            privacyScope: .bridgeService,
+            displayName: "Vercel AI SDK Bridge",
+            endpoint: "http://localhost:4177",
+            defaultModelIdentifier: "",
+            recommendedModelIdentifiers: [],
+            capabilities: [.chat, .streaming, .toolCalling, .embeddings, .structuredOutput],
+            credentialRequirement: .localBridge,
+            modelDiscoveryStrategy: .bridgeHealth,
+            requestBoundary: .localBridge
+        )
+    ]
+
+    static func entry(for providerKind: AIProviderKind) -> AIProviderCatalogEntry? {
+        entries.first { $0.providerKind == providerKind }
+    }
+
+    static func entry(for providerKind: LLMProviderKind) -> AIProviderCatalogEntry? {
+        entry(for: AIProviderKind(providerKind))
+    }
+
+    static func recommendedModelIdentifiers(for providerKind: AIProviderKind) -> [String] {
+        entry(for: providerKind)?.normalizedRecommendedModelIdentifiers ?? []
+    }
+}
+
 extension AIProviderKind {
     init(_ providerKind: LLMProviderKind) {
         switch providerKind {
@@ -310,6 +647,31 @@ extension AIProviderKind {
             self = .claudeCodeCLI
         case .vercelAISDKBridge:
             self = .vercelAISDKBridge
+        }
+    }
+}
+
+private extension ModelCapability {
+    var aiModelCapability: AIModelCapability? {
+        switch self {
+        case .chat:
+            .chat
+        case .streaming:
+            .streaming
+        case .toolCalling:
+            .toolUse
+        case .embeddings:
+            .embeddings
+        case .vision:
+            .vision
+        case .reasoning:
+            .reasoning
+        case .structuredOutput:
+            .structuredOutput
+        case .webSearch:
+            .retrieval
+        case .imageGeneration, .openAICompatible, .anthropicCompatible:
+            nil
         }
     }
 }
@@ -354,6 +716,25 @@ extension AIProviderMode {
         switch accessMode {
         case .localServer:
             self = .nativeAPI
+        case .apiKey:
+            self = .apiKey
+        case .subscriptionCLI:
+            self = .subscriptionCLI
+        case .openAICompatible:
+            self = .openAICompatible
+        case .anthropicCompatible:
+            self = .anthropicCompatible
+        case .aiSDKBridge:
+            self = .aiSDKBridge
+        }
+    }
+}
+
+extension ProviderAccessMode {
+    init(_ providerMode: AIProviderMode) {
+        switch providerMode {
+        case .nativeAPI:
+            self = .localServer
         case .apiKey:
             self = .apiKey
         case .subscriptionCLI:

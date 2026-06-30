@@ -761,6 +761,78 @@ struct AIChatProviderRegistryTests {
         #expect(AIProviderKind.vercelAISDKBridge.defaultBaseURL?.absoluteString == "http://localhost:4177")
     }
 
+    @Test("Known provider catalog covers every first-class route")
+    func knownProviderCatalogCoversEveryFirstClassRoute() throws {
+        let ids = AIKnownProviderCatalog.entries.map(\.id)
+
+        #expect(Set(ids).count == ids.count)
+        for kind in LLMProviderKind.allCases {
+            let entry = try #require(AIKnownProviderCatalog.entry(for: kind))
+            #expect(entry.providerKind == AIProviderKind(kind))
+            #expect(
+                entry.accessMode == ProviderAccessMode(entry.providerMode)
+                    || (entry.accessMode == .apiKey && entry.providerMode == .openAICompatible)
+                    || (entry.accessMode == .localServer && entry.providerMode == .openAICompatible)
+            )
+        }
+    }
+
+    @Test("Known provider catalog separates API keys from subscription CLI modes")
+    func knownProviderCatalogSeparatesAPIKeysFromSubscriptionCLIModes() throws {
+        let openAIAPI = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.openAI))
+        let chatGPTCLI = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.chatGPTCLI))
+        let anthropicAPI = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.anthropic))
+        let claudeCLI = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.claudeCodeCLI))
+
+        #expect(openAIAPI.credentialRequirement == AIProviderCredentialRequirement.requiredAPIKey)
+        #expect(openAIAPI.requiresKeychainSecret)
+        #expect(openAIAPI.leavesDeviceDirectly)
+        #expect(openAIAPI.modelDiscoveryStrategy == AIProviderModelDiscoveryStrategy.openAICompatibleModels)
+        #expect(openAIAPI.normalizedRecommendedModelIdentifiers.contains("gpt-5.5"))
+
+        #expect(chatGPTCLI.credentialRequirement == AIProviderCredentialRequirement.subscriptionCLI)
+        #expect(chatGPTCLI.supportsSubscriptionCLI)
+        #expect(chatGPTCLI.requiresKeychainSecret == false)
+        #expect(chatGPTCLI.leavesDeviceDirectly == false)
+        #expect(chatGPTCLI.capabilities == [ModelCapability.chat, .streaming])
+
+        #expect(anthropicAPI.credentialRequirement == AIProviderCredentialRequirement.requiredAPIKey)
+        #expect(anthropicAPI.requiresKeychainSecret)
+        #expect(anthropicAPI.leavesDeviceDirectly)
+        #expect(anthropicAPI.modelDiscoveryStrategy == AIProviderModelDiscoveryStrategy.staticCatalog)
+
+        #expect(claudeCLI.credentialRequirement == AIProviderCredentialRequirement.subscriptionCLI)
+        #expect(claudeCLI.supportsSubscriptionCLI)
+        #expect(claudeCLI.requiresKeychainSecret == false)
+        #expect(claudeCLI.leavesDeviceDirectly == false)
+        #expect(claudeCLI.capabilities == [ModelCapability.chat, .streaming])
+    }
+
+    @Test("Known provider catalog advertises local discovery and hosted model descriptors")
+    func knownProviderCatalogAdvertisesLocalDiscoveryAndHostedModelDescriptors() throws {
+        let ollama = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.ollama))
+        let lmStudio = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.lmStudio))
+        let perplexity = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.perplexity))
+        let customEndpoint = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.customOpenAICompatible))
+
+        #expect(ollama.credentialRequirement == AIProviderCredentialRequirement.none)
+        #expect(ollama.modelDiscoveryStrategy == AIProviderModelDiscoveryStrategy.localServer)
+        #expect(ollama.requestBoundary == ProviderRuntimeBoundary.localServer)
+        #expect(ollama.normalizedRecommendedModelIdentifiers.contains("nomic-embed-text"))
+        #expect(ollama.modelDescriptors.first?.capabilities.contains(AIModelCapability.embeddings) == true)
+
+        #expect(lmStudio.credentialRequirement == AIProviderCredentialRequirement.none)
+        #expect(lmStudio.modelDiscoveryStrategy == AIProviderModelDiscoveryStrategy.localServer)
+        #expect(lmStudio.capabilities.contains(ModelCapability.openAICompatible))
+
+        #expect(perplexity.modelDescriptors.first?.capabilities.contains(AIModelCapability.retrieval) == true)
+        #expect(perplexity.normalizedRecommendedModelIdentifiers.contains("sonar-pro"))
+
+        #expect(customEndpoint.credentialRequirement == AIProviderCredentialRequirement.optionalAPIKey)
+        #expect(customEndpoint.supportsOptionalKeychainSecret)
+        #expect(customEndpoint.modelDiscoveryStrategy == AIProviderModelDiscoveryStrategy.openAICompatibleModels)
+    }
+
     @MainActor
     @Test("AI SDK bridge needs successful bridge health before routing")
     func aiSDKBridgeNeedsSuccessfulBridgeHealthBeforeRouting() throws {
