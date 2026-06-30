@@ -3617,7 +3617,9 @@ private struct ChatSurface: View {
                 clearTranscriptSearch: clearTranscriptSearch
             )
             .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
+
+            FlannelSeparator(opacity: 0.36)
 
             ScrollViewReader { proxy in
                 ScrollView {
@@ -4006,34 +4008,92 @@ private struct ChatThreadHeader: View {
         "\(visibleMessageCount) message\(visibleMessageCount == 1 ? "" : "s")"
     }
 
+    private var activeProvider: ProviderConfiguration? {
+        store.activeProvider
+    }
+
     private var routeStatusText: String {
-        store.activeProvider?.providerModeChoiceTitle ?? "Local fallback"
+        activeProvider?.providerModeChoiceTitle ?? "Local fallback"
+    }
+
+    private var routeStatusIcon: String {
+        activeProvider?.accessMode.icon ?? "cpu"
+    }
+
+    private var routeStatusTone: FlannelStatusTone {
+        guard let activeProvider else {
+            return .warning
+        }
+
+        switch activeProvider.connectionStatus {
+        case .ready:
+            return .success
+        case .needsAttention, .rateLimited:
+            return .warning
+        case .syncing:
+            return .info
+        case .disconnected:
+            return .neutral
+        }
+    }
+
+    private var privacyTitle: String {
+        if store.preferences.localOnlyMode ?? true {
+            return "Local-only"
+        }
+
+        return activeProvider?.privacyScope.title ?? "Private"
+    }
+
+    private var privacyIcon: String {
+        if store.preferences.localOnlyMode ?? true {
+            return "lock.fill"
+        }
+
+        switch activeProvider?.privacyScope {
+        case .externalAPI:
+            return (store.preferences.allowCloudProviders ?? false) ? "network" : "network.slash"
+        case .localCLI:
+            return "terminal"
+        case .bridgeService:
+            return "shippingbox"
+        case .localOnly:
+            return "lock.fill"
+        case nil:
+            return "lock"
+        }
+    }
+
+    private var privacyTone: FlannelStatusTone {
+        if store.preferences.localOnlyMode ?? true {
+            return .accent
+        }
+
+        if activeProvider?.privacyScope == .externalAPI {
+            return (store.preferences.allowCloudProviders ?? false) ? .warning : .danger
+        }
+
+        return activeProvider == nil ? .warning : .neutral
     }
 
     var body: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(store.currentAssistantThread?.title ?? "New Chat")
-                    .font(.headline)
+                    .font(.headline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
+
                 HStack(spacing: 8) {
-                    Label("Private", systemImage: "lock")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(messageCountText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(routeStatusText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    FlannelStatusChip(privacyTitle, systemImage: privacyIcon, tone: privacyTone)
+                    FlannelStatusChip(messageCountText, systemImage: "text.bubble", tone: .neutral)
+                    FlannelStatusChip(routeStatusText, systemImage: routeStatusIcon, tone: routeStatusTone)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Private chat, \(messageCountText), route \(routeStatusText)")
+                .accessibilityLabel("\(privacyTitle), \(messageCountText), route \(routeStatusText)")
             }
 
-            Spacer()
+            Spacer(minLength: 12)
 
             ChatTranscriptFindBar(
                 text: $transcriptSearchText,
@@ -4044,6 +4104,7 @@ private struct ChatThreadHeader: View {
                 clear: clearTranscriptSearch
             )
         }
+        .frame(minHeight: 46)
     }
 }
 
