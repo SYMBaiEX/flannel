@@ -93,6 +93,14 @@ private struct FlannelAppCommands: Commands {
 
             Divider()
 
+            routingPolicyButton(.selectedProvider)
+            routingPolicyButton(.localFirst)
+            routingPolicyButton(.bestAvailable)
+            routingPolicyButton(.cheapest)
+            routingPolicyButton(.fastest)
+
+            Divider()
+
             commandButton(.openCompare)
             commandButton(.openModels)
         }
@@ -141,6 +149,21 @@ private struct FlannelAppCommands: Commands {
 
         return Button(command?.title ?? fallbackTitle(for: id)) {
             run(id)
+        }
+        .disabled(runFocusedCommand == nil || command?.isEnabled != true)
+    }
+
+    private func routingPolicyButton(_ policy: ProviderRoutingPolicy) -> some View {
+        let id = FlannelCommandID.routingCommandID(for: policy)
+        let command = FlannelCommand.defaultCommand(id, context: context)
+
+        return Button {
+            run(id)
+        } label: {
+            Label(
+                command?.title ?? policy.title,
+                systemImage: context.providerRoutingPolicy == policy ? "checkmark" : policy.icon
+            )
         }
         .disabled(runFocusedCommand == nil || command?.isEnabled != true)
     }
