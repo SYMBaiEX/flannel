@@ -42,7 +42,7 @@ nonisolated enum CLIProviderTransportError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .unsupportedProvider(let provider):
-            return "\(provider) is not backed by a local subscription CLI transport."
+            return "\(provider) is not backed by a local account CLI transport."
         case .missingCommandContract(let provider):
             return "\(provider) needs a local command contract before Flannel can invoke it."
         case .unsupportedShellSyntax(let character):
@@ -464,7 +464,7 @@ nonisolated struct CLIProviderCommandBuilder: Sendable {
         case .apiKey:
             "API Key"
         case .subscriptionCLI:
-            "Subscription CLI"
+            "Account CLI"
         case .openAICompatible:
             "OpenAI Compatible"
         case .anthropicCompatible:

@@ -287,7 +287,7 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
                 id: .toggleCloudProviders,
                 title: context.allowCloudProviders && !context.localOnlyMode ? "Block Cloud API Providers" : "Allow Cloud API Providers",
                 subtitle: context.allowCloudProviders && !context.localOnlyMode
-                    ? "Keep local servers and subscription CLI routes available while blocking external API-key providers."
+                    ? "Keep local servers and account CLI routes available while blocking external API-key providers."
                     : "Turn off local-only mode and allow explicitly configured BYOK API routes.",
                 category: "Privacy",
                 systemImage: context.allowCloudProviders && !context.localOnlyMode ? "network.slash" : "network",
@@ -326,7 +326,7 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
             FlannelCommand(
                 id: .openModels,
                 title: "Open Models & Providers",
-                subtitle: "Provider routing, BYOK keys, subscription CLIs, local servers, and model defaults.",
+                subtitle: "Provider routing, BYOK keys, account CLIs, local servers, and model defaults.",
                 category: "Settings",
                 systemImage: "cpu",
                 keywords: ["provider", "api", "ollama", "lm studio", "settings", "sidebar"],

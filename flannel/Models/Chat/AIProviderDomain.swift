@@ -295,7 +295,7 @@ enum AIProviderCredentialRequirement: String, Codable, CaseIterable, Hashable, S
         case .optionalAPIKey:
             "Optional API key"
         case .subscriptionCLI:
-            "Subscription CLI"
+            "Account CLI"
         case .localBridge:
             "Local bridge"
         }
@@ -353,7 +353,7 @@ enum AIProviderRuntimeInterface: String, Codable, CaseIterable, Hashable, Sendab
         case .anthropicCompatible:
             "Anthropic-compatible"
         case .subscriptionCLI:
-            "Subscription CLI"
+            "Account CLI"
         case .aiSDKBridge:
             "AI SDK bridge"
         }

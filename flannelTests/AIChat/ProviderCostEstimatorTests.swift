@@ -33,7 +33,7 @@ struct ProviderCostEstimatorTests {
         #expect(ProviderCostEstimator.shared.marginalCostPerMillionTokens(provider) == 12.5)
     }
 
-    @Test("Local and subscription CLI routes are zero marginal cost but omit transcript cost chips")
+    @Test("Local and account CLI routes are zero marginal cost but omit transcript cost chips")
     func localAndCLIRoutesAreFreeForRoutingWithoutTranscriptCost() {
         let local = ProviderConfiguration(
             kind: .ollama,

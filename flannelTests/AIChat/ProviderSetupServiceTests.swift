@@ -623,7 +623,7 @@ struct ProviderSetupServiceTests {
         #expect(validation.report.diagnostics.contains(where: { $0.code == .providerUnavailable }))
     }
 
-    @Test("Subscription CLI providers are blocked when the executable is missing")
+    @Test("Account CLI providers are blocked when the executable is missing")
     func subscriptionCLIProviderReportCapturesMissingExecutable() {
         let service = ProviderSetupService(
             cliTransport: CLIProviderTransport(resolveExecutable: { _ in nil })
@@ -649,7 +649,7 @@ struct ProviderSetupServiceTests {
     }
 
     @MainActor
-    @Test("Subscription CLI readiness runs auth status before the smoke probe")
+    @Test("Account CLI readiness runs auth status before the smoke probe")
     func subscriptionCLIReadinessRunsStatusAndSmokeProbe() async {
         let commandRecorder = CLIReadinessCommandRecorder()
         let service = ProviderSetupService(
@@ -704,7 +704,7 @@ struct ProviderSetupServiceTests {
     }
 
     @MainActor
-    @Test("Subscription CLI readiness fails when command executable is unavailable")
+    @Test("Account CLI readiness fails when command executable is unavailable")
     func subscriptionCLIReadinessFailsMissingExecutable() async {
         let service = ProviderSetupService(
             cliTransport: CLIProviderTransport(resolveExecutable: { _ in nil })
@@ -736,7 +736,7 @@ struct ProviderSetupServiceTests {
     }
 
     @MainActor
-    @Test("Subscription CLI readiness fails when the smoke probe returns no decoded text")
+    @Test("Account CLI readiness fails when the smoke probe returns no decoded text")
     func subscriptionCLIReadinessFailsEmptySmokeProbe() async {
         let commandRecorder = CLIReadinessCommandRecorder()
         let service = ProviderSetupService(
@@ -788,7 +788,7 @@ struct ProviderSetupServiceTests {
     }
 
     @MainActor
-    @Test("Subscription CLI readiness requires the expected smoke probe token")
+    @Test("Account CLI readiness requires the expected smoke probe token")
     func subscriptionCLIReadinessRequiresExpectedSmokeProbeToken() async {
         let commandRecorder = CLIReadinessCommandRecorder()
         let service = ProviderSetupService(
@@ -839,7 +839,7 @@ struct ProviderSetupServiceTests {
         #expect(commands.last?.stdinText?.contains("flannel-ready") == true)
     }
 
-    @Test("Claude subscription CLI providers require print mode or a prompt placeholder")
+    @Test("Claude Code account CLI providers require print mode or a prompt placeholder")
     func claudeCLIProviderReportRequiresPrintMode() {
         let service = ProviderSetupService(
             cliTransport: CLIProviderTransport(resolveExecutable: { _ in URL(fileURLWithPath: "/usr/bin/true") })

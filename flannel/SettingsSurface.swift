@@ -526,7 +526,7 @@ struct SettingsSurface: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Provider routes")
                     .font(.headline)
-                Text("Add separate API-key, subscription CLI, local server, bridge, or OpenAI-compatible routes.")
+                Text("Add separate API-key, account CLI, local server, bridge, or OpenAI-compatible routes.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -544,7 +544,7 @@ struct SettingsSurface: View {
                     Button {
                         addProviderRoute(kind: .chatGPTCLI, accessMode: .subscriptionCLI)
                     } label: {
-                        Label("ChatGPT/Codex subscription CLI", systemImage: "terminal")
+                        Label("ChatGPT/Codex CLI", systemImage: "terminal")
                     }
                 }
 
@@ -558,7 +558,7 @@ struct SettingsSurface: View {
                     Button {
                         addProviderRoute(kind: .claudeCodeCLI, accessMode: .subscriptionCLI)
                     } label: {
-                        Label("Claude Code subscription CLI", systemImage: "terminal")
+                        Label("Claude Code CLI", systemImage: "terminal")
                     }
                 }
 
@@ -2122,7 +2122,7 @@ enum SettingsTab: String, CaseIterable, Hashable, Identifiable {
         case .general:
             "Startup, history, and folders."
         case .models:
-            "Provider routing, BYOK keys, subscription CLIs, local servers, and model defaults."
+            "Provider routing, BYOK keys, account CLIs, local servers, and model defaults."
         case .knowledge:
             "Local retrieval sources, indexing state, and grounded context."
         case .memory:
@@ -2218,7 +2218,7 @@ private enum ProviderSettingsGroupKind: String, CaseIterable, Identifiable {
         case .localServers:
             "Local Server Routes"
         case .subscriptionCLI:
-            "Subscription CLI Routes"
+            "Account CLI Routes"
         case .byokAPIs:
             "API-Key Cloud Routes"
         case .localBridge:
@@ -2229,7 +2229,7 @@ private enum ProviderSettingsGroupKind: String, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .localServers:
-            "Ollama and LM Studio require a running local server and selected local model. They do not use provider API keys or subscription sign-in."
+            "Ollama and LM Studio require a running local server and selected local model. They do not use provider API keys or account sign-in."
         case .subscriptionCLI:
             "ChatGPT/Codex and Claude Code use locally authenticated commands. They do not store or read provider API keys."
         case .byokAPIs:
@@ -2294,7 +2294,7 @@ private enum ProviderModeGuideKind: String, CaseIterable, Identifiable {
         case .localServer:
             "Local server routes"
         case .subscriptionCLI:
-            "Subscription CLI routes"
+            "Account CLI routes"
         case .apiKey:
             "API-key routes"
         case .compatibleEndpoint:
@@ -2309,7 +2309,7 @@ private enum ProviderModeGuideKind: String, CaseIterable, Identifiable {
         case .localServer:
             "Use loopback model servers such as Ollama or LM Studio. These routes need a running local server and selected local model, not provider API keys."
         case .subscriptionCLI:
-            "Use a locally authenticated CLI session such as ChatGPT/Codex or Claude Code. Subscription sign-in is separate from API-key access and stays in the local command-line tool."
+            "Use a locally authenticated CLI session such as ChatGPT/Codex or Claude Code. App API keys stay separate from CLI account or API-key auth."
         case .apiKey:
             "Use the provider's official hosted API. Each route needs its own Keychain-backed API key before remote requests can run."
         case .compatibleEndpoint:
@@ -2683,7 +2683,7 @@ private struct ProviderModeGuideRow: View {
         case .aiSDKBridge:
             return "\(configuredRouteCount) routes • \(modelSummary) • bridge-managed runtime"
         case .subscriptionCLI:
-            return "\(configuredRouteCount) routes • \(modelSummary) • subscription CLI sign-in"
+            return "\(configuredRouteCount) routes • \(modelSummary) • account CLI auth"
         case .apiKey:
             return "\(configuredRouteCount) routes • \(modelSummary) • Keychain API keys"
         case .localServer:
@@ -3441,11 +3441,11 @@ private struct ProviderSettingsRow: View {
         guard provider.accessMode == .subscriptionCLI else { return nil }
         switch provider.kind {
         case .chatGPTCLI:
-            return "Subscription CLI route. Recommended: `codex exec --json -`. The `-` tells Codex to read Flannel's rendered prompt from stdin while `--json` emits JSONL events. This does not use an OpenAI Platform API key. Placeholders like `{prompt}`, `{last_user_message}`, `{model}`, and legacy `{stdin}` are also supported. Pipes and shell expansion are rejected."
+            return "Account CLI route. Recommended: `codex exec --json -`. The `-` tells Codex to read Flannel's rendered prompt from stdin while `--json` emits JSONL events. ChatGPT sign-in or Codex API-key auth stays inside the CLI. Placeholders like `{prompt}`, `{last_user_message}`, `{model}`, and legacy `{stdin}` are also supported. Pipes and shell expansion are rejected."
         case .claudeCodeCLI:
-            return "Subscription CLI route. Recommended: `claude -p --output-format stream-json --verbose`. Flannel decodes Claude JSON or stream-json output through the local Claude Code login. This does not use an Anthropic Console API key. Interactive Claude sessions are not launched from chat."
+            return "Account CLI route. Recommended: `claude -p --output-format stream-json --verbose`. Flannel decodes Claude JSON or stream-json output through the local Claude Code login. This does not read an Anthropic Console API key from this row. Interactive Claude sessions are not launched from chat."
         default:
-            return "Use a direct argv-style subscription CLI command. Shell syntax, pipes, redirects, and command substitution are rejected."
+            return "Use a direct argv-style account CLI command. Shell syntax, pipes, redirects, and command substitution are rejected."
         }
     }
 
@@ -3736,14 +3736,14 @@ private struct ProviderSettingsRow: View {
         case .subscriptionCLI:
             return ProviderSettingsNextStep(
                 title: "Confirm the CLI is signed in",
-                detail: "Use the recommended command shape, make sure the subscription CLI account works in Terminal, then check readiness. Do not paste an API key into this route.",
+                detail: "Use the recommended command shape, make sure the CLI account works in Terminal, then check readiness. Do not paste a provider API key into this route.",
                 systemImage: "terminal",
                 tone: .info
             )
         case .apiKey, .anthropicCompatible:
             return ProviderSettingsNextStep(
                 title: "Finish API-key setup",
-                detail: "Save the provider API key in Keychain when required, confirm the model id, then check readiness. Subscription sign-in does not satisfy this route.",
+                detail: "Save the provider API key in Keychain when required, confirm the model id, then check readiness. CLI account sign-in does not satisfy this route.",
                 systemImage: "key",
                 tone: .info
             )
@@ -3783,7 +3783,7 @@ private struct ProviderSettingsRow: View {
         case .missingKeychainReference, .keychainReferenceShouldBeCanonical:
             return ProviderSettingsNextStep(
                 title: "Save the provider key in Keychain",
-                detail: "Paste the BYOK API key here and save it; subscription CLI sign-in does not satisfy this API route.",
+                detail: "Paste the BYOK API key here and save it; CLI account sign-in does not satisfy this API route.",
                 systemImage: "key",
                 tone: .warning
             )
@@ -3791,7 +3791,7 @@ private struct ProviderSettingsRow: View {
             return ProviderSettingsNextStep(
                 title: diagnostic.code == .cliSmokeProbeFailed || diagnostic.code == .cliStatusCheckFailed ? "Sign in or repair the CLI" : "Repair the local CLI command",
                 detail: diagnostic.code == .cliSmokeProbeFailed || diagnostic.code == .cliStatusCheckFailed
-                    ? "Run the same command in Terminal, confirm the subscription account is signed in, then check readiness again."
+                    ? "Run the same command in Terminal, confirm the CLI account is signed in, then check readiness again."
                     : "Install and sign in to the CLI, use the recommended print/JSON command, then check readiness.",
                 systemImage: "terminal",
                 tone: .warning
@@ -4091,13 +4091,13 @@ private extension ProviderConfiguration {
     var settingsSetupInstruction: String {
         switch kind {
         case .openAI:
-            "API-key route for the OpenAI Platform API. A ChatGPT subscription is not used here; use ChatGPT/Codex CLI for local subscription access."
+            "API-key route for the OpenAI Platform API. ChatGPT/Codex CLI access is configured as a separate local CLI route."
         case .chatGPTCLI:
-            "Subscription CLI route for ChatGPT/Codex. Flannel runs the configured local command and does not read an OpenAI Platform API key from this row."
+            "Account CLI route for ChatGPT/Codex. Flannel runs the configured local command; ChatGPT plan sign-in or Codex API-key auth stays inside that CLI."
         case .anthropic:
-            "API-key route for the Anthropic API. Claude subscription access belongs to Claude Code CLI, not this API-key route."
+            "API-key route for the Anthropic API. Claude Code account access belongs to Claude Code CLI, not this API-key route."
         case .claudeCodeCLI:
-            "Subscription CLI route for Claude Code. Flannel runs Claude Code print mode through a local authenticated install."
+            "Account CLI route for Claude Code. Flannel runs Claude Code print mode through a local authenticated install."
         case .ollama:
             "Local Ollama server route. No API key is required; start Ollama and run local discovery to hydrate models."
         case .lmStudio:
@@ -4126,7 +4126,7 @@ private extension ProviderConfiguration {
         case .localServer:
             "Local server route"
         case .subscriptionCLI:
-            "Subscription CLI route"
+            "Account CLI route"
         case .apiKey:
             "API-key route"
         case .openAICompatible:
@@ -4201,13 +4201,13 @@ private extension ProviderConfiguration {
     var settingsEndpointHelp: String? {
         switch kind {
         case .ollama:
-            "Local server route. Use the loopback Ollama server; no API key or subscription sign-in is read from this row."
+            "Local server route. Use the loopback Ollama server; no API key or account sign-in is read from this row."
         case .lmStudio:
             "Local server route. Use LM Studio's local server endpoint; start the server in LM Studio before validating."
         case .openAI:
-            "API-key route. Use the OpenAI Platform API base URL. This is separate from ChatGPT web or desktop subscription access."
+            "API-key route. Use the OpenAI Platform API base URL. This is separate from ChatGPT/Codex CLI access."
         case .anthropic:
-            "API-key route. Use the Anthropic API base URL. This is separate from Claude subscription or Claude Code CLI access."
+            "API-key route. Use the Anthropic API base URL. This is separate from Claude Code account access."
         case .gemini:
             "API-key route. Use Gemini's OpenAI-compatible endpoint when routing through the OpenAI-shaped transport."
         case .xAI:
@@ -4294,9 +4294,9 @@ private extension ProviderConfiguration {
     var settingsSecretReferenceHelp: String {
         switch kind {
         case .openAI:
-            "Save an OpenAI Platform API key here. ChatGPT subscription sign-in belongs to the ChatGPT/Codex CLI provider."
+            "Save an OpenAI Platform API key here. ChatGPT/Codex CLI auth belongs to the ChatGPT/Codex CLI provider."
         case .anthropic:
-            "Save an Anthropic Console API key here. Claude subscription sign-in belongs to the Claude Code CLI provider."
+            "Save an Anthropic Console API key here. Claude Code account sign-in belongs to the Claude Code CLI provider."
         case .gemini:
             "Save a Gemini API key here, even though this route uses an OpenAI-compatible endpoint."
         case .openRouter:
@@ -4322,7 +4322,7 @@ private extension ProviderConfiguration {
         case .localServer:
             return "No API key used"
         case .subscriptionCLI:
-            return "Subscription CLI sign-in"
+            return "Account CLI auth"
         case .aiSDKBridge:
             return "Bridge-owned credentials"
         case .apiKey, .openAICompatible, .anthropicCompatible:
@@ -4417,7 +4417,7 @@ private extension ProviderConfiguration {
         case .openAICompatible:
             runtimeBoundary == .localServer ? "Local endpoint" : "Remote endpoint"
         case .subscriptionCLI:
-            "Subscription CLI"
+            "Account CLI"
         case .aiSDKBridge:
             "Bridge"
         }

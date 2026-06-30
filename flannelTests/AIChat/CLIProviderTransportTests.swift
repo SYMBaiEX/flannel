@@ -105,7 +105,7 @@ struct CLIProviderTransportTests {
         #expect(spec.outputFormat == .codexJSONLines)
     }
 
-    @Test("Subscription CLI providers expose documented auth status commands for readiness")
+    @Test("Account CLI providers expose documented auth status commands for readiness")
     func subscriptionCLIReadinessStatusCommandsUseDocumentedContracts() throws {
         let codexProvider = ProviderConfiguration(
             kind: .chatGPTCLI,
@@ -184,7 +184,7 @@ struct CLIProviderTransportTests {
                     wasApproved: true,
                     executionStatus: .completed,
                     executionResultID: toolResultID,
-                    outputPreview: "Matched the provider matrix and subscription CLI route notes."
+                    outputPreview: "Matched the provider matrix and account CLI route notes."
                 )
             ]
         )
@@ -218,7 +218,7 @@ struct CLIProviderTransportTests {
         #expect(prompt.contains("  - Approved locally: yes"))
         #expect(prompt.contains("  - Local result ID: \(toolResultID.uuidString)"))
         #expect(prompt.contains(#"  - Arguments JSON: {"query":"provider routing","limit":3}"#))
-        #expect(prompt.contains("  - Output preview: Matched the provider matrix and subscription CLI route notes."))
+        #expect(prompt.contains("  - Output preview: Matched the provider matrix and account CLI route notes."))
         #expect(prompt.hasSuffix("Assistant:"))
     }
 
@@ -489,7 +489,7 @@ struct CLIProviderTransportTests {
     }
 
     @MainActor
-    @Test("ChatStreamingService routes subscription CLI providers into the CLI transport")
+    @Test("ChatStreamingService routes account CLI providers into the CLI transport")
     func chatStreamingServiceUsesCLITransportForSubscriptionProviders() async throws {
         let provider = ProviderConfiguration(
             kind: .chatGPTCLI,

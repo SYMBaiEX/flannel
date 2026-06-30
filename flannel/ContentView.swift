@@ -4482,7 +4482,7 @@ private struct ChatTranscript: View {
                         title: "Start a private chat",
                         detail: hasRunnableProvider
                             ? "Messages are stored locally in SwiftData. Pick a starter or type directly below."
-                            : "Configure a local model, API key, or subscription CLI mode before sending model-backed messages."
+                            : "Configure a local model, API key, or account CLI route before sending model-backed messages."
                     )
 
                     if hasRunnableProvider {
@@ -6587,7 +6587,7 @@ private struct ModelHubSurface: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                SectionTitle("Models and providers", "BYOK, local servers, subscription CLI modes, and optional AI SDK bridge.")
+                SectionTitle("Models and providers", "BYOK, local servers, account CLI routes, and optional AI SDK bridge.")
                 Spacer()
                 Button {
                     discoverModels()
@@ -6668,7 +6668,7 @@ private struct ProviderModeLegend: View {
     var body: some View {
         HStack(spacing: 10) {
             ModePill("API keys live in Keychain", icon: "key")
-            ModePill("Subscription CLI is local command access", icon: "terminal")
+            ModePill("Account CLI is local command access", icon: "terminal")
             ModePill("Vercel AI SDK is an optional Node bridge", icon: "shippingbox")
         }
     }

@@ -239,7 +239,7 @@ enum ProviderSettingsMessaging {
         case .localServer:
             return "Local server route needs attention before chat routing."
         case .subscriptionCLI:
-            return "Subscription CLI route needs attention before chat routing."
+            return "Account CLI route needs attention before chat routing."
         case .apiKey, .anthropicCompatible:
             return "API route needs attention before chat routing."
         case .openAICompatible:

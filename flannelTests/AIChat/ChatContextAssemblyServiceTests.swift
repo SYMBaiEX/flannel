@@ -66,7 +66,7 @@ struct ChatContextAssemblyServiceTests {
         #expect(result.estimatedTokenCount <= result.promptBudgetTokens + service.estimatedTokenCount(for: latest.text))
     }
 
-    @Test("Subscription CLI providers reserve a larger prompt buffer")
+    @Test("Account CLI providers reserve a larger prompt buffer")
     func subscriptionCLIProvidersReserveLargerPromptBuffer() {
         let apiProvider = provider(accessMode: .apiKey, contextWindowTokens: 4_000)
         let cliProvider = provider(accessMode: .subscriptionCLI, contextWindowTokens: 4_000)
