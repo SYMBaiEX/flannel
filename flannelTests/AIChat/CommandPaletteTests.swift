@@ -380,4 +380,36 @@ struct CommandPaletteTests {
         #expect(focusChatWhenHidden.isEnabled == false)
         #expect(showInspector.isEnabled)
     }
+
+    @Test("Artifact layout commands are disabled outside the conversation shell")
+    func artifactLayoutCommandsRespectShellAvailability() throws {
+        let settingsWithStoredVisibleInspector = FlannelCommandContext(
+            hasCurrentThread: true,
+            canSendMessage: false,
+            isStreaming: false,
+            isDiscoveringModels: false,
+            canCompareCurrentPrompt: false,
+            canRunComparison: false,
+            localOnlyMode: true,
+            inspectorVisible: true,
+            canPresentInspector: false
+        )
+        let settingsWithHiddenInspector = FlannelCommandContext(
+            hasCurrentThread: true,
+            canSendMessage: false,
+            isStreaming: false,
+            isDiscoveringModels: false,
+            canCompareCurrentPrompt: false,
+            canRunComparison: false,
+            localOnlyMode: true,
+            inspectorVisible: false,
+            canPresentInspector: false
+        )
+
+        let focusChat = try #require(FlannelCommand.defaultCommand(.focusChat, context: settingsWithStoredVisibleInspector))
+        let showInspector = try #require(FlannelCommand.defaultCommand(.showInspector, context: settingsWithHiddenInspector))
+
+        #expect(focusChat.isEnabled == false)
+        #expect(showInspector.isEnabled == false)
+    }
 }

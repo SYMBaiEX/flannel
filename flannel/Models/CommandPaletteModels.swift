@@ -96,6 +96,7 @@ struct FlannelCommandContext: Hashable, Sendable {
     var localOnlyMode: Bool
     var allowCloudProviders: Bool
     var inspectorVisible: Bool
+    var canPresentInspector: Bool
     var hasKnowledgeSources: Bool
     var hasQueuedKnowledgeSources: Bool
     var providerRoutingPolicy: ProviderRoutingPolicy
@@ -110,6 +111,7 @@ struct FlannelCommandContext: Hashable, Sendable {
         localOnlyMode: Bool,
         allowCloudProviders: Bool = false,
         inspectorVisible: Bool,
+        canPresentInspector: Bool = true,
         hasKnowledgeSources: Bool = false,
         hasQueuedKnowledgeSources: Bool = false,
         providerRoutingPolicy: ProviderRoutingPolicy = .selectedProvider
@@ -123,6 +125,7 @@ struct FlannelCommandContext: Hashable, Sendable {
         self.localOnlyMode = localOnlyMode
         self.allowCloudProviders = allowCloudProviders
         self.inspectorVisible = inspectorVisible
+        self.canPresentInspector = canPresentInspector
         self.hasKnowledgeSources = hasKnowledgeSources
         self.hasQueuedKnowledgeSources = hasQueuedKnowledgeSources
         self.providerRoutingPolicy = providerRoutingPolicy
@@ -407,7 +410,7 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
                 systemImage: "sidebar.right",
                 keywords: ["layout", "window", "artifacts"],
                 keyEquivalent: "⌘/",
-                isEnabled: context.inspectorVisible
+                isEnabled: context.canPresentInspector && context.inspectorVisible
             ),
             FlannelCommand(
                 id: .showInspector,
@@ -416,7 +419,7 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
                 category: "Layout",
                 systemImage: "sidebar.right",
                 keywords: ["layout", "context", "right sidebar", "artifacts"],
-                isEnabled: !context.inspectorVisible
+                isEnabled: context.canPresentInspector && !context.inspectorVisible
             ),
             FlannelCommand(
                 id: .exportMarkdown,

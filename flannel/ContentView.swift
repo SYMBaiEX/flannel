@@ -231,7 +231,7 @@ struct ContentView: View {
             CommandPaletteOverlay(
                 commands: FlannelCommand.defaultCommands(context: commandContext),
                 query: $commandPaletteQuery,
-                dismissPalette: closeCommandPalette,
+                dismissPalette: { closeCommandPalette() },
                 run: runCommand
             )
             .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -281,6 +281,7 @@ struct ContentView: View {
             localOnlyMode: store.preferences.localOnlyMode ?? true,
             allowCloudProviders: store.preferences.allowCloudProviders ?? false,
             inspectorVisible: columnVisibility == .all,
+            canPresentInspector: sidebarSurface.showsInspectorColumn,
             hasKnowledgeSources: !store.knowledgeSources.isEmpty,
             hasQueuedKnowledgeSources: store.knowledgeSources.contains { source in
                 source.status == .queued || source.status == .stale || source.status == .notIndexed
@@ -296,11 +297,11 @@ struct ContentView: View {
         }
     }
 
-    private func closeCommandPalette() {
+    private func closeCommandPalette(restoreComposerFocus: Bool = true) {
         withAnimation(.easeOut(duration: 0.12)) {
             isCommandPalettePresented = false
         }
-        if sidebarSurface == .conversation {
+        if restoreComposerFocus && sidebarSurface == .conversation {
             requestComposerFocus()
         }
     }
@@ -353,7 +354,7 @@ struct ContentView: View {
             return
         }
 
-        closeCommandPalette()
+        closeCommandPalette(restoreComposerFocus: false)
 
         if let routingPolicy = command.id.routingPolicy {
             store.preferences.providerRoutingPolicy = routingPolicy
@@ -417,7 +418,7 @@ struct ContentView: View {
         case .focusChat:
             setInspectorVisibility(false, focusComposerWhenHidden: true)
         case .showInspector:
-            setInspectorVisibility(true)
+            setInspectorVisibility(true, focusChromeWhenShown: true)
         case .exportMarkdown:
             exportCurrentThread(as: .markdown)
         case .exportJSON:
@@ -489,7 +490,11 @@ struct ContentView: View {
         }
     }
 
-    private func setInspectorVisibility(_ isVisible: Bool, focusComposerWhenHidden: Bool = true) {
+    private func setInspectorVisibility(
+        _ isVisible: Bool,
+        focusComposerWhenHidden: Bool = true,
+        focusChromeWhenShown: Bool = false
+    ) {
         let wasVisible = columnVisibility == .all
         withAnimation(.easeInOut(duration: 0.18)) {
             columnVisibility = isVisible ? .all : .doubleColumn
@@ -499,7 +504,7 @@ struct ContentView: View {
         if wasVisible != isVisible {
             announce(isVisible ? "Artifacts shown" : "Artifacts hidden")
         }
-        if isVisible {
+        if isVisible && focusChromeWhenShown {
             inspectorFocusRequest += 1
         }
         if !isVisible && focusComposerWhenHidden {
