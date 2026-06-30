@@ -2417,6 +2417,7 @@ private struct SettingsRouteHeader: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -2444,7 +2445,6 @@ private struct SettingsRouteHeader: View {
         }
         .padding(.vertical, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
     }
 }
 
