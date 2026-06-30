@@ -218,7 +218,7 @@ struct ContentView: View {
             CommandPaletteOverlay(
                 commands: FlannelCommand.defaultCommands(context: commandContext),
                 query: $commandPaletteQuery,
-                isPresented: $isCommandPalettePresented,
+                dismissPalette: closeCommandPalette,
                 run: runCommand
             )
             .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -286,6 +286,9 @@ struct ContentView: View {
     private func closeCommandPalette() {
         withAnimation(.easeOut(duration: 0.12)) {
             isCommandPalettePresented = false
+        }
+        if sidebarSurface == .conversation {
+            requestComposerFocus()
         }
     }
 
@@ -3241,7 +3244,7 @@ private struct SidebarProviderStatus: View {
 private struct CommandPaletteOverlay: View {
     var commands: [FlannelCommand]
     @Binding var query: String
-    @Binding var isPresented: Bool
+    var dismissPalette: () -> Void
     var run: (FlannelCommand) -> Void
     @FocusState private var isSearchFocused: Bool
     @State private var selectedID: FlannelCommandID?
@@ -3273,6 +3276,8 @@ private struct CommandPaletteOverlay: View {
                         .textFieldStyle(.plain)
                         .font(.title3)
                         .focused($isSearchFocused)
+                        .accessibilityLabel("Search commands")
+                        .accessibilityHint("Type to filter available Flannel commands.")
                         .onSubmit {
                             runSelectedCommand()
                         }
@@ -3315,6 +3320,9 @@ private struct CommandPaletteOverlay: View {
             .shadow(color: .black.opacity(0.22), radius: 34, x: 0, y: 20)
             .padding(.horizontal, 28)
             .padding(.top, 86)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Command palette")
+            .accessibilityAddTraits(.isModal)
         }
         .onAppear {
             selectedID = filteredCommands.first(where: \.isEnabled)?.id ?? filteredCommands.first?.id
@@ -3361,7 +3369,7 @@ private struct CommandPaletteOverlay: View {
     }
 
     private func dismiss() {
-        isPresented = false
+        dismissPalette()
     }
 
     private func reconcileSelection() {
