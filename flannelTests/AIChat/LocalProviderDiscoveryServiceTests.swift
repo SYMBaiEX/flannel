@@ -85,7 +85,7 @@ struct LocalProviderDiscoveryServiceTests {
     }
 
     @MainActor
-    @Test("LM Studio falls back to OpenAI-compatible model list")
+    @Test("LM Studio fallback preserves rich model metadata from OpenAI-compatible model list")
     func lmStudioFallsBackToOpenAICompatibleModelList() async throws {
         let transport = LocalDiscoveryTransportRecorder(
             responses: [
@@ -102,7 +102,34 @@ struct LocalProviderDiscoveryServiceTests {
                         {
                           "id": "google/gemma-3-27b-it",
                           "object": "model",
-                          "owned_by": "google"
+                          "owned_by": "google",
+                          "publisher": "Google",
+                          "display_name": "Gemma 3 27B Instruct",
+                          "architecture": "gemma3",
+                          "quantization": {
+                            "name": "Q4_K_M"
+                          },
+                          "size_bytes": 18038862643,
+                          "params_string": "27B",
+                          "loaded_instances": [
+                            {
+                              "id": "loaded-gemma",
+                              "config": {
+                                "context_length": 32768
+                              }
+                            }
+                          ],
+                          "max_context_length": 131072,
+                          "format": "gguf",
+                          "capabilities": {
+                            "vision": true,
+                            "trained_for_tool_use": true,
+                            "reasoning": {
+                              "allowed_options": ["low", "medium"],
+                              "default": "medium"
+                            }
+                          },
+                          "selected_variant": "4bit"
                         }
                       ]
                     }
@@ -123,11 +150,24 @@ struct LocalProviderDiscoveryServiceTests {
         #expect(result.endpoint == "http://localhost:1234/v1")
         #expect(result.status == .ready)
         #expect(model.name == "google/gemma-3-27b-it")
+        #expect(model.displayName == "Gemma 3 27B Instruct")
         #expect(model.endpoint == "http://localhost:1234/v1")
-        #expect(model.publisher == "google")
+        #expect(model.publisher == "Google")
+        #expect(model.family == "gemma3")
+        #expect(model.parameterSize == "27B")
+        #expect(model.quantization == "Q4_K_M")
+        #expect(model.format == "gguf")
+        #expect(model.contextWindowTokens == 32768)
+        #expect(model.loadedInstanceCount == 1)
+        #expect(model.sizeBytes == 18_038_862_643)
+        #expect(model.selectedVariant == "4bit")
         #expect(model.capabilities.contains(.chat))
         #expect(model.capabilities.contains(.streaming))
+        #expect(model.capabilities.contains(.anthropicCompatible))
         #expect(model.capabilities.contains(.openAICompatible))
+        #expect(model.capabilities.contains(.toolCalling))
+        #expect(model.capabilities.contains(.vision))
+        #expect(model.capabilities.contains(.reasoning))
         #expect(requests.map(\.url) == [
             "http://localhost:1234/api/v1/models",
             "http://localhost:1234/v1/models"

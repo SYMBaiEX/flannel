@@ -226,15 +226,55 @@ struct LocalProviderDiscoveryService: Sendable {
         providerKind: LLMProviderKind
     ) -> [LocalModelDescriptor] {
         response.data.map { model in
-            LocalModelDescriptor(
+            if providerKind == .lmStudio {
+                return makeLMStudioFallbackDescriptor(from: model, endpoint: endpoint)
+            }
+
+            return LocalModelDescriptor(
                 name: model.id,
-                displayName: model.id,
-                publisher: model.ownedBy,
+                displayName: model.displayName ?? model.id,
+                publisher: model.publisher ?? model.ownedBy,
                 providerKind: providerKind,
                 endpoint: endpoint,
+                family: model.architecture,
+                parameterSize: model.paramsString,
+                quantization: model.quantization?.name,
+                format: model.format,
+                contextWindowTokens: model.loadedInstances?
+                    .compactMap { $0.config?.contextLength }
+                    .first
+                    ?? model.maxContextLength,
+                loadedInstanceCount: model.loadedInstances?.count,
+                sizeBytes: model.sizeBytes,
+                selectedVariant: model.selectedVariant,
                 capabilities: openAICompatibleCapabilities(for: model.id)
             )
         }
+    }
+
+    private static func makeLMStudioFallbackDescriptor(
+        from model: OpenAICompatibleModelsDiscoveryResponse.Model,
+        endpoint: String
+    ) -> LocalModelDescriptor {
+        LocalModelDescriptor(
+            name: model.id,
+            displayName: model.displayName ?? model.id,
+            publisher: model.publisher ?? model.ownedBy,
+            providerKind: .lmStudio,
+            endpoint: endpoint,
+            family: model.architecture,
+            parameterSize: model.paramsString,
+            quantization: model.quantization?.name,
+            format: model.format,
+            contextWindowTokens: model.loadedInstances?
+                .compactMap { $0.config?.contextLength }
+                .first
+                ?? model.maxContextLength,
+            loadedInstanceCount: model.loadedInstances?.count ?? 0,
+            sizeBytes: model.sizeBytes,
+            selectedVariant: model.selectedVariant,
+            capabilities: lmStudioFallbackCapabilities(for: model)
+        )
     }
 
     private static func runningOllamaModelLookup(
@@ -295,6 +335,26 @@ struct LocalProviderDiscoveryService: Sendable {
         }
 
         return [.chat, .openAICompatible, .streaming]
+    }
+
+    private static func lmStudioFallbackCapabilities(
+        for model: OpenAICompatibleModelsDiscoveryResponse.Model
+    ) -> [ModelCapability] {
+        if model.modelType == "embedding" || isEmbeddingModelIdentifier(model.id) {
+            return [.embeddings, .openAICompatible]
+        }
+
+        var capabilities: Set<ModelCapability> = [.chat, .streaming, .openAICompatible, .anthropicCompatible]
+        if model.capabilities?.trainedForToolUse == true {
+            capabilities.insert(.toolCalling)
+        }
+        if model.capabilities?.vision == true {
+            capabilities.insert(.vision)
+        }
+        if model.capabilities?.reasoning != nil {
+            capabilities.insert(.reasoning)
+        }
+        return Array(capabilities).sorted { $0.rawValue < $1.rawValue }
     }
 
     private static func isEmbeddingModelIdentifier(_ modelIdentifier: String) -> Bool {
@@ -588,10 +648,34 @@ private struct OpenAICompatibleModelsDiscoveryResponse: Decodable {
     struct Model: Decodable {
         var id: String
         var ownedBy: String?
+        var publisher: String?
+        var modelType: String?
+        var displayName: String?
+        var architecture: String?
+        var quantization: LMStudioNativeModelsDiscoveryResponse.Quantization?
+        var sizeBytes: Int64?
+        var paramsString: String?
+        var loadedInstances: [LMStudioNativeModelsDiscoveryResponse.LoadedInstance]?
+        var maxContextLength: Int?
+        var format: String?
+        var capabilities: LMStudioNativeModelsDiscoveryResponse.Capabilities?
+        var selectedVariant: String?
 
         enum CodingKeys: String, CodingKey {
             case id
             case ownedBy = "owned_by"
+            case publisher
+            case modelType = "type"
+            case displayName = "display_name"
+            case architecture
+            case quantization
+            case sizeBytes = "size_bytes"
+            case paramsString = "params_string"
+            case loadedInstances = "loaded_instances"
+            case maxContextLength = "max_context_length"
+            case format
+            case capabilities
+            case selectedVariant = "selected_variant"
         }
     }
 }
