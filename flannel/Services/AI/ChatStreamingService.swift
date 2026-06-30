@@ -735,6 +735,7 @@ struct ChatStreamingService: Sendable {
                 request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
             }
         }
+        applyOpenAICompatibleProviderHeaders(to: &request, provider: provider)
 
         let payload = OpenAICompatibleChatRequestPayload(
             model: model,
@@ -770,6 +771,30 @@ struct ChatStreamingService: Sendable {
         )
         request.httpBody = try JSONEncoder().encode(payload)
         return request
+    }
+
+    private func applyOpenAICompatibleProviderHeaders(
+        to request: inout URLRequest,
+        provider: ProviderConfiguration
+    ) {
+        guard provider.kind == .openRouter else { return }
+
+        request.setValue("Flannel", forHTTPHeaderField: "X-OpenRouter-Title")
+        if let referer = openRouterReferer(from: provider.organizationIdentifier) {
+            request.setValue(referer, forHTTPHeaderField: "HTTP-Referer")
+        }
+    }
+
+    private func openRouterReferer(from rawValue: String?) -> String? {
+        guard let rawValue else { return nil }
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let components = URLComponents(string: trimmed),
+              let scheme = components.scheme?.lowercased(),
+              (scheme == "https" || scheme == "http"),
+              components.host != nil else {
+            return nil
+        }
+        return trimmed
     }
 
     private func makeAISDKBridgeRequest(

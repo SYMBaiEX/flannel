@@ -823,6 +823,33 @@ struct ChatStreamingServiceTests {
         #expect(request.url?.absoluteString == "https://api.perplexity.ai/chat/completions")
     }
 
+    @Test("OpenRouter request includes optional app attribution headers")
+    func openRouterRequestIncludesAttributionHeaders() throws {
+        let (keychain, reference, cleanup) = try makeTemporaryAPIKey()
+        defer { cleanup() }
+        let provider = ProviderConfiguration(
+            kind: .openRouter,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "OpenRouter",
+            endpoint: "https://openrouter.ai/api/v1",
+            modelIdentifier: "openai/gpt-5.5",
+            secretReference: reference.rawValue,
+            organizationIdentifier: "https://flannel.local"
+        )
+
+        let request = try ChatStreamingService(keychain: keychain).makeURLRequest(
+            for: ChatStreamingRequest(
+                provider: provider,
+                messages: [AssistantMessage(role: .user, text: "Hello")]
+            )
+        )
+
+        #expect(request.url?.absoluteString == "https://openrouter.ai/api/v1/chat/completions")
+        #expect(request.value(forHTTPHeaderField: "X-OpenRouter-Title") == "Flannel")
+        #expect(request.value(forHTTPHeaderField: "HTTP-Referer") == "https://flannel.local")
+    }
+
     @Test("Custom OpenAI-compatible endpoint can stream without an API key")
     func customOpenAICompatibleRequestAllowsMissingAPIKey() throws {
         let provider = ProviderConfiguration(
