@@ -89,13 +89,13 @@ struct FlannelShellModelsTests {
         ) == .cancelStreaming)
     }
 
-    @Test("Inspector sections stay stable when a chat has no artifacts yet")
-    func inspectorSectionsRemainAvailableWithoutArtifacts() {
+    @Test("Inspector sections stay minimal when a chat has no artifacts yet")
+    func inspectorSectionsStayMinimalWithoutArtifacts() {
         #expect(FlannelInspectorSection.availableSections(
             hasCompareArtifacts: false,
             hasSourceArtifacts: false,
             hasToolArtifacts: false
-        ) == FlannelInspectorSection.allCases)
+        ) == [.chatDetail])
         #expect(FlannelInspectorSection.defaultSection(
             hasCompareArtifacts: false,
             hasSourceArtifacts: false,

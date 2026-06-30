@@ -8402,13 +8402,15 @@ private struct InspectorSurface: View {
                     .accessibilityLabel("Collapse Artifacts")
                 }
 
-                InspectorSectionSelector(
-                    sections: availableSections,
-                    activeSection: activeSection,
-                    count: sectionCount,
-                    summary: sectionSummary,
-                    select: { activeSection = $0 }
-                )
+                if availableSections.count > 1 {
+                    InspectorSectionSelector(
+                        sections: availableSections,
+                        activeSection: activeSection,
+                        count: sectionCount,
+                        summary: sectionSummary,
+                        select: { activeSection = $0 }
+                    )
+                }
 
                 if !hasContextualArtifacts {
                     InspectorCompactEmptySummary(
