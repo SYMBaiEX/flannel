@@ -2601,8 +2601,10 @@ private struct SettingsSidebar: View {
                 .buttonStyle(.borderless)
                 .controlSize(.regular)
                 .focused($isExitSettingsFocused)
+                .keyboardShortcut(.escape, modifiers: [])
                 .help("Return to chat")
                 .accessibilityLabel("Exit Settings")
+                .accessibilityHint("Returns the sidebar to chat history and restores the chat surface.")
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Settings")
@@ -3791,6 +3793,18 @@ private struct ChatThreadHeader: View {
     var selectNextTranscriptSearchMatch: () -> Void
     var clearTranscriptSearch: () -> Void
 
+    private var visibleMessageCount: Int {
+        store.currentAssistantThread?.messages.filter { $0.role != .system }.count ?? 0
+    }
+
+    private var messageCountText: String {
+        "\(visibleMessageCount) message\(visibleMessageCount == 1 ? "" : "s")"
+    }
+
+    private var routeStatusText: String {
+        store.activeProvider?.providerModeChoiceTitle ?? "Local fallback"
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
@@ -3799,15 +3813,19 @@ private struct ChatThreadHeader: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 HStack(spacing: 8) {
-                    Label("Private chat", systemImage: "bubble.left.and.bubble.right")
+                    Label("Private", systemImage: "lock")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    if let thread = store.currentAssistantThread {
-                        Text("\(thread.messages.filter { $0.role != .system }.count) messages")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(messageCountText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(routeStatusText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Private chat, \(messageCountText), route \(routeStatusText)")
             }
 
             Spacer()
