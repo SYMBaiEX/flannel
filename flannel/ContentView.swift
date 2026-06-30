@@ -9911,7 +9911,7 @@ private struct ProviderRoutingCurrentMenuRow: View {
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(selectedProvider?.providerModeChoiceTitle ?? "Choose provider")
+                Text(selectedProvider?.modeBoundaryTitle ?? "Choose provider")
                 Text(detailText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -9925,14 +9925,10 @@ private struct ProviderRoutingCurrentMenuRow: View {
             return "Open Models & Providers to configure a chat route."
         }
 
-        var parts = [selectedProvider.accessMode.title]
-        if routingPolicy != .selectedProvider {
-            parts.append(routingPolicy.title)
-        }
-        if let readiness {
-            parts.append(readiness.text)
-        }
-        return parts.joined(separator: " • ")
+        return selectedProvider.providerPickerStatusLine(
+            readinessText: readiness?.text ?? "Check setup",
+            routingPolicy: routingPolicy
+        )
     }
 }
 
@@ -9950,8 +9946,8 @@ private struct ProviderRoutingPickerLabel: View {
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(selectedProvider?.providerModeChoiceTitle ?? "Choose provider")
-                    .font(.callout.weight(.medium))
+                Text(selectedProvider?.modeBoundaryTitle ?? "Choose provider")
+                    .font(.callout.weight(.semibold))
                     .lineLimit(1)
                 Text(labelDetail)
                     .font(.caption2)
@@ -9989,12 +9985,10 @@ private struct ProviderRoutingPickerLabel: View {
         let readinessText = readiness?.text ?? statusText
         guard let selectedProvider else { return readinessText }
 
-        var parts = [selectedProvider.accessMode.title]
-        if routingPolicy != .selectedProvider {
-            parts.append(routingPolicy.title)
-        }
-        parts.append(readinessText)
-        return parts.joined(separator: " • ")
+        return selectedProvider.providerPickerStatusLine(
+            readinessText: readinessText,
+            routingPolicy: routingPolicy
+        )
     }
 
     private var accessibilityLabel: String {
@@ -10062,7 +10056,7 @@ private struct ProviderRoutingMenuRow: View {
         } else if isPreferred {
             parts.append("Selected")
         }
-        parts.append(provider.providerModeSelectionDetail)
+        parts.append(provider.providerPickerRouteSummary)
         parts.append(readiness.text)
         return parts.joined(separator: " • ")
     }

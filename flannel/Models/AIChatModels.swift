@@ -399,7 +399,7 @@ extension ProviderConfiguration {
     }
 
     var providerPickerAccessibilityLabel: String {
-        "\(providerModeChoiceTitle), \(providerPickerRouteSummary)"
+        "\(modeBoundaryTitle), \(providerPickerRouteSummary)"
     }
 
     var providerModeSelectionTitle: String {
