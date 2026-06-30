@@ -76,10 +76,22 @@ This is a single-window experience: sidebar/chat/composer/artifact/settings tran
 
 ## Commit-tracking discipline
 
-- Scope each screenshot pass to one objective and commit it as one logical QA unit.
-- Record each QA pass in this file with commit hash, states captured, blockers/omitted states, and approver/reviewer.
+- Scope each product UI or testing slice to its own commit and one objective.
+- For every QA/test pass, append one ledger row that includes:
+  - `commit:` short or full SHA
+  - `slice:` what changed
+  - `evidence:` screenshot file names or command outputs
+  - `result:` pass / blocked
+  - `reviewer:` initials or handle
+- All screenshot and validation evidence must cite the commit hash that introduced the reviewed state.
+- Keep docs-only polish passes separate from app-source commits.
 - Prefer granular commit messages such as `docs(qc): add sidebar and settings handoff checks`.
 - Avoid bundling unrelated feature changes into the same commit.
+
+## QA commit ledger
+
+- Use this compact format when appending new QA/testing entries:
+  - `2026-06-29 | commit: <hash> | slice: <product|ui|testing> | evidence: <artifact paths + hashes> | result: <pass|blocked: reason> | reviewer: <name|handle>`
 
 ## Local-first tool approvals
 

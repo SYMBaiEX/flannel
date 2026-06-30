@@ -28,9 +28,14 @@ This repository documents a working implementation, not a roadmap-only feature l
 
 ## Commit-tracking discipline
 
-- For UI architecture or screenshot-related updates, create one focused commit for each pass (or each state group if changes are independent).
-- Use a granular commit style that names scope and state first, then action, e.g. `docs(ui): lock in sidebar + settings shell direction`.
-- Record screenshot-linked changes in the QA doc so each commit can be traced to a visible state review path.
+- For product, UI, and testing slices, use one commit per slice (single objective per commit).
+- Keep commit scope strict: no cross-slice refactors, no mixed source + docs in the same pass.
+- Use commit prefixes by intent, e.g. `feat(ui): ...`, `fix(tests): ...`, `docs(qc): ...`.
+- Record QA/validation references in `docs/MACOS26_CHAT_UI_VISUAL_QA.md` with the exact commit hash.
+- Screenshot or validation note requirements:
+  - every UI state bundle/screenshot set must be tied to a committed hash.
+  - every command/output validation note must include the commit hash that introduced the change.
+- Docs-only passes must stay separate from app-source changes and use docs-only commit messages.
 
 ## Provider behavior (implemented)
 
