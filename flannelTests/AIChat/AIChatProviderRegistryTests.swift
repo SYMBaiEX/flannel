@@ -116,6 +116,82 @@ struct AIChatProviderRegistryTests {
     }
 
     @MainActor
+    @Test("Chat routing block reasons distinguish setup, capability, readiness, and CLI failures")
+    func chatRoutingBlockReasonsDistinguishProviderFailures() throws {
+        let (_, store) = try makeLoadedStore()
+        store.preferences.localOnlyMode = false
+        store.preferences.allowCloudProviders = true
+
+        let disabledProvider = ProviderConfiguration(
+            kind: .lmStudio,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "Disabled Local",
+            endpoint: "http://localhost:1234/v1",
+            modelIdentifier: "local-model",
+            isEnabled: false,
+            connectionStatus: .ready,
+            capabilities: [.chat, .streaming],
+            supportsStreaming: true
+        )
+        let embeddingOnlyProvider = ProviderConfiguration(
+            kind: .lmStudio,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "Embedding Only",
+            endpoint: "http://localhost:1234/v1",
+            modelIdentifier: "text-embedding-model",
+            isEnabled: true,
+            connectionStatus: .ready,
+            capabilities: [.embeddings],
+            supportsStreaming: true
+        )
+        let nonStreamingProvider = ProviderConfiguration(
+            kind: .lmStudio,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "Non Streaming",
+            endpoint: "http://localhost:1234/v1",
+            modelIdentifier: "local-model",
+            isEnabled: true,
+            connectionStatus: .ready,
+            capabilities: [.chat],
+            supportsStreaming: false
+        )
+        let failedReadinessProvider = ProviderConfiguration(
+            kind: .ollama,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "Unavailable Ollama",
+            endpoint: "http://localhost:11434",
+            modelIdentifier: "llama3.1",
+            isEnabled: true,
+            connectionStatus: .needsAttention,
+            lastErrorMessage: "Connection refused.",
+            capabilities: [.chat, .streaming],
+            supportsStreaming: true
+        )
+        let invalidCLIProvider = ProviderConfiguration(
+            kind: .claudeCodeCLI,
+            accessMode: .subscriptionCLI,
+            privacyScope: .localCLI,
+            displayName: "Claude Code CLI",
+            endpoint: "claude",
+            modelIdentifier: "claude-subscription",
+            isEnabled: true,
+            connectionStatus: .ready,
+            capabilities: [.chat, .streaming],
+            supportsStreaming: true
+        )
+
+        #expect(store.chatRoutingBlockReason(for: disabledProvider) == "Enable this provider before routing chat to it.")
+        #expect(store.chatRoutingBlockReason(for: embeddingOnlyProvider) == "Chat capability is disabled for this provider configuration.")
+        #expect(store.chatRoutingBlockReason(for: nonStreamingProvider) == "Streaming is disabled for this provider configuration.")
+        #expect(store.chatRoutingBlockReason(for: failedReadinessProvider) == "Connection refused.")
+        #expect(store.chatRoutingBlockReason(for: invalidCLIProvider)?.contains("print") == true)
+    }
+
+    @MainActor
     @Test("Preferred cloud provider is skipped while local-only mode is enabled")
     func activeProviderSkipsCloudProviderWhenLocalOnlyModeIsEnabled() throws {
         let (_, store) = try makeLoadedStore()

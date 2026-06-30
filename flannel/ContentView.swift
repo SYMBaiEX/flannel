@@ -6562,9 +6562,8 @@ private struct ProviderCard: View {
 
     private var chatReadinessMessage: String? {
         guard let provider else { return nil }
-        if canUseForChat { return nil }
-        if !provider.isEnabled {
-            return "Enable this provider before routing chat to it."
+        if let blockReason = store.chatRoutingBlockReason(for: provider) {
+            return blockReason
         }
         if let blockingDiagnostic = setupReport?.diagnostics.first(where: \.isBlocking) {
             return blockingDiagnostic.message
@@ -6575,7 +6574,7 @@ private struct ProviderCard: View {
         if !provider.supportsStreaming {
             return "Streaming is disabled for this provider configuration."
         }
-        return "No live streaming transport is available for this provider mode yet."
+        return nil
     }
 
     private func modelBinding(fallback: String) -> Binding<String> {

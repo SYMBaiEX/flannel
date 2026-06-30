@@ -3372,6 +3372,53 @@ final class WorkspaceStore {
         return true
     }
 
+    func chatRoutingBlockReason(for provider: ProviderConfiguration) -> String? {
+        guard !isProviderRunnableForChat(provider) else { return nil }
+
+        if !provider.isEnabled {
+            return "Enable this provider before routing chat to it."
+        }
+
+        let setupReport = ProviderSetupService.shared.report(
+            for: provider,
+            preferences: preferences
+        )
+        if let blockingDiagnostic = setupReport.diagnostics.first(where: \.isBlocking) {
+            return blockingDiagnostic.message
+        }
+        if let routingDiagnostic = setupReport.diagnostics.first(where: { $0.field == "privacyScope" }) {
+            return routingDiagnostic.message
+        }
+
+        if !provider.capabilities.contains(.chat) {
+            return "Chat capability is disabled for this provider configuration."
+        }
+        if !provider.supportsStreaming {
+            return "Streaming is disabled for this provider configuration."
+        }
+        if !provider.runtimePolicy.supportsChatTransport {
+            return "This provider route is not connected to a Flannel chat streaming transport."
+        }
+
+        switch provider.connectionStatus {
+        case .needsAttention:
+            return provider.lastErrorMessage ?? "This provider needs a successful readiness check before chat routing."
+        case .rateLimited:
+            return provider.lastErrorMessage ?? "This provider is rate limited; try again after the provider recovers."
+        case .syncing:
+            return "Provider readiness is still checking. Try routing after the check completes."
+        case .ready, .disconnected:
+            break
+        }
+
+        if provider.accessMode == .subscriptionCLI,
+           let cliDiagnostic = ProviderSetupService.shared.subscriptionCLIDiagnostic(for: provider) {
+            return cliDiagnostic.message
+        }
+
+        return "Run provider readiness again or review this route before using it for chat."
+    }
+
     private func cachedProviderReadinessAllowsChat(_ provider: ProviderConfiguration) -> Bool {
         switch provider.connectionStatus {
         case .ready, .disconnected:
