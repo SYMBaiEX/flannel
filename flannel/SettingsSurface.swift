@@ -2403,15 +2403,11 @@ private struct SettingsRouteHeader: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: tab.systemImage)
-                .font(.title3)
+                .font(.title2)
                 .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.primary)
+                .foregroundStyle(.secondary)
                 .frame(width: 34, height: 34)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .strokeBorder(FlannelSystemColor.quietStroke, lineWidth: FlannelSpacing.hairline)
-                }
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(tab.title)
