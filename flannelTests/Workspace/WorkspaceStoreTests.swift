@@ -779,6 +779,57 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Knowledge rebuild writes failed manifest metadata for unreadable source")
+    func knowledgeRebuildWritesFailedManifestMetadataForUnreadableSource() throws {
+        let (_, store) = try makeLoadedStore()
+        let storageURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("flannel-failed-vector-store-\(UUID().uuidString)", isDirectory: true)
+            .standardizedFileURL
+        let sourceURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("flannel-unreadable-source-\(UUID().uuidString).txt")
+            .standardizedFileURL
+        defer {
+            try? FileManager.default.removeItem(at: storageURL)
+            try? FileManager.default.removeItem(at: sourceURL)
+        }
+
+        try "Index source that will disappear before rebuild.".write(
+            to: sourceURL,
+            atomically: true,
+            encoding: .utf8
+        )
+        store.preferences.localStorageLabel = storageURL.path
+        store.knowledgeSources = [
+            KnowledgeSource(
+                title: "Unreadable source",
+                kind: .file,
+                location: sourceURL.path,
+                status: .queued,
+                embeddingModelIdentifier: LocalEmbeddingService.deterministicModelIdentifier,
+                isWatched: true
+            )
+        ]
+        store.knowledgeIndexManifests = []
+        try FileManager.default.removeItem(at: sourceURL)
+
+        store.rebuildKnowledgeIndexManifests(now: Date(timeIntervalSince1970: 2_000_000))
+
+        let source = try #require(store.knowledgeSources.first)
+        let manifest = try #require(store.knowledgeIndexManifests.first(where: { $0.sourceID == source.id }))
+
+        #expect(source.status == .failed)
+        #expect(source.documentCount == 0)
+        #expect(source.chunkCount == 0)
+        #expect(source.embeddingRecordCount == 0)
+        #expect(source.vectorDimension == nil)
+        #expect(source.lastErrorMessage == "No readable local documents were found for this source.")
+        #expect(manifest.status == .failed)
+        #expect(manifest.embeddingState == .failed)
+        #expect(manifest.lastErrorMessage == source.lastErrorMessage)
+        #expect(manifest.sourceID == source.id)
+    }
+
+    @MainActor
     @Test("Knowledge rebuild can persist provider-backed embeddings and retrieve with matching query vectors")
     func knowledgeRebuildUsesProviderBackedEmbeddings() async throws {
         let (_, store) = try makeLoadedStore()
@@ -4065,6 +4116,57 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Chat history filters by previous seven-day boundary")
+    func chatHistoryFiltersByPreviousSevenDaysBoundary() throws {
+        let (_, store) = try makeLoadedStore()
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let startOfToday = Calendar.autoupdatingCurrent.startOfDay(for: now)
+        let lowerBound = Calendar.autoupdatingCurrent.date(byAdding: .day, value: -7, to: startOfToday) ?? startOfToday
+        let project = WorkspaceProject(title: "Boundary Workspace")
+        let boundaryThread = AssistantThread(
+            title: "Boundary thread",
+            messages: [
+                AssistantMessage(
+                    role: .assistant,
+                    text: "Boundary included",
+                    referencedEntityIDs: [project.id],
+                    providerDisplayName: "Local Ollama",
+                    modelIdentifier: "llama3.1"
+                )
+            ],
+            pinnedProjectID: project.id,
+            updatedAt: lowerBound
+        )
+        let staleThread = AssistantThread(
+            title: "Stale thread",
+            messages: [
+                AssistantMessage(
+                    role: .assistant,
+                    text: "Stale excluded",
+                    referencedEntityIDs: [project.id],
+                    providerDisplayName: "Local Ollama",
+                    modelIdentifier: "llama3.1"
+                )
+            ],
+            pinnedProjectID: project.id,
+            updatedAt: lowerBound.addingTimeInterval(-1)
+        )
+
+        store.projects = [project]
+        store.assistantThreads = [staleThread, boundaryThread]
+
+        let filters = ChatHistoryFilters(
+            providerDisplayName: "Local Ollama",
+            modelIdentifier: "llama3.1",
+            projectID: project.id,
+            dateFilter: .previousSevenDays
+        )
+        let results = store.chatHistoryThreads(filters: filters, now: now)
+
+        #expect(results.map(\.id) == [boundaryThread.id])
+    }
+
+    @MainActor
     @Test("Filtered chat search only returns matching provider threads")
     func filteredChatSearchOnlyReturnsMatchingProviderThreads() throws {
         let (_, store) = try makeLoadedStore()
@@ -4251,6 +4353,77 @@ struct WorkspaceStoreTests {
         #expect(reloadedRun.createdAt == Date(timeIntervalSince1970: 1_700_000_000))
         #expect(reloadedSnapshot.providerDisplayName == "Stable provider")
         #expect(reloadedSnapshot.modelIdentifier == "stable-model")
+    }
+
+    @MainActor
+    @Test("Model comparison run captures provider identity and privacy metadata")
+    func modelComparisonRunCapturesProviderIdentityMetadata() throws {
+        let container = try ModelContainer(
+            for: Item.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let store = WorkspaceStore()
+        try store.loadOrCreate(in: context)
+        store.modelComparisonRuns.removeAll()
+        store.providerConfigurations.removeAll()
+
+        let localProvider = ProviderConfiguration(
+            id: UUID(uuidString: "4d8d4d58-9bf6-4f7e-9fd8-1f9e0f4a9d2b")!,
+            kind: .lmStudio,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "Snapshot provider",
+            endpoint: "http://localhost:11434",
+            modelIdentifier: "stable-v1",
+            isEnabled: true,
+            connectionStatus: .ready,
+            supportsStreaming: true
+        )
+        let cloudProvider = ProviderConfiguration(
+            id: UUID(uuidString: "d31f6f20-9f58-4e7b-b6b7-0cf2f0db4f8a")!,
+            kind: .openAI,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "Snapshot cloud",
+            endpoint: "https://api.openai.com/v1",
+            modelIdentifier: "gpt-4.1-mini",
+            isEnabled: true,
+            connectionStatus: .ready,
+            supportsStreaming: true
+        )
+        store.providerConfigurations = [localProvider, cloudProvider]
+
+        let runID = try #require(
+            store.createModelComparisonRun(
+                prompt: "Capture provider identity metadata.",
+                providerIDs: [localProvider.id, cloudProvider.id],
+                now: Date(timeIntervalSince1970: 1_810_000_000)
+            )
+        )
+
+        if let providerIndex = store.providerConfigurations.firstIndex(where: { $0.id == localProvider.id }) {
+            store.providerConfigurations[providerIndex].displayName = "Mutated name"
+            store.providerConfigurations[providerIndex].modelIdentifier = "mutated-model"
+            store.providerConfigurations[providerIndex].accessMode = .apiKey
+            store.providerConfigurations[providerIndex].privacyScope = .externalAPI
+        }
+
+        let run = try #require(store.modelComparisonRuns.first(where: { $0.id == runID }))
+        let localSnapshot = try #require(run.results.first(where: { $0.providerID == localProvider.id }))
+        let cloudSnapshot = try #require(run.results.first(where: { $0.providerID == cloudProvider.id }))
+
+        #expect(localSnapshot.providerKind == .lmStudio)
+        #expect(localSnapshot.accessMode == .localServer)
+        #expect(localSnapshot.privacyScope == .localOnly)
+        #expect(localSnapshot.providerDisplayName == "Snapshot provider")
+        #expect(localSnapshot.modelIdentifier == "stable-v1")
+
+        #expect(cloudSnapshot.providerKind == .openAI)
+        #expect(cloudSnapshot.accessMode == .apiKey)
+        #expect(cloudSnapshot.privacyScope == .externalAPI)
+        #expect(cloudSnapshot.providerDisplayName == "Snapshot cloud")
+        #expect(cloudSnapshot.modelIdentifier == "gpt-4.1-mini")
     }
 
     @MainActor
