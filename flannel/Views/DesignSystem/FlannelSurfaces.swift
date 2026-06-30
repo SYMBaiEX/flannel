@@ -43,11 +43,11 @@ enum FlannelPaneSurface {
     var strokeOpacity: Double {
         switch self {
         case .subtle:
-            0.28
+            0.22
         case .regular:
-            0.42
+            0.34
         case .prominent:
-            0.58
+            0.46
         }
     }
 }
@@ -119,12 +119,57 @@ private struct FlannelFloatingDockSurfaceModifier: ViewModifier {
             .glassEffect(.regular.tint(tint).interactive(true), in: shape)
             .overlay {
                 shape.strokeBorder(
-                    FlannelSystemColor.separator.opacity(0.22),
+                    FlannelSystemColor.chromeStrokeStrong,
                     lineWidth: FlannelSpacing.hairline
                 )
             }
-            .shadow(color: .black.opacity(0.12), radius: 22, x: 0, y: 14)
-            .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 1)
+            .shadow(color: FlannelShadow.floatingPrimary, radius: 22, x: 0, y: 14)
+            .shadow(color: FlannelShadow.floatingSecondary, radius: 4, x: 0, y: 1)
+    }
+}
+
+private struct FlannelChromePanelModifier: ViewModifier {
+    var cornerRadius: CGFloat
+    var tint: Color?
+    var interactive: Bool
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        content
+            .glassEffect(.regular.tint(tint).interactive(interactive), in: shape)
+            .background(FlannelSystemColor.chromeFill, in: shape)
+            .overlay {
+                shape.strokeBorder(
+                    interactive ? FlannelSystemColor.chromeStrokeStrong : FlannelSystemColor.chromeStroke,
+                    lineWidth: FlannelSpacing.hairline
+                )
+            }
+    }
+}
+
+struct FlannelShellBackdrop: View {
+    var body: some View {
+        LinearGradient(
+            colors: [
+                Color(nsColor: .windowBackgroundColor),
+                Color(nsColor: .underPageBackgroundColor),
+                Color(nsColor: .windowBackgroundColor)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .overlay(alignment: .bottom) {
+            LinearGradient(
+                colors: [
+                    Color.clear,
+                    Color.white.opacity(0.035)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .ignoresSafeArea()
     }
 }
 
@@ -165,5 +210,13 @@ extension View {
         tint: Color? = nil
     ) -> some View {
         modifier(FlannelFloatingDockSurfaceModifier(cornerRadius: cornerRadius, tint: tint))
+    }
+
+    func flannelChromePanel(
+        cornerRadius: CGFloat = FlannelRadius.xl,
+        tint: Color? = nil,
+        interactive: Bool = false
+    ) -> some View {
+        modifier(FlannelChromePanelModifier(cornerRadius: cornerRadius, tint: tint, interactive: interactive))
     }
 }
