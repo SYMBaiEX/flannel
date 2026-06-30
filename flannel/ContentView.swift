@@ -2088,8 +2088,7 @@ private struct AppSidebar: View {
                     provider: store.activeProvider,
                     localOnlyMode: store.preferences.localOnlyMode ?? true,
                     allowCloudProviders: store.preferences.allowCloudProviders ?? false,
-                    openSettings: { enterSettings(.general) },
-                    openModels: { enterSettings(.models) }
+                    openSettings: { enterSettings(.general) }
                 )
                 .transition(.opacity)
             }
@@ -2729,107 +2728,15 @@ private struct SidebarFooter: View {
     var localOnlyMode: Bool
     var allowCloudProviders: Bool
     var openSettings: () -> Void
-    var openModels: () -> Void
 
-    var body: some View {
-        VStack(spacing: 7) {
-            FlannelSeparator(opacity: 0.5)
-
-            VStack(spacing: 2) {
-                SidebarFooterRow(
-                    title: "Settings",
-                    detail: "Preferences, models, privacy",
-                    systemImage: "gearshape",
-                    trailingText: "⌘,",
-                    shortcutDescription: "Command comma",
-                    action: openSettings
-                )
-
-                SidebarProviderStatusRow(
-                    provider: provider,
-                    localOnlyMode: localOnlyMode,
-                    allowCloudProviders: allowCloudProviders,
-                    action: openModels
-                )
-            }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 10)
-        }
-        .padding(.top, 6)
-    }
-}
-
-private struct SidebarFooterRow: View {
-    var title: String
-    var detail: String
-    var systemImage: String
-    var tint: Color = .secondary
-    var trailingText: String?
-    var shortcutDescription: String?
-    var action: () -> Void
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 9) {
-                Image(systemName: systemImage)
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(tint)
-                    .frame(width: 18)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    Text(detail)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 6)
-
-                if let trailingText {
-                    Text(trailingText)
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .background(isHovering ? Color.primary.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-        .onHover { isHovering = $0 }
-        .accessibilityLabel(title)
-        .accessibilityValue(detail)
-        .accessibilityHint(accessibilityHint)
-    }
-
-    private var accessibilityHint: String {
-        guard let shortcutDescription else { return detail }
-        return "\(detail). Keyboard shortcut \(shortcutDescription)."
-    }
-}
-
-private struct SidebarProviderStatusRow: View {
-    var provider: ProviderConfiguration?
-    var localOnlyMode: Bool
-    var allowCloudProviders: Bool
-    var action: () -> Void
-    @State private var isHovering = false
-
-    private var statusTitle: String {
+    private var providerStatusTitle: String {
         if let provider {
             return provider.providerModeChoiceTitle
         }
         return "No active model"
     }
 
-    private var statusDetail: String {
+    private var providerStatusDetail: String {
         if let provider {
             return "\(privacyTitle) - \(provider.accessMode.title)"
         }
@@ -2853,70 +2760,44 @@ private struct SidebarProviderStatusRow: View {
         return provider?.privacyScope.title ?? "Private"
     }
 
-    private var statusIcon: String {
-        if provider == nil {
-            return "exclamationmark.circle"
-        }
-
-        if localOnlyMode {
-            return "lock"
-        }
-
-        return provider?.privacyScope == .externalAPI ? "network" : provider?.accessMode.icon ?? "cpu"
-    }
-
-    private var tint: Color {
-        if provider == nil {
-            return .orange
-        }
-
-        if localOnlyMode {
-            return .green
-        }
-
-        if provider?.privacyScope == .externalAPI {
-            return allowCloudProviders ? .blue : .orange
-        }
-
-        return .secondary
-    }
-
     var body: some View {
-        Button(action: action) {
+        VStack(spacing: 7) {
+            FlannelSeparator(opacity: 0.5)
+
             HStack(spacing: 9) {
-                Image(systemName: statusIcon)
+                Button(action: openSettings) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Settings")
+                                .font(.callout.weight(.medium))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            Text("\(providerStatusTitle) - \(providerStatusDetail)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    } icon: {
+                        Image(systemName: "gearshape")
+                            .frame(width: 18)
+                    }
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(tint)
-                    .frame(width: 18)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(statusTitle)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    Text(statusDetail)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    .labelStyle(.titleAndIcon)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-
-                Spacer(minLength: 6)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+                .buttonStyle(.borderless)
+                .controlSize(.regular)
+                .foregroundStyle(.secondary)
+                .help("Open Settings. \(providerStatusTitle), \(providerStatusDetail)")
+                .accessibilityLabel("Settings")
+                .accessibilityValue("\(providerStatusTitle), \(providerStatusDetail)")
+                .accessibilityHint("Open preferences, models, and privacy settings.")
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .padding(.horizontal, 14)
+            .padding(.bottom, 10)
         }
-        .buttonStyle(.plain)
-        .background(isHovering ? Color.primary.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-        .onHover { isHovering = $0 }
-        .help("Open Models and Providers settings")
-        .accessibilityLabel("Provider and privacy status")
-        .accessibilityValue("\(statusTitle), \(statusDetail)")
+        .padding(.top, 6)
     }
 }
 
