@@ -4805,8 +4805,9 @@ private struct Composer: View {
                 .buttonStyle(.borderless)
                 .controlSize(.regular)
                 .disabled(isStreamingResponse)
-                .help("Attach files")
+                .help(attachHelpText)
                 .accessibilityLabel("Attach files")
+                .accessibilityHint(attachHelpText)
 
                 if !isStreamingResponse {
                     Button {
@@ -4820,8 +4821,9 @@ private struct Composer: View {
                     .buttonStyle(.borderless)
                     .controlSize(.regular)
                     .disabled(!canComparePrompt)
-                    .help("Compare with multiple models")
+                    .help(compareHelpText)
                     .accessibilityLabel("Compare with multiple models")
+                    .accessibilityHint(compareHelpText)
                 }
 
                 if isStreamingResponse {
@@ -4852,8 +4854,9 @@ private struct Composer: View {
                 .controlSize(.regular)
                 .keyboardShortcut(.return, modifiers: [.command])
                 .disabled(isStreamingResponse || !canSubmit)
-                .help("Send message")
+                .help(sendHelpText)
                 .accessibilityLabel("Send message")
+                .accessibilityHint(sendHelpText)
             }
         }
         .dropDestination(for: URL.self) { urls, _ in
@@ -4867,6 +4870,11 @@ private struct Composer: View {
         }
         .onChange(of: focusNonce) { _, _ in
             isEditorFocused = true
+        }
+        .onChange(of: attachmentImportError) { _, newValue in
+            if let newValue {
+                announceAttachmentImportError(newValue)
+            }
         }
         .fileImporter(
             isPresented: $isFileImporterPresented,
@@ -4892,6 +4900,24 @@ private struct Composer: View {
         return FlannelSystemColor.quietStroke.opacity(0.72)
     }
 
+    private var attachHelpText: String {
+        isStreamingResponse ? "Wait for the current response to finish before attaching files." : "Attach files to include in the next message."
+    }
+
+    private var compareHelpText: String {
+        canComparePrompt ? "Compare the current prompt across multiple runnable models." : "Type a prompt before comparing models."
+    }
+
+    private var sendHelpText: String {
+        if isStreamingResponse {
+            return "Stop the current response before sending another message."
+        }
+        if canSubmit {
+            return "Send the composer text and attachments. Keyboard shortcut Command Return."
+        }
+        return "Type a message or attach a file to enable Send."
+    }
+
     private func importAttachments(from urls: [URL]) {
         let result = ChatAttachmentService().importAttachments(from: urls)
         if !result.attachments.isEmpty {
@@ -4902,6 +4928,14 @@ private struct Composer: View {
         attachmentImportError = result.failures.first.map {
             "Could not attach \($0.url.lastPathComponent): \($0.message)"
         }
+    }
+
+    private func announceAttachmentImportError(_ message: String) {
+        NSAccessibility.post(
+            element: NSApp as Any,
+            notification: .announcementRequested,
+            userInfo: [.announcement: message]
+        )
     }
 
     private func removeAttachment(_ attachment: AIChatAttachment) {
