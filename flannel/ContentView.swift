@@ -2848,44 +2848,14 @@ private struct SidebarFooter: View {
         return provider == nil ? .warning : .neutral
     }
 
-    private var footerTint: Color? {
-        switch privacyTone {
-        case .accent:
-            return Color.accentColor.opacity(0.08)
-        case .warning:
-            return Color.orange.opacity(0.08)
-        case .danger:
-            return Color.red.opacity(0.08)
-        case .success:
-            return Color.green.opacity(0.08)
-        case .info:
-            return Color.blue.opacity(0.08)
-        case .custom(let color):
-            return color.opacity(0.08)
-        case .neutral:
-            return nil
-        }
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             FlannelSeparator(opacity: 0.5)
 
-            HStack(spacing: 7) {
-                SidebarFooterIconButton(
-                    title: "Profile",
-                    systemImage: "person.crop.circle",
-                    action: openProfile
-                )
-                .help("Open profile and workspace settings")
-                .accessibilityHint("Opens General settings inside this window.")
-
-                Divider()
-                    .frame(height: 28)
-
+            HStack(spacing: 6) {
                 Button(action: openModels) {
                     Label {
-                        VStack(alignment: .leading, spacing: 5) {
+                        VStack(alignment: .leading, spacing: 4) {
                             Text(providerStatusTitle)
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(.primary)
@@ -2893,20 +2863,15 @@ private struct SidebarFooter: View {
                                 .truncationMode(.middle)
 
                             HStack(spacing: 5) {
-                                FlannelStatusChip(
-                                    privacyTitle,
-                                    systemImage: privacyIcon,
-                                    tone: privacyTone,
-                                    prominence: .subtle
-                                )
-                                .font(.caption2)
+                                Label(privacyTitle, systemImage: privacyIcon)
+                                    .foregroundStyle(privacyTone.color)
 
                                 Text(providerStatusDetail)
-                                    .font(.caption2)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                             }
+                            .font(.caption2)
                         }
                     } icon: {
                         Image(systemName: provider == nil ? "exclamationmark.triangle" : "cpu")
@@ -2917,7 +2882,7 @@ private struct SidebarFooter: View {
                     .symbolRenderingMode(.hierarchical)
                     .labelStyle(.titleAndIcon)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 7)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 6)
                     .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
@@ -2928,8 +2893,13 @@ private struct SidebarFooter: View {
                 .accessibilityValue("\(providerStatusTitle), \(privacyTitle), \(providerStatusDetail)")
                 .accessibilityHint("Opens Models and Providers settings inside this window.")
 
-                Divider()
-                    .frame(height: 28)
+                SidebarFooterIconButton(
+                    title: "Profile",
+                    systemImage: "person.crop.circle",
+                    action: openProfile
+                )
+                .help("Open profile and workspace settings")
+                .accessibilityHint("Opens General settings inside this window.")
 
                 SidebarFooterIconButton(
                     title: "Settings",
@@ -2939,8 +2909,8 @@ private struct SidebarFooter: View {
                 .help("Open Settings")
                 .accessibilityHint("Opens Settings inside this window.")
             }
-            .padding(7)
-            .flannelGlassSurface(.regular, tint: footerTint, interactive: false, cornerRadius: 12)
+            .padding(6)
+            .flannelPaneSurface(.subtle, cornerRadius: 12)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         }
@@ -2957,7 +2927,7 @@ private struct SidebarFooterIconButton: View {
             Image(systemName: systemImage)
                 .font(.callout.weight(.medium))
                 .symbolRenderingMode(.hierarchical)
-                .frame(width: 28, height: 32)
+                .frame(width: 28, height: 30)
                 .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .buttonStyle(.borderless)
