@@ -2122,22 +2122,15 @@ private struct AppSidebar: View {
 
     private var conversationSidebar: some View {
         VStack(spacing: 0) {
-            AppIdentity()
-                .padding(.horizontal, 14)
-                .padding(.top, 14)
-                .padding(.bottom, 10)
-
-            newChatControl
-                .padding(.horizontal, 14)
-                .padding(.bottom, 8)
-
-            sidebarSearchField
-                .padding(.horizontal, 14)
-                .padding(.bottom, 10)
-
-            sidebarRefinementControl
-                .padding(.horizontal, 14)
-                .padding(.bottom, 8)
+            VStack(spacing: FlannelSpacing.sidebarSectionSpacing) {
+                AppIdentity()
+                newChatControl
+                sidebarSearchField
+                sidebarRefinementControl
+            }
+            .padding(FlannelSpacing.sidebarInset)
+            .padding(.top, FlannelSpacing.sidebarInset)
+            .padding(.bottom, 8)
 
             List(selection: selectedThreadListBinding) {
                 if query.isEmpty {
@@ -2190,6 +2183,8 @@ private struct AppSidebar: View {
                 }
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            .padding(.top, 2)
         }
     }
 
@@ -2199,7 +2194,10 @@ private struct AppSidebar: View {
             placeholder: "Search chats",
             focusRequest: searchFocusRequest
         )
-        .frame(height: 28)
+        .frame(height: 30)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .flannelChromePanel(cornerRadius: 14)
         .accessibilityLabel("Search chats")
     }
 
@@ -2213,6 +2211,9 @@ private struct AppSidebar: View {
             }
             .buttonStyle(.plain)
             .controlSize(.regular)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .flannelChromePanel(cornerRadius: 16, tint: Color.accentColor.opacity(0.06), interactive: true)
             .help("New Chat")
             .accessibilityLabel("New Chat")
         } else {
@@ -2237,6 +2238,9 @@ private struct AppSidebar: View {
             }
             .menuStyle(.borderlessButton)
             .controlSize(.regular)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .flannelChromePanel(cornerRadius: 16, tint: Color.accentColor.opacity(0.06), interactive: true)
             .help("New Chat")
             .accessibilityLabel("New Chat")
         }
@@ -2373,6 +2377,12 @@ private struct AppSidebar: View {
 
             Spacer(minLength: 6)
 
+            if activeSidebarRefinementCount > 0 {
+                CapsuleLabel("\(activeSidebarRefinementCount)", icon: "line.3.horizontal.decrease.circle")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+
             Text(sidebarRefinementSummary)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -2394,6 +2404,9 @@ private struct AppSidebar: View {
             }
         }
         .font(.caption)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .flannelChromePanel(cornerRadius: 14)
     }
 
     private func threadRow(_ thread: AssistantThread) -> some View {
@@ -2860,12 +2873,10 @@ private struct SidebarFooter: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            FlannelSeparator(opacity: 0.5)
-
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Button(action: openModels) {
                     Label {
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 5) {
                             Text(providerStatusTitle)
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(.primary)
@@ -2919,8 +2930,8 @@ private struct SidebarFooter: View {
                 .help("Open Settings")
                 .accessibilityHint("Opens Settings inside this window.")
             }
-            .padding(6)
-            .flannelPaneSurface(.subtle, cornerRadius: 12)
+            .padding(8)
+            .flannelChromePanel(cornerRadius: 16)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         }
@@ -2937,32 +2948,38 @@ private struct SidebarFooterIconButton: View {
             Image(systemName: systemImage)
                 .font(.callout.weight(.medium))
                 .symbolRenderingMode(.hierarchical)
-                .frame(width: 28, height: 30)
+                .frame(width: 30, height: 30)
                 .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .buttonStyle(.borderless)
         .controlSize(.small)
         .foregroundStyle(.secondary)
+        .flannelGlassCapsule(.clear, interactive: true)
         .accessibilityLabel(title)
     }
 }
 
 private struct AppIdentity: View {
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(alignment: .center, spacing: 10) {
             Image(systemName: "sparkles.square.filled.on.square")
-                .font(.title2)
+                .font(.title3.weight(.semibold))
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(Color.accentColor)
-                .frame(width: 28)
+                .frame(width: 28, height: 28)
+                .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Flannel")
-                    .font(.headline)
+                .font(.headline)
                 Text("Local-first AI chat")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+
+            Spacer(minLength: 8)
+
+            FlannelStatusChip("Desktop", systemImage: "macwindow", tone: .neutral)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -2986,6 +3003,22 @@ private struct SidebarThreadRow: View {
 
     private var showsQuickActions: Bool {
         isHovering || isSelected
+    }
+
+    private var rowShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+    }
+
+    private var rowBackgroundStyle: AnyShapeStyle {
+        if isSelected {
+            return AnyShapeStyle(FlannelSystemColor.sidebarSelectionTint)
+        }
+
+        if isHovering {
+            return AnyShapeStyle(Color.primary.opacity(0.045))
+        }
+
+        return AnyShapeStyle(Color.clear)
     }
 
     private var lastMessagePreview: String? {
@@ -3027,7 +3060,7 @@ private struct SidebarThreadRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 6) {
+        HStack(alignment: .center, spacing: 8) {
             Button(action: choose) {
                 HStack(alignment: .top, spacing: 9) {
                     Image(systemName: isArchived ? "archivebox" : "bubble.left")
@@ -3063,12 +3096,8 @@ private struct SidebarThreadRow: View {
                             }
 
                             if let folder {
-                                Label(folder.title, systemImage: folder.symbolName)
-                                    .labelStyle(.titleAndIcon)
+                                CapsuleLabel(folder.title, icon: folder.symbolName)
                                     .font(.caption2.weight(.medium))
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 1)
-                                    .background(.quaternary.opacity(0.55), in: Capsule())
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -3104,14 +3133,21 @@ private struct SidebarThreadRow: View {
                     action: archiveToggle
                 )
             }
-            .frame(width: 56)
+            .frame(width: 62)
             .opacity(showsQuickActions ? 1 : 0)
             .disabled(!showsQuickActions)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .background(rowBackgroundStyle, in: rowShape)
+        .overlay {
+            rowShape.strokeBorder(
+                isSelected ? FlannelSystemColor.chromeStrokeStrong : Color.clear,
+                lineWidth: FlannelSpacing.hairline
+            )
+        }
+        .contentShape(rowShape)
         .onHover { isHovering = $0 }
         .accessibilityElement(children: .contain)
         .accessibilityAction(named: isPinned ? "Remove from Favorites" : "Add to Favorites", pinToggle)
@@ -3189,6 +3225,7 @@ private struct SidebarThreadQuickAction: View {
         }
         .buttonStyle(.borderless)
         .foregroundStyle(.secondary)
+        .flannelGlassCapsule(.clear, interactive: true)
         .help(title)
         .accessibilityLabel(title)
     }
@@ -3240,7 +3277,8 @@ private struct SidebarSearchResultRow: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .background(isSelected ? FlannelSystemColor.sidebarSelectionTint : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .contextMenu {
