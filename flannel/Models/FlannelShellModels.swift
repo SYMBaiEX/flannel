@@ -122,17 +122,6 @@ nonisolated enum FlannelInspectorSection: String, CaseIterable, Hashable, Identi
         hasSourceArtifacts: Bool,
         hasToolArtifacts: Bool
     ) -> [FlannelInspectorSection] {
-        var sections: [FlannelInspectorSection] = []
-        if hasSourceArtifacts {
-            sections.append(.sources)
-        }
-        if hasCompareArtifacts {
-            sections.append(.compare)
-        }
-        if hasToolArtifacts {
-            sections.append(.tools)
-        }
-        sections.append(.chatDetail)
-        return sections
+        allCases
     }
 }

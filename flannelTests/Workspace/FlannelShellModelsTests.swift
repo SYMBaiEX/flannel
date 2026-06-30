@@ -53,6 +53,20 @@ struct FlannelShellModelsTests {
         ) == .none)
     }
 
+    @Test("Inspector sections stay stable when a chat has no artifacts yet")
+    func inspectorSectionsRemainAvailableWithoutArtifacts() {
+        #expect(FlannelInspectorSection.availableSections(
+            hasCompareArtifacts: false,
+            hasSourceArtifacts: false,
+            hasToolArtifacts: false
+        ) == FlannelInspectorSection.allCases)
+        #expect(FlannelInspectorSection.defaultSection(
+            hasCompareArtifacts: false,
+            hasSourceArtifacts: false,
+            hasToolArtifacts: false
+        ) == .chatDetail)
+    }
+
     @Test("Transcript follow policy treats near-bottom positions as pinned")
     func transcriptFollowPolicyUsesBottomThreshold() {
         #expect(FlannelTranscriptFollowPolicy.isPinnedToBottom(bottomDistance: -12))
