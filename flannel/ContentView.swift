@@ -9093,16 +9093,6 @@ private struct ProviderRoutingPicker: View {
                 let familyProviders = providers(in: family)
                 if !familyProviders.isEmpty {
                     Section(family.title) {
-                        if let modeChoicePrompt = family.modeChoicePrompt {
-                            Button {} label: {
-                                ProviderModeBoundaryMenuRow(
-                                    prompt: modeChoicePrompt,
-                                    icon: family.icon
-                                )
-                            }
-                            .disabled(true)
-                        }
-
                         ForEach(familyProviders) { provider in
                             let modelNames = selectableModelNames(for: provider)
                             if modelNames.isEmpty {
@@ -9297,25 +9287,27 @@ private struct ProviderRoutingPickerLabel: View {
     var readiness: ProviderRouteReadiness?
 
     var body: some View {
-        HStack(spacing: 9) {
-            Image(systemName: selectedProvider?.accessMode.icon ?? "cpu")
-                .frame(width: 18)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(selectedProvider?.providerModeChoiceTitle ?? "Choose provider")
-                    .font(.callout.weight(.medium))
-                    .lineLimit(1)
-                Text(labelDetail)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+        HStack(spacing: 8) {
+            Label {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(selectedProvider?.providerModeChoiceTitle ?? "Choose provider")
+                        .font(.callout.weight(.medium))
+                        .lineLimit(1)
+                    Text(labelDetail)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            } icon: {
+                Image(systemName: selectedProvider?.accessMode.icon ?? "cpu")
+                    .frame(width: 18)
             }
-            .frame(maxWidth: 190, alignment: .leading)
+            .labelStyle(.titleAndIcon)
+            .frame(maxWidth: 220, alignment: .leading)
 
-            Circle()
-                .fill(readiness?.tint ?? statusTint)
-                .frame(width: 7, height: 7)
-                .accessibilityLabel(readiness?.text ?? statusText)
+            Image(systemName: statusIcon)
+                .font(.caption)
+                .foregroundStyle(statusTint)
             Image(systemName: "chevron.up.chevron.down")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -9338,10 +9330,13 @@ private struct ProviderRoutingPickerLabel: View {
     private var labelDetail: String {
         let readinessText = readiness?.text ?? statusText
         guard let selectedProvider else { return readinessText }
-        return selectedProvider.providerPickerStatusLine(
-            readinessText: readinessText,
-            routingPolicy: routingPolicy
-        )
+
+        var parts = [selectedProvider.accessMode.title]
+        if routingPolicy != .selectedProvider {
+            parts.append(routingPolicy.title)
+        }
+        parts.append(readinessText)
+        return parts.joined(separator: " • ")
     }
 
     private var accessibilityLabel: String {
@@ -9357,9 +9352,20 @@ private struct ProviderRoutingPickerLabel: View {
             return .green
         }
         if preferredProvider?.id == selectedProvider.id {
-            return .orange
+            return Color.accentColor
         }
-        return .secondary
+        return readiness?.tint ?? .secondary
+    }
+
+    private var statusIcon: String {
+        guard let selectedProvider else { return "circle" }
+        if activeProvider?.id == selectedProvider.id {
+            return "checkmark.circle.fill"
+        }
+        if preferredProvider?.id == selectedProvider.id {
+            return "circle.inset.filled"
+        }
+        return readiness?.icon ?? "circle"
     }
 }
 
@@ -9370,38 +9376,57 @@ private struct ProviderRoutingMenuRow: View {
     var isActive: Bool
 
     var body: some View {
-        Label {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(provider.providerModeSelectionTitle)
-                    if isPreferred {
-                        Text("Selected")
-                            .font(.caption2)
-                    }
-                    if isActive {
-                        Text("Active")
-                            .font(.caption2)
-                    }
-                    Text(provider.providerModeBoundaryBadge)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Text(provider.providerModeSelectionDetail)
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: provider.accessMode.icon)
+                .frame(width: 16)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(provider.providerModeSelectionTitle)
+                Text(detailText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Text(provider.providerPickerRouteSummary)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Label(readiness.text, systemImage: readiness.icon)
-                    .font(.caption2)
-                    .foregroundStyle(readiness.tint)
-                    .lineLimit(1)
             }
-        } icon: {
-            Image(systemName: provider.privacyScope.icon)
+
+            Spacer(minLength: 8)
+
+            Image(systemName: statusIcon)
+                .font(.caption)
+                .foregroundStyle(statusTint)
         }
+    }
+
+    private var detailText: String {
+        var parts: [String] = []
+        if isActive {
+            parts.append("Active")
+        } else if isPreferred {
+            parts.append("Selected")
+        }
+        parts.append(provider.providerModeSelectionDetail)
+        parts.append(readiness.text)
+        return parts.joined(separator: " • ")
+    }
+
+    private var statusIcon: String {
+        if isActive {
+            return "checkmark.circle.fill"
+        }
+        if isPreferred {
+            return "checkmark.circle"
+        }
+        return readiness.icon
+    }
+
+    private var statusTint: Color {
+        if isActive {
+            return .green
+        }
+        if isPreferred {
+            return Color.accentColor
+        }
+        return readiness.tint
     }
 }
 
@@ -9412,44 +9437,51 @@ private struct ProviderModelRoutingMenuRow: View {
     var isActive: Bool
 
     var body: some View {
-        Label {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(modelName)
-                    if isSelected {
-                        Text("Selected")
-                            .font(.caption2)
-                    }
-                    if isActive {
-                        Text("Active")
-                            .font(.caption2)
-                    }
-                }
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: statusIcon)
+                .frame(width: 16)
+                .foregroundStyle(statusTint)
 
-                Text("\(provider.providerModeBoundaryBadge) • \(provider.runtimeBoundary.title) • \(modelName)")
+            VStack(alignment: .leading, spacing: 1) {
+                Text(modelName)
+                Text(detailText)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-        } icon: {
-            Image(systemName: isSelected ? "checkmark" : "memorychip")
         }
     }
-}
 
-private struct ProviderModeBoundaryMenuRow: View {
-    var prompt: String
-    var icon: String
-
-    var body: some View {
-        Label {
-            Text(prompt)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        } icon: {
-            Image(systemName: icon)
+    private var detailText: String {
+        var parts: [String] = []
+        if isActive {
+            parts.append("Active")
+        } else if isSelected {
+            parts.append("Selected")
         }
+        parts.append(provider.accessMode.title)
+        parts.append(provider.runtimeBoundary.title)
+        return parts.joined(separator: " • ")
+    }
+
+    private var statusIcon: String {
+        if isActive {
+            return "checkmark.circle.fill"
+        }
+        if isSelected {
+            return "checkmark.circle"
+        }
+        return "memorychip"
+    }
+
+    private var statusTint: Color {
+        if isActive {
+            return .green
+        }
+        if isSelected {
+            return Color.accentColor
+        }
+        return .secondary
     }
 }
 
@@ -9458,28 +9490,18 @@ private struct LocalModelRoutingMenuRow: View {
     var isSelected: Bool
 
     var body: some View {
-        Label {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(model.displayName ?? model.name)
-                    if isSelected {
-                        Text("Selected")
-                            .font(.caption2)
-                    }
-                }
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: isSelected ? "checkmark.circle" : icon)
+                .frame(width: 16)
+                .foregroundStyle(isSelected ? Color.accentColor : .secondary)
 
-                Text(model.name)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(model.displayName ?? model.name)
+                Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
-        } icon: {
-            Image(systemName: icon)
         }
     }
 
@@ -9517,6 +9539,16 @@ private struct LocalModelRoutingMenuRow: View {
             parts.append("Reasoning")
         }
         return parts.isEmpty ? "\(model.providerKind.title) local chat model" : parts.joined(separator: " - ")
+    }
+
+    private var subtitle: String {
+        var parts = [model.providerKind.title]
+        if let displayName = model.displayName,
+           displayName.localizedCaseInsensitiveCompare(model.name) != .orderedSame {
+            parts.append(model.name)
+        }
+        parts.append(detail.replacingOccurrences(of: " - ", with: " • "))
+        return parts.joined(separator: " • ")
     }
 }
 
