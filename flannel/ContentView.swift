@@ -2189,15 +2189,10 @@ private struct AppSidebar: View {
             Button {
                 createChat()
             } label: {
-                Label("New Chat", systemImage: "plus")
-                    .font(.callout.weight(.medium))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                SidebarCommandLabel(title: "New Chat", systemImage: "plus")
             }
             .buttonStyle(.plain)
             .controlSize(.regular)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 7)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .help("New Chat")
             .accessibilityLabel("New Chat")
         } else {
@@ -2218,15 +2213,10 @@ private struct AppSidebar: View {
                     }
                 }
             } label: {
-                Label("New Chat", systemImage: "plus")
-                    .font(.callout.weight(.medium))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                SidebarCommandLabel(title: "New Chat", systemImage: "plus")
             }
             .menuStyle(.borderlessButton)
             .controlSize(.regular)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 7)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .help("New Chat")
             .accessibilityLabel("New Chat")
         }
@@ -2667,6 +2657,22 @@ private struct SettingsRouteRow: View {
         .accessibilityLabel(tab.title)
         .accessibilityValue(isSelected ? "Selected" : "")
         .accessibilityHint(tab.detail)
+    }
+}
+
+private struct SidebarCommandLabel: View {
+    var title: String
+    var systemImage: String
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(.callout.weight(.medium))
+            .labelStyle(.titleAndIcon)
+            .symbolRenderingMode(.hierarchical)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 }
 
