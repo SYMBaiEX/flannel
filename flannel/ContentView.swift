@@ -2577,21 +2577,17 @@ private struct SettingsSidebar: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 Button(action: exitSettings) {
-                    HStack(spacing: 7) {
-                        Image(systemName: "chevron.left")
-                            .font(.caption.weight(.semibold))
-                            .frame(width: 14)
-                        Text("Exit Settings")
-                            .font(.callout.weight(.medium))
-                        Spacer(minLength: 0)
-                    }
+                    Label("Exit Settings", systemImage: "chevron.left")
+                        .font(.callout.weight(.medium))
+                        .labelStyle(.titleAndIcon)
+                        .symbolRenderingMode(.hierarchical)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
                     .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
-                .buttonStyle(.plain)
-                .controlSize(.small)
-                .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .buttonStyle(.borderless)
+                .controlSize(.regular)
                 .help("Return to chat")
                 .accessibilityLabel("Exit Settings")
 
