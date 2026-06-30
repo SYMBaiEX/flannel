@@ -3911,8 +3911,6 @@ private struct ChatSurface: View {
                             }
 
                             Composer(
-                                provider: store.activeProvider,
-                                localOnlyMode: store.preferences.localOnlyMode ?? true,
                                 contextBudget: composerContextBudget,
                                 text: $composerText,
                                 attachments: $composerAttachments,
@@ -5254,8 +5252,6 @@ private struct ChatExportMenu: View {
 }
 
 private struct Composer: View {
-    var provider: ProviderConfiguration?
-    var localOnlyMode: Bool
     var contextBudget: ChatContextBudget?
     @Binding var text: String
     @Binding var attachments: [AIChatAttachment]
@@ -5351,8 +5347,6 @@ private struct Composer: View {
 
             HStack(alignment: .center, spacing: 8) {
                 ComposerStatusStrip(
-                    provider: provider,
-                    localOnlyMode: localOnlyMode,
                     contextBudget: contextBudget,
                     attachmentCount: attachments.count,
                     isStreamingResponse: isStreamingResponse
@@ -5376,20 +5370,25 @@ private struct Composer: View {
                 .accessibilityLabel("Attach files")
                 .accessibilityHint(attachHelpText)
 
-                Button {
-                    compare()
+                Menu {
+                    Button {
+                        compare()
+                    } label: {
+                        Label("Compare Current Prompt", systemImage: "rectangle.split.3x1")
+                    }
+                    .disabled(!canComparePrompt)
                 } label: {
-                    Image(systemName: "rectangle.split.3x1")
+                    Image(systemName: "ellipsis.circle")
                         .font(.body)
                         .frame(width: 30, height: 28)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.borderless)
+                .menuStyle(.borderlessButton)
                 .controlSize(.regular)
                 .flannelGlassCapsule(.clear, interactive: true)
-                .disabled(isStreamingResponse || !canComparePrompt)
+                .disabled(isStreamingResponse)
                 .help(compareHelpText)
-                .accessibilityLabel("Compare with multiple models")
+                .accessibilityLabel("More composer actions")
                 .accessibilityHint(compareHelpText)
 
                 Button {
@@ -5509,25 +5508,15 @@ private struct Composer: View {
 }
 
 private struct ComposerStatusStrip: View {
-    var provider: ProviderConfiguration?
-    var localOnlyMode: Bool
     var contextBudget: ChatContextBudget?
     var attachmentCount: Int
     var isStreamingResponse: Bool
 
     var body: some View {
         FlowLayout(spacing: 6) {
-            CapsuleLabel(
-                isStreamingResponse ? "Responding" : provider?.displayName ?? "Local fallback",
-                icon: isStreamingResponse ? "dot.radiowaves.left.and.right" : "cpu"
-            )
-            .help(providerStatusHelpText)
-
-            CapsuleLabel(
-                privacyLabel,
-                icon: privacyIcon,
-                tint: privacyTint
-            )
+            if isStreamingResponse {
+                CapsuleLabel("Responding", icon: "dot.radiowaves.left.and.right")
+            }
 
             if let contextBudget {
                 CapsuleLabel(
@@ -5543,40 +5532,6 @@ private struct ComposerStatusStrip: View {
                 CapsuleLabel("\(attachmentCount) attachment\(attachmentCount == 1 ? "" : "s")", icon: "paperclip")
             }
         }
-    }
-
-    private var privacyLabel: String {
-        if localOnlyMode {
-            return "Local-only"
-        }
-        return provider?.privacyScope.title ?? "Private"
-    }
-
-    private var privacyIcon: String {
-        if localOnlyMode {
-            return "lock"
-        }
-        return provider?.privacyScope.icon ?? "lock"
-    }
-
-    private var privacyTint: Color {
-        if localOnlyMode {
-            return .green
-        }
-        return provider?.privacyScope == .externalAPI ? .orange : .green
-    }
-
-    private var providerStatusHelpText: String {
-        guard let provider else {
-            return "No runnable provider is selected. Open Models and Providers settings to choose one."
-        }
-
-        let modelDetail = provider.modelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
-        if modelDetail.isEmpty {
-            return provider.modeBoundaryDetail
-        }
-
-        return "\(provider.modeBoundaryDetail) Model: \(modelDetail)."
     }
 }
 
