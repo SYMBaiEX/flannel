@@ -44,6 +44,7 @@ struct ContentView: View {
     @State private var sidebarSearchFocusRequest = 0
     @State private var settingsSidebarFocusRequest = 0
     @State private var composerFocusRequest = 0
+    @State private var inspectorFocusRequest = 0
 
     var body: some View {
         rootSplitView
@@ -177,6 +178,7 @@ struct ContentView: View {
             selectedComparisonResultID: selectedComparisonResultID,
             isDiscoveringModels: isDiscoveringModels,
             isRunningComparison: isRunningComparison,
+            focusRequest: inspectorFocusRequest,
             discoverModels: discoverLocalModels,
             collapseArtifacts: { setInspectorVisibility(false) },
             copyComparisonResult: copyComparisonResult,
@@ -500,6 +502,9 @@ struct ContentView: View {
         }
         if wasVisible != isVisible {
             announce(isVisible ? "Artifacts shown" : "Artifacts hidden")
+        }
+        if isVisible {
+            inspectorFocusRequest += 1
         }
         if !isVisible && focusComposerWhenHidden {
             requestComposerFocus()
@@ -8324,6 +8329,7 @@ private struct InspectorSurface: View {
     var selectedComparisonResultID: UUID?
     var isDiscoveringModels: Bool
     var isRunningComparison: Bool
+    var focusRequest: Int
     var discoverModels: () -> Void
     var collapseArtifacts: () -> Void
     var copyComparisonResult: (ModelComparisonResult) -> Void
@@ -8331,6 +8337,7 @@ private struct InspectorSurface: View {
     var openSettingsTab: (SettingsTab) -> Void
     var persist: () -> Void
     @SceneStorage("flannel.inspector.activeSection") private var activeSectionRawValue = FlannelInspectorSection.chatDetail.rawValue
+    @FocusState private var isCollapseButtonFocused: Bool
 
     private var hasCompareArtifacts: Bool {
         selectedComparisonRunID != nil || !store.modelComparisonRuns.isEmpty || isRunningComparison
@@ -8398,6 +8405,7 @@ private struct InspectorSurface: View {
                     }
                     .buttonStyle(.borderless)
                     .controlSize(.small)
+                    .focused($isCollapseButtonFocused)
                     .help("Collapse Artifacts")
                     .accessibilityLabel("Collapse Artifacts")
                 }
@@ -8425,8 +8433,12 @@ private struct InspectorSurface: View {
         }
         .background(.bar)
         .onAppear(perform: ensureActiveSectionIsAvailable)
+        .onAppear(perform: focusCollapseButtonIfRequested)
         .onChange(of: availableSectionIDs) { _, _ in
             ensureActiveSectionIsAvailable()
+        }
+        .onChange(of: focusRequest) { _, _ in
+            focusCollapseButtonIfRequested()
         }
     }
 
@@ -8505,6 +8517,13 @@ private struct InspectorSurface: View {
               availableSections.contains(storedSection) else {
             activeSection = fallbackSection
             return
+        }
+    }
+
+    private func focusCollapseButtonIfRequested() {
+        guard focusRequest > 0 else { return }
+        DispatchQueue.main.async {
+            isCollapseButtonFocused = true
         }
     }
 
