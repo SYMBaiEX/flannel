@@ -16,6 +16,8 @@ The default layout is built from six stable regions:
 5. Bottom Settings/Profile controls
 6. In-window settings mode
 
+This is a single-window experience: sidebar/chat/composer/artifact/settings transitions should happen within the same shell.
+
 ## Primary layout
 
 ### 1. Source-list sidebar
@@ -48,6 +50,7 @@ The default layout is built from six stable regions:
 - Empty/unused rail is minimal and not promotional.
 - Chat detail controls in the rail expose thread title and knowledge-source scope without becoming a second navigation sidebar.
 - Multi-model comparison artifacts show provider, mode, privacy scope, latency, cost when available, token counts, and explicit estimated-token labels when provider usage is not reported.
+- Artifact rail actions should be scoped and never replace the active message list.
 
 ### 5. Bottom Settings/Profile controls
 
@@ -69,6 +72,14 @@ The default layout is built from six stable regions:
 - Toolbar settings search filters provider setup and local discovery rows without adding another search field.
 - The top action row includes `Exit Settings`.
 - Exiting must restore chat state and preserve selected thread and composer input.
+- Settings should open inside the current shell and avoid introducing new modal routes.
+
+## Commit-tracking discipline
+
+- Scope each screenshot pass to one objective and commit it as one logical QA unit.
+- Record each QA pass in this file with commit hash, states captured, blockers/omitted states, and approver/reviewer.
+- Prefer granular commit messages such as `docs(qc): add sidebar and settings handoff checks`.
+- Avoid bundling unrelated feature changes into the same commit.
 
 ## Local-first tool approvals
 
@@ -127,6 +138,7 @@ Capture screenshots against the built macOS app, not static mockups. At minimum,
 A UI screenshot/documentation polish pass is acceptable when:
 
 - Screenshots cover every required state above or explicitly note a missing state with a short reason.
+- Each screenshot set includes a commit reference in this file.
 - README or release notes link to this QA file when screenshots are added or refreshed.
 - No app source files are modified for a documentation-only pass.
 - Any observed visual regressions are filed as concrete follow-up tasks with the affected region, state, and screenshot name.

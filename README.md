@@ -17,6 +17,21 @@ This repository documents a working implementation, not a roadmap-only feature l
 - Message-level chat actions for pin/unpin, copy, branch-aware retry/regenerate, edit-and-rewrite, and fork, plus store-backed archive/search organization.
 - Current Vercel AI SDK support remains an optional local bridge flow (`aiSDKBridge`) and is intentionally not a native Swift SDK dependency.
 
+## Current interaction direction
+
+- The app keeps one persistent shell across chat/artifact/settings: no top-level mode tabs for Chat/Cowork/Code are introduced in this branch.
+- Left sidebar remains the primary thread/source navigator and includes quick actions (pin/favorite/archive) without breaking composer continuity.
+- Main chat transcript stays the visual center; the composer remains centered and fixed while threads, artifacts, and settings are toggled.
+- Right artifact rail is contextual and collapses by default; it opens for tool outputs/comparison/citation context and must not replace the active transcript or composer.
+- Bottom controls are the preferred entry point for Profile/Settings and route in-window to the Models/Provider/Knowledge surfaces.
+- Settings changes should return to the same thread and preserve composer input state.
+
+## Commit-tracking discipline
+
+- For UI architecture or screenshot-related updates, create one focused commit for each pass (or each state group if changes are independent).
+- Use a granular commit style that names scope and state first, then action, e.g. `docs(ui): lock in sidebar + settings shell direction`.
+- Record screenshot-linked changes in the QA doc so each commit can be traced to a visible state review path.
+
 ## Provider behavior (implemented)
 
 - Default routing: `WorkspacePreferences.localOnlyMode = true`, and `workspace.activeProvider` filters enabled providers through local-only/cloud preference gates.
