@@ -1056,6 +1056,53 @@ struct AIChatProviderRegistryTests {
     }
 
     @MainActor
+    @Test("Selecting an OpenAI model updates only OpenAI family configuration and keeps Anthropic separate")
+    func selectingOpenAIModelFromChatPickerKeepsAnthropicFamilySeparate() throws {
+        let (_, store) = try makeLoadedStore()
+
+        let openAI = try #require(store.providerConfigurations.first(where: { $0.kind == .openAI }))
+        let anthropicAPI = try #require(store.providerConfigurations.first(where: { $0.kind == .anthropic }))
+        let claudeCLI = try #require(store.providerConfigurations.first(where: { $0.kind == .claudeCodeCLI }))
+
+        store.preferences.localOnlyMode = false
+        store.preferences.allowCloudProviders = true
+        store.preferences.providerRoutingPolicy = .fastest
+
+        let anthropicIndex = try #require(store.providerConfigurations.firstIndex(where: { $0.id == anthropicAPI.id }))
+        store.providerConfigurations[anthropicIndex].secretReference = ProviderSetupService.shared
+            .canonicalSecretReferenceString(for: store.providerConfigurations[anthropicIndex])
+        store.providerConfigurations[anthropicIndex].connectionStatus = .ready
+
+        #expect(openAI.modeFamily == .openAIChatGPT)
+        #expect(anthropicAPI.modeFamily == .anthropicClaude)
+        #expect(claudeCLI.modeFamily == .anthropicClaude)
+        #expect(openAI.modeBoundaryTitle == "OpenAI API key")
+        #expect(anthropicAPI.modeBoundaryTitle == "Anthropic API key")
+        #expect(claudeCLI.modeBoundaryTitle == "Claude Code subscription CLI")
+
+        let initialAnthropicModel = anthropicAPI.modelIdentifier
+        let initialAnthropicMode = anthropicAPI.availableModels
+
+        let updated = store.selectPreferredProviderModelForChat(
+            providerID: openAI.id,
+            modelIdentifier: " gpt-5.5-preview "
+        )
+
+        let updatedOpenAI = try #require(store.providerConfigurations.first(where: { $0.id == openAI.id }))
+        let untouchedAnthropic = try #require(store.providerConfigurations.first(where: { $0.id == anthropicAPI.id }))
+        let untouchedClaudeCLI = try #require(store.providerConfigurations.first(where: { $0.id == claudeCLI.id }))
+
+        #expect(updated)
+        #expect(updatedOpenAI.modelIdentifier == "gpt-5.5-preview")
+        #expect(store.preferences.preferredProviderID == updatedOpenAI.id)
+        #expect(store.preferences.providerRoutingPolicy == .selectedProvider)
+        #expect(store.activeProvider?.id == updatedOpenAI.id)
+        #expect(untouchedAnthropic.modelIdentifier == initialAnthropicModel)
+        #expect(untouchedAnthropic.availableModels == initialAnthropicMode)
+        #expect(untouchedClaudeCLI.providerModeChoiceTitle.contains("Claude Code subscription"))
+    }
+
+    @MainActor
     @Test("Cheapest routing prefers zero marginal cost local providers")
     func cheapestRoutingPrefersLocalProviderCost() throws {
         let (_, store) = try makeLoadedStore()
