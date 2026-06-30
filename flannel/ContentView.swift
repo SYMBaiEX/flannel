@@ -489,10 +489,14 @@ struct ContentView: View {
     }
 
     private func setInspectorVisibility(_ isVisible: Bool, focusComposerWhenHidden: Bool = true) {
+        let wasVisible = columnVisibility == .all
         withAnimation(.easeInOut(duration: 0.18)) {
             columnVisibility = isVisible ? .all : .doubleColumn
             store.preferences.showsRightSidebar = isVisible
             persistQuietly()
+        }
+        if wasVisible != isVisible {
+            announce(isVisible ? "Artifacts shown" : "Artifacts hidden")
         }
         if !isVisible && focusComposerWhenHidden {
             requestComposerFocus()
@@ -501,6 +505,14 @@ struct ContentView: View {
 
     private func requestComposerFocus() {
         composerFocusRequest += 1
+    }
+
+    private func announce(_ message: String) {
+        NSAccessibility.post(
+            element: NSApp as Any,
+            notification: .announcementRequested,
+            userInfo: [.announcement: message]
+        )
     }
 
     private func newChat(from template: ChatTemplate? = nil, folderID: UUID? = nil) {
