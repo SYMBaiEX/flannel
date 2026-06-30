@@ -60,6 +60,31 @@ struct WorkspaceDestinationMigrationTests {
     }
 
     @MainActor
+    @Test("Legacy Settings workspace without chat threads gets a seeded chat thread")
+    func loadingLegacySettingsDestinationWithoutThreadSeedsThread() throws {
+        let container = try ModelContainer(
+            for: Item.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let legacyWorkspace = Item(
+            selectedDestination: .settings,
+            preferences: WorkspacePreferences(defaultDestination: .settings)
+        )
+        context.insert(legacyWorkspace)
+        try context.save()
+
+        let store = WorkspaceStore()
+        try store.loadOrCreate(in: context)
+
+        #expect(store.selectedDestination == .home)
+        #expect(store.preferences.defaultDestination == .home)
+        #expect(store.currentAssistantThread != nil)
+        #expect(store.currentAssistantThread?.title == "New AI Chat")
+        #expect(store.currentAssistantThread?.messages.first?.role == .system)
+    }
+
+    @MainActor
     @Test("Legacy main-window routes all migrate to Chat")
     func legacyMainWindowRoutesAllMigrateToChat() throws {
         for destination in WorkspaceDestination.allCases where destination != .home {
