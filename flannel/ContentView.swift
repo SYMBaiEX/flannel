@@ -42,6 +42,7 @@ struct ContentView: View {
     @SceneStorage("flannel.settings.search") private var settingsSearchText = ""
     @State private var columnVisibilityBeforeSettings: NavigationSplitViewVisibility = .all
     @State private var sidebarSearchFocusRequest = 0
+    @State private var settingsSidebarFocusRequest = 0
     @State private var composerFocusRequest = 0
 
     var body: some View {
@@ -108,6 +109,7 @@ struct ContentView: View {
             sidebarSurface: sidebarSurface,
             selectedSettingsTab: selectedSettingsTabBinding,
             searchFocusRequest: sidebarSearchFocusRequest,
+            settingsFocusRequest: settingsSidebarFocusRequest,
             newChat: newChat,
             enterSettings: enterSettingsMode,
             exitSettings: { exitSettingsMode() },
@@ -469,12 +471,19 @@ struct ContentView: View {
 
     private func enterSettingsMode(_ tab: SettingsTab = .general) {
         selectedSettingsTab = tab
-        if sidebarSurface != .settings {
+        let isEnteringSettings = sidebarSurface != .settings
+        if isEnteringSettings {
             columnVisibilityBeforeSettings = columnVisibility
         }
         withAnimation(.easeInOut(duration: 0.18)) {
             sidebarSurface = .settings
             columnVisibility = .doubleColumn
+        }
+        if isEnteringSettings {
+            DispatchQueue.main.async {
+                settingsSidebarFocusRequest += 1
+                announce("Settings")
+            }
         }
     }
 
@@ -1851,6 +1860,7 @@ private struct AppSidebar: View {
     var sidebarSurface: FlannelSidebarSurface
     @Binding var selectedSettingsTab: SettingsTab
     var searchFocusRequest: Int
+    var settingsFocusRequest: Int
     var newChat: (ChatTemplate?, UUID?) -> Void
     var enterSettings: (SettingsTab) -> Void
     var exitSettings: () -> Void
@@ -2075,6 +2085,7 @@ private struct AppSidebar: View {
             if sidebarSurface == .settings {
                 SettingsSidebar(
                     selectedTab: $selectedSettingsTab,
+                    focusRequest: settingsFocusRequest,
                     exitSettings: exitSettings
                 )
                 .transition(.opacity)
@@ -2559,7 +2570,9 @@ private struct AppSidebar: View {
 
 private struct SettingsSidebar: View {
     @Binding var selectedTab: SettingsTab
+    var focusRequest: Int
     var exitSettings: () -> Void
+    @FocusState private var isExitSettingsFocused: Bool
 
     private var selection: Binding<SettingsTab?> {
         Binding(
@@ -2587,6 +2600,7 @@ private struct SettingsSidebar: View {
                 }
                 .buttonStyle(.borderless)
                 .controlSize(.regular)
+                .focused($isExitSettingsFocused)
                 .help("Return to chat")
                 .accessibilityLabel("Exit Settings")
 
@@ -2612,6 +2626,17 @@ private struct SettingsSidebar: View {
             .listStyle(.sidebar)
         }
         .frame(maxHeight: .infinity)
+        .onAppear(perform: focusExitSettingsIfRequested)
+        .onChange(of: focusRequest) { _, _ in
+            focusExitSettingsIfRequested()
+        }
+    }
+
+    private func focusExitSettingsIfRequested() {
+        guard focusRequest > 0 else { return }
+        DispatchQueue.main.async {
+            isExitSettingsFocused = true
+        }
     }
 
     @ViewBuilder
