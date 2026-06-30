@@ -3396,6 +3396,7 @@ private struct ChatSurface: View {
     @State private var composerFocusNonce = UUID()
     @State private var transcriptViewportHeight: CGFloat = 0
     @State private var isTranscriptPinnedToBottom = true
+    @State private var announcedOffscreenMessageID: UUID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -3508,12 +3509,19 @@ private struct ChatSurface: View {
                 .onChange(of: visibleMessages.count) { _, _ in
                     if shouldFollowLatestMessage {
                         scrollToLatest(using: proxy)
+                    } else {
+                        announceNewTranscriptOutputIfNeeded()
                     }
                 }
                 .onChange(of: latestMessageScrollFingerprint) { _, _ in
                     if shouldFollowLatestMessage {
                         scrollToLatest(using: proxy)
+                    } else {
+                        announceNewTranscriptOutputIfNeeded()
                     }
+                }
+                .onChange(of: store.currentAssistantThread?.id) { _, _ in
+                    announcedOffscreenMessageID = nil
                 }
                 .onChange(of: composerFocusRequest) { _, _ in
                     composerFocusNonce = UUID()
@@ -3662,6 +3670,21 @@ private struct ChatSurface: View {
             element: NSApp as Any,
             notification: .announcementRequested,
             userInfo: [.announcement: announcement]
+        )
+    }
+
+    private func announceNewTranscriptOutputIfNeeded() {
+        guard shouldShowJumpToLatest,
+              let latestMessage = visibleMessages.last,
+              latestMessage.role == .assistant,
+              latestMessage.id != announcedOffscreenMessageID else {
+            return
+        }
+        announcedOffscreenMessageID = latestMessage.id
+        NSAccessibility.post(
+            element: NSApp as Any,
+            notification: .announcementRequested,
+            userInfo: [.announcement: "New assistant message available. Jump to latest."]
         )
     }
 
