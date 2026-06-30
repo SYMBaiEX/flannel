@@ -112,14 +112,18 @@ private struct HighlightedCodeText: View {
     var language: String?
     var code: String
 
-    private var text: Text {
-        CodeSyntaxHighlighter.segments(in: code, language: language).reduce(Text("")) { partial, segment in
-            partial + Text(segment.text).foregroundStyle(color(for: segment.kind))
+    private var highlightedCode: AttributedString {
+        var attributed = AttributedString()
+        for segment in CodeSyntaxHighlighter.segments(in: code, language: language) {
+            var run = AttributedString(segment.text)
+            run.foregroundColor = color(for: segment.kind)
+            attributed.append(run)
         }
+        return attributed
     }
 
     var body: some View {
-        text
+        Text(highlightedCode)
             .font(.system(.body, design: .monospaced))
             .textSelection(.enabled)
     }
