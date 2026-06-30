@@ -2446,8 +2446,9 @@ private struct SettingsRouteHeader: View {
                 }
             }
         }
-        .padding(14)
-        .flannelPaneSurface(.subtle, cornerRadius: FlannelRadius.lg)
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }
 
