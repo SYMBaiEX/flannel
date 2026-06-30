@@ -3428,45 +3428,47 @@ private struct ChatSurface: View {
                     }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    VStack(spacing: 0) {
-                        if shouldShowJumpToLatest {
-                            Button {
-                                isTranscriptPinnedToBottom = true
-                                scrollToLatest(using: proxy)
-                            } label: {
-                                Label("Jump to latest", systemImage: "arrow.down")
+                    GlassEffectContainer(spacing: 8) {
+                        VStack(spacing: 0) {
+                            if shouldShowJumpToLatest {
+                                Button {
+                                    isTranscriptPinnedToBottom = true
+                                    scrollToLatest(using: proxy)
+                                } label: {
+                                    Label("Jump to latest", systemImage: "arrow.down")
+                                }
+                                .buttonStyle(.plain)
+                                .controlSize(.small)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .flannelGlassCapsule(.regular, interactive: true)
+                                .padding(.bottom, 8)
+                                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                                .help("Scroll to the newest message.")
                             }
-                            .buttonStyle(.plain)
-                            .controlSize(.small)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .flannelGlassCapsule(.regular, interactive: true)
-                            .padding(.bottom, 8)
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
-                            .help("Scroll to the newest message.")
-                        }
 
-                        Composer(
-                            provider: store.activeProvider,
-                            localOnlyMode: store.preferences.localOnlyMode ?? true,
-                            contextBudget: composerContextBudget,
-                            text: $composerText,
-                            attachments: $composerAttachments,
-                            isStreamingResponse: isStreamingResponse,
-                            focusNonce: composerFocusNonce,
-                            send: {
-                                isTranscriptPinnedToBottom = true
-                                sendMessage()
-                            },
-                            cancel: cancelStreaming,
-                            compare: compareCurrentPrompt
-                        )
-                        .frame(maxWidth: 860)
-                        .padding(10)
-                        .flannelFloatingDockSurface(cornerRadius: 24)
-                        .padding(.horizontal, 28)
-                        .padding(.bottom, 14)
-                        .frame(maxWidth: .infinity)
+                            Composer(
+                                provider: store.activeProvider,
+                                localOnlyMode: store.preferences.localOnlyMode ?? true,
+                                contextBudget: composerContextBudget,
+                                text: $composerText,
+                                attachments: $composerAttachments,
+                                isStreamingResponse: isStreamingResponse,
+                                focusNonce: composerFocusNonce,
+                                send: {
+                                    isTranscriptPinnedToBottom = true
+                                    sendMessage()
+                                },
+                                cancel: cancelStreaming,
+                                compare: compareCurrentPrompt
+                            )
+                            .frame(maxWidth: 860)
+                            .padding(10)
+                            .flannelFloatingDockSurface(cornerRadius: 24)
+                            .padding(.horizontal, 28)
+                            .padding(.bottom, 14)
+                            .frame(maxWidth: .infinity)
+                        }
                     }
                     .padding(.top, 12)
                 }
