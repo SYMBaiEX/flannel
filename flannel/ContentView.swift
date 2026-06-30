@@ -3674,6 +3674,8 @@ private struct ChatSurface: View {
     var persist: () -> Void
     @State private var transcriptSearchText = ""
     @State private var selectedTranscriptSearchIndex = 0
+    @State private var isTranscriptSearchVisible = false
+    @State private var transcriptSearchFocusRequest = 0
     @State private var composerFocusNonce = UUID()
     @State private var transcriptViewportHeight: CGFloat = 0
     @State private var isTranscriptPinnedToBottom = true
@@ -3684,11 +3686,14 @@ private struct ChatSurface: View {
             ChatThreadHeader(
                 store: store,
                 transcriptSearchText: $transcriptSearchText,
+                isTranscriptSearchVisible: $isTranscriptSearchVisible,
                 transcriptSearchMatchCount: transcriptSearchMatches.count,
                 selectedTranscriptSearchPosition: selectedTranscriptSearchPosition,
+                transcriptSearchFocusRequest: transcriptSearchFocusRequest,
+                revealTranscriptSearch: revealTranscriptSearch,
                 selectPreviousTranscriptSearchMatch: selectPreviousTranscriptSearchMatch,
                 selectNextTranscriptSearchMatch: selectNextTranscriptSearchMatch,
-                clearTranscriptSearch: clearTranscriptSearch
+                clearTranscriptSearch: closeTranscriptSearch
             )
             .padding(.horizontal, FlannelSpacing.shellInset)
             .padding(.top, 12)
@@ -4046,6 +4051,21 @@ private struct ChatSurface: View {
         selectedTranscriptSearchIndex = 0
     }
 
+    private func revealTranscriptSearch() {
+        withAnimation(.easeOut(duration: 0.14)) {
+            isTranscriptSearchVisible = true
+        }
+        transcriptSearchFocusRequest += 1
+    }
+
+    private func closeTranscriptSearch() {
+        clearTranscriptSearch()
+        withAnimation(.easeOut(duration: 0.12)) {
+            isTranscriptSearchVisible = false
+        }
+        composerFocusNonce = UUID()
+    }
+
     private func clampTranscriptSearchSelection() {
         guard !transcriptSearchMatches.isEmpty else {
             selectedTranscriptSearchIndex = 0
@@ -4067,8 +4087,11 @@ private struct ChatSurface: View {
 private struct ChatThreadHeader: View {
     @Bindable var store: WorkspaceStore
     @Binding var transcriptSearchText: String
+    @Binding var isTranscriptSearchVisible: Bool
     var transcriptSearchMatchCount: Int
     var selectedTranscriptSearchPosition: Int?
+    var transcriptSearchFocusRequest: Int
+    var revealTranscriptSearch: () -> Void
     var selectPreviousTranscriptSearchMatch: () -> Void
     var selectNextTranscriptSearchMatch: () -> Void
     var clearTranscriptSearch: () -> Void
@@ -4157,14 +4180,31 @@ private struct ChatThreadHeader: View {
 
             Spacer(minLength: 12)
 
-            ChatTranscriptFindBar(
-                text: $transcriptSearchText,
-                matchCount: transcriptSearchMatchCount,
-                selectedPosition: selectedTranscriptSearchPosition,
-                previous: selectPreviousTranscriptSearchMatch,
-                next: selectNextTranscriptSearchMatch,
-                clear: clearTranscriptSearch
-            )
+            if isTranscriptSearchVisible || !transcriptSearchText.isEmpty {
+                ChatTranscriptFindBar(
+                    text: $transcriptSearchText,
+                    matchCount: transcriptSearchMatchCount,
+                    selectedPosition: selectedTranscriptSearchPosition,
+                    focusRequest: transcriptSearchFocusRequest,
+                    previous: selectPreviousTranscriptSearchMatch,
+                    next: selectNextTranscriptSearchMatch,
+                    clear: clearTranscriptSearch
+                )
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+            } else {
+                Button(action: revealTranscriptSearch) {
+                    Label("Find in Chat", systemImage: "magnifyingglass")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .frame(width: 30, height: 28)
+                .contentShape(Circle())
+                .flannelGlassCapsule(.clear, interactive: true)
+                .keyboardShortcut("f", modifiers: [.command])
+                .help("Find in chat")
+                .accessibilityLabel("Find in chat")
+            }
         }
         .frame(minHeight: 54)
     }
@@ -4174,9 +4214,11 @@ private struct ChatTranscriptFindBar: View {
     @Binding var text: String
     var matchCount: Int
     var selectedPosition: Int?
+    var focusRequest: Int
     var previous: () -> Void
     var next: () -> Void
     var clear: () -> Void
+    @FocusState private var isFieldFocused: Bool
 
     private var hasQuery: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -4201,6 +4243,7 @@ private struct ChatTranscriptFindBar: View {
                 .textFieldStyle(.plain)
                 .font(.callout)
                 .frame(minWidth: 220, idealWidth: 240, maxWidth: 280)
+                .focused($isFieldFocused)
                 .onSubmit(next)
                 .accessibilityLabel("Find in chat")
 
@@ -4248,6 +4291,18 @@ private struct ChatTranscriptFindBar: View {
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
         .flannelChromePanel(cornerRadius: 14)
+        .onAppear(perform: focusField)
+        .onChange(of: focusRequest) { _, _ in
+            focusField()
+        }
+        .onExitCommand(perform: clear)
+    }
+
+    private func focusField() {
+        guard focusRequest > 0 else { return }
+        DispatchQueue.main.async {
+            isFieldFocused = true
+        }
     }
 }
 
