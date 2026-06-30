@@ -285,6 +285,8 @@ struct AIChatProviderRegistryTests {
         #expect(chatGPTCLI.providerModeSelectionDetail.contains("does not read an OpenAI Platform key"))
         #expect(openAIAPI.providerModeBoundaryBadge == "API key")
         #expect(chatGPTCLI.providerModeBoundaryBadge == "Subscription CLI")
+        #expect(openAIAPI.runtimeBoundary == .externalAPI)
+        #expect(chatGPTCLI.runtimeBoundary == .localCLI)
         #expect(openAIAPI.providerPickerRouteSummary.contains("API key"))
         #expect(openAIAPI.providerPickerRouteSummary.contains("External API"))
         #expect(chatGPTCLI.providerPickerRouteSummary.contains("Subscription CLI"))
@@ -310,16 +312,47 @@ struct AIChatProviderRegistryTests {
         #expect(claudeCLI.providerModeSelectionDetail.contains("does not read an Anthropic Console key"))
         #expect(anthropicAPI.providerModeBoundaryBadge == "API key")
         #expect(claudeCLI.providerModeBoundaryBadge == "Subscription CLI")
+        #expect(anthropicAPI.runtimeBoundary == .externalAPI)
+        #expect(claudeCLI.runtimeBoundary == .localCLI)
         #expect(anthropicAPI.providerPickerAccessibilityLabel.contains("Anthropic API, API key"))
         #expect(claudeCLI.providerPickerAccessibilityLabel.contains("Claude Code subscription, Subscription CLI"))
 
         #expect(ollama.modeFamily == .localModels)
+        #expect(ollama.runtimeBoundary == .localServer)
         #expect(ProviderModeFamily.openAIChatGPT.detail.contains("API keys"))
         #expect(ProviderModeFamily.openAIChatGPT.detail.contains("subscription CLI"))
         #expect(ProviderModeFamily.openAIChatGPT.modeChoicePrompt?.contains("separate credentials") == true)
         #expect(ProviderModeFamily.anthropicClaude.detail.contains("API keys"))
         #expect(ProviderModeFamily.anthropicClaude.detail.contains("subscription CLI"))
         #expect(ProviderModeFamily.anthropicClaude.modeChoicePrompt?.contains("separate credentials") == true)
+    }
+
+    @Test("OpenAI-compatible runtime boundary follows endpoint locality")
+    func openAICompatibleRuntimeBoundaryFollowsEndpointLocality() {
+        let localEndpoint = ProviderConfiguration(
+            kind: .customOpenAICompatible,
+            accessMode: .openAICompatible,
+            privacyScope: .localOnly,
+            displayName: "Local gateway",
+            endpoint: "http://localhost:8080/v1",
+            modelIdentifier: "local-model"
+        )
+        let remoteEndpoint = ProviderConfiguration(
+            kind: .customOpenAICompatible,
+            accessMode: .openAICompatible,
+            privacyScope: .externalAPI,
+            displayName: "Remote gateway",
+            endpoint: "https://models.example.com/v1",
+            modelIdentifier: "remote-model"
+        )
+
+        #expect(localEndpoint.runtimeBoundary == .localServer)
+        #expect(localEndpoint.runtimeBoundary.leavesDeviceDirectly == false)
+        #expect(localEndpoint.providerPickerRouteSummary.contains("Local Server"))
+
+        #expect(remoteEndpoint.runtimeBoundary == .externalAPI)
+        #expect(remoteEndpoint.runtimeBoundary.leavesDeviceDirectly)
+        #expect(remoteEndpoint.providerPickerRouteSummary.contains("External API"))
     }
 
     @MainActor

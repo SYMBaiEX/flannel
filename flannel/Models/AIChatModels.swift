@@ -125,6 +125,56 @@ enum ProviderPrivacyScope: String, Codable, CaseIterable, Identifiable, Hashable
     }
 }
 
+enum ProviderRuntimeBoundary: String, Codable, CaseIterable, Hashable, Sendable {
+    case localServer
+    case localCLI
+    case externalAPI
+    case localBridge
+
+    var title: String {
+        switch self {
+        case .localServer:
+            "Local Server"
+        case .localCLI:
+            "Local CLI"
+        case .externalAPI:
+            "External API"
+        case .localBridge:
+            "Local Bridge"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .localServer:
+            "Requests stay inside a loopback or local-network model server configured by the user."
+        case .localCLI:
+            "Requests run through a locally authenticated command-line session."
+        case .externalAPI:
+            "Requests leave this Mac for a BYOK hosted provider endpoint."
+        case .localBridge:
+            "Requests go to a local bridge process that owns its downstream provider routing."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .localServer:
+            "desktopcomputer"
+        case .localCLI:
+            "terminal"
+        case .externalAPI:
+            "network"
+        case .localBridge:
+            "point.3.connected.trianglepath.dotted"
+        }
+    }
+
+    var leavesDeviceDirectly: Bool {
+        self == .externalAPI
+    }
+}
+
 enum ProviderModeFamily: String, CaseIterable, Identifiable, Hashable, Sendable {
     case localModels
     case openAIChatGPT
@@ -212,6 +262,21 @@ enum ProviderModeFamily: String, CaseIterable, Identifiable, Hashable, Sendable 
 }
 
 extension ProviderConfiguration {
+    nonisolated var runtimeBoundary: ProviderRuntimeBoundary {
+        switch accessMode {
+        case .localServer:
+            .localServer
+        case .subscriptionCLI:
+            .localCLI
+        case .aiSDKBridge:
+            .localBridge
+        case .apiKey, .anthropicCompatible:
+            .externalAPI
+        case .openAICompatible:
+            isLoopbackEndpoint ? .localServer : .externalAPI
+        }
+    }
+
     nonisolated var runtimePolicy: ProviderRuntimePolicy {
         ProviderRuntimePolicy(
             readinessStrategy: runtimeReadinessStrategy,
@@ -270,6 +335,19 @@ extension ProviderConfiguration {
         }
     }
 
+    nonisolated private var isLoopbackEndpoint: Bool {
+        let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let components = URLComponents(string: trimmed),
+              let host = components.host?.lowercased() else {
+            return privacyScope == .localOnly
+        }
+
+        return privacyScope == .localOnly
+            || host == "localhost"
+            || host == "127.0.0.1"
+            || host == "::1"
+    }
+
     var modeFamily: ProviderModeFamily {
         ProviderModeFamily.allCases.first { $0.contains(self) } ?? .customEndpoints
     }
@@ -306,7 +384,7 @@ extension ProviderConfiguration {
     var providerPickerRouteSummary: String {
         let model = modelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
         let modelText = model.isEmpty ? "No model" : model
-        return "\(providerModeBoundaryBadge) • \(privacyScope.title) • \(modelText)"
+        return "\(providerModeBoundaryBadge) • \(runtimeBoundary.title) • \(modelText)"
     }
 
     func providerPickerStatusLine(
