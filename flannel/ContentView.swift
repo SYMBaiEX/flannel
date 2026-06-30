@@ -8558,9 +8558,6 @@ private struct InspectorSurface: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Artifacts")
                             .font(.headline)
-                        Text("Compare runs, cited sources, and transcript tool traces.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
 
                     Spacer(minLength: 8)
@@ -8581,7 +8578,6 @@ private struct InspectorSurface: View {
                         sections: availableSections,
                         activeSection: activeSection,
                         count: sectionCount,
-                        summary: sectionSummary,
                         select: { activeSection = $0 }
                     )
                 }
@@ -8706,28 +8702,12 @@ private struct InspectorSurface: View {
         }
     }
 
-    private func sectionSummary(_ section: FlannelInspectorSection) -> String {
-        switch section {
-        case .chatDetail:
-            return store.currentAssistantThread?.title ?? "Select a chat"
-        case .sources:
-            return currentCitations.isEmpty ? "Citations" : "\(currentCitations.count) cited local source\(currentCitations.count == 1 ? "" : "s")"
-        case .compare:
-            if isRunningComparison {
-                return "Running"
-            }
-            return store.modelComparisonRuns.isEmpty ? "No runs" : "\(store.modelComparisonRuns.count) run\(store.modelComparisonRuns.count == 1 ? "" : "s")"
-        case .tools:
-            return currentThreadToolResults.isEmpty ? "No traces" : "\(currentThreadToolResults.count) trace\(currentThreadToolResults.count == 1 ? "" : "s")"
-        }
-    }
 }
 
 private struct InspectorSectionSelector: View {
     var sections: [FlannelInspectorSection]
     var activeSection: FlannelInspectorSection
     var count: (FlannelInspectorSection) -> Int
-    var summary: (FlannelInspectorSection) -> String
     var select: (FlannelInspectorSection) -> Void
 
     private var selection: Binding<FlannelInspectorSection> {
@@ -8746,14 +8726,9 @@ private struct InspectorSectionSelector: View {
                 }
             }
             .pickerStyle(.segmented)
+            .controlSize(.small)
             .labelsHidden()
             .accessibilityLabel("Artifact section")
-
-            Text("\(activeSection.title) - \(summary(activeSection)) - \(count(activeSection)) item\(count(activeSection) == 1 ? "" : "s")")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
         }
     }
 }
