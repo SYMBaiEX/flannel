@@ -857,6 +857,121 @@ struct ProviderSetupServiceTests {
         #expect(report.hasBlockingIssues)
         #expect(report.diagnostics.contains(where: { $0.code == .claudePrintModeRequired }))
     }
+
+    @Test("Settings messaging explains local discovery readiness distinctly")
+    func settingsMessagingExplainsLocalDiscoveryReadiness() {
+        let provider = ProviderConfiguration(
+            kind: .ollama,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "Ollama",
+            endpoint: "http://localhost:11434",
+            modelIdentifier: "llama3.1",
+            connectionStatus: .disconnected
+        )
+        let validation = ProviderReadinessValidation(
+            report: service.report(for: provider, preferences: WorkspacePreferences()),
+            connectionStatus: .ready,
+            availableModels: ["llama3.1", "qwen3:14b"],
+            selectedModelIdentifier: "llama3.1",
+            selectedModelIsAvailable: true,
+            checkedAt: Date(timeIntervalSince1970: 1_800_000_100),
+            errorMessage: nil
+        )
+
+        #expect(ProviderSettingsMessaging.disconnectedChipTitle(for: provider) == "Discovery needed")
+        #expect(ProviderSettingsMessaging.statusText(for: provider) == "Discovery and readiness have not run yet.")
+        #expect(ProviderSettingsMessaging.setupMessage(for: provider, validation: validation) == "Ready. Confirmed Ollama and checked 2 local models.")
+        #expect(ProviderSettingsMessaging.readinessSummary(for: provider, validation: validation).contains("Selected model is installed and reachable."))
+    }
+
+    @Test("Settings messaging separates compatible endpoint and CLI readiness copy")
+    func settingsMessagingSeparatesCompatibleEndpointAndCLIReadiness() {
+        let endpointProvider = ProviderConfiguration(
+            kind: .customOpenAICompatible,
+            accessMode: .openAICompatible,
+            privacyScope: .externalAPI,
+            displayName: "Hosted Router",
+            endpoint: "https://router.example.com/v1",
+            modelIdentifier: "router-model",
+            connectionStatus: .disconnected
+        )
+        let cleanEndpointReport = ProviderSetupReport(
+            normalizedEndpoint: "https://router.example.com/v1",
+            normalizedModelIdentifier: "router-model",
+            canonicalSecretReference: nil,
+            routingEligibility: .eligible,
+            diagnostics: []
+        )
+        let endpointValidation = ProviderReadinessValidation(
+            report: cleanEndpointReport,
+            connectionStatus: .ready,
+            availableModels: ["router-model"],
+            selectedModelIdentifier: "router-model",
+            selectedModelIsAvailable: true,
+            checkedAt: Date(timeIntervalSince1970: 1_800_000_200),
+            errorMessage: nil
+        )
+        let cliProvider = ProviderConfiguration(
+            kind: .chatGPTCLI,
+            accessMode: .subscriptionCLI,
+            privacyScope: .localCLI,
+            displayName: "ChatGPT/Codex CLI",
+            endpoint: "codex exec --json -",
+            modelIdentifier: "chatgpt-subscription",
+            connectionStatus: .disconnected
+        )
+        let cleanCLIReport = ProviderSetupReport(
+            normalizedEndpoint: nil,
+            normalizedModelIdentifier: "chatgpt-subscription",
+            canonicalSecretReference: nil,
+            routingEligibility: .eligible,
+            diagnostics: []
+        )
+        let cliValidation = ProviderReadinessValidation(
+            report: cleanCLIReport,
+            connectionStatus: .ready,
+            availableModels: ["chatgpt-subscription"],
+            selectedModelIdentifier: "chatgpt-subscription",
+            selectedModelIsAvailable: true,
+            checkedAt: Date(timeIntervalSince1970: 1_800_000_300),
+            errorMessage: nil
+        )
+
+        #expect(ProviderSettingsMessaging.disconnectedChipTitle(for: endpointProvider) == "Endpoint not checked")
+        #expect(ProviderSettingsMessaging.setupMessage(for: endpointProvider, validation: endpointValidation) == "Ready. Compatible endpoint responded and returned the selected model.")
+        #expect(ProviderSettingsMessaging.readinessSummary(for: endpointProvider, validation: endpointValidation).contains("Compatible endpoint checked"))
+        #expect(ProviderSettingsMessaging.disconnectedChipTitle(for: cliProvider) == "CLI not checked")
+        #expect(ProviderSettingsMessaging.statusText(for: cliProvider) == "CLI command has not been smoke-tested yet.")
+        #expect(ProviderSettingsMessaging.setupMessage(for: cliProvider, validation: cliValidation) == "Ready. Local CLI smoke check passed.")
+        #expect(ProviderSettingsMessaging.readinessSummary(for: cliProvider, validation: cliValidation).contains("local subscription command answered Flannel's smoke check"))
+    }
+
+    @Test("Local discovery settings message preserves provider-specific failures")
+    func localDiscoverySettingsMessagePreservesFailures() {
+        let message = ProviderSettingsMessaging.localDiscoveryMessage(for: [
+            LocalProviderDiscoveryResult(
+                providerKind: .ollama,
+                endpoint: "http://localhost:11434",
+                status: .needsAttention,
+                errorMessage: "Connection refused."
+            ),
+            LocalProviderDiscoveryResult(
+                providerKind: .lmStudio,
+                endpoint: "http://localhost:1234",
+                status: .ready,
+                models: [
+                    LocalModelDescriptor(
+                        name: "qwen3",
+                        providerKind: .lmStudio,
+                        endpoint: "http://localhost:1234"
+                    )
+                ]
+            )
+        ])
+
+        #expect(message == "Found 1 model across 1 local provider route. Needs attention: Ollama: Connection refused.")
+    }
 }
 
 private actor ProviderReadinessTransportRecorder {

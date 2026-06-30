@@ -1820,7 +1820,10 @@ struct SettingsSurface: View {
                 validations.append((providerID: providerID, validation: validation))
                 providerReadinessValidations[providerID] = validation
                 providerSetupReports[providerID] = validation.report
-                providerSetupMessages[providerID] = providerSetupMessage(for: validation)
+                providerSetupMessages[providerID] = providerSetupMessage(
+                    for: provider,
+                    validation: validation
+                )
                 validatingProviderIDs.remove(providerID)
             }
 
@@ -1831,15 +1834,11 @@ struct SettingsSurface: View {
         }
     }
 
-    private func providerSetupMessage(for validation: ProviderReadinessValidation) -> String {
-        if validation.isReady {
-            let modelCount = validation.availableModels.isEmpty
-                ? "provider metadata"
-                : "\(validation.availableModels.count) model\(validation.availableModels.count == 1 ? "" : "s")"
-            return "Ready. Checked \(modelCount)."
-        }
-
-        return validation.errorMessage ?? "Provider needs attention before chat routing."
+    private func providerSetupMessage(
+        for provider: ProviderConfiguration,
+        validation: ProviderReadinessValidation
+    ) -> String {
+        ProviderSettingsMessaging.setupMessage(for: provider, validation: validation)
     }
 
     private func saveAPIKey(for providerID: UUID) {
@@ -1885,11 +1884,7 @@ struct SettingsSurface: View {
         for provider in store.providerConfigurations where provider.kind == .ollama || provider.kind == .lmStudio {
             validateProvider(provider.id)
         }
-        let readyCount = results.filter { $0.status == .ready }.count
-        let modelCount = results.reduce(0) { $0 + $1.models.count }
-        localDiscoveryMessage = readyCount == 0
-            ? "No running local providers found."
-            : "Found \(modelCount) models across \(readyCount) local providers."
+        localDiscoveryMessage = ProviderSettingsMessaging.localDiscoveryMessage(for: results)
         isDiscoveringLocalModels = false
         persist()
     }
@@ -3359,7 +3354,7 @@ private struct ProviderSettingsRow: View {
             }
 
             if let readinessValidation {
-                ProviderReadinessSummary(validation: readinessValidation)
+                ProviderReadinessSummary(provider: provider, validation: readinessValidation)
             }
         }
         .padding(.vertical, 8)
@@ -3632,7 +3627,7 @@ private struct ProviderSettingsRow: View {
             )
         case .disconnected:
             return ProviderSettingsStatusChip(
-                title: "Not checked",
+                title: ProviderSettingsMessaging.disconnectedChipTitle(for: provider),
                 systemImage: "circle.dashed",
                 tone: .neutral,
                 prominence: .subtle
@@ -3838,11 +3833,7 @@ private struct ProviderSettingsRow: View {
     }
 
     private var statusText: String {
-        var values = [humanized(provider.connectionStatus.rawValue)]
-        if let validatedAt = provider.lastValidatedAt {
-            values.append("checked \(validatedAt.formatted(date: .abbreviated, time: .shortened))")
-        }
-        return values.joined(separator: " - ")
+        ProviderSettingsMessaging.statusText(for: provider)
     }
 
     private var statusStyle: AnyShapeStyle {
@@ -4071,6 +4062,7 @@ private struct ProviderRequestOverridesEditor: View {
 }
 
 private struct ProviderReadinessSummary: View {
+    var provider: ProviderConfiguration
     var validation: ProviderReadinessValidation
 
     var body: some View {
@@ -4080,7 +4072,7 @@ private struct ProviderReadinessSummary: View {
                 .foregroundStyle(validation.isReady ? AnyShapeStyle(.green) : AnyShapeStyle(.orange))
                 .fixedSize(horizontal: false, vertical: true)
 
-            if !validation.availableModels.isEmpty {
+            if let modelListSummary {
                 Text(modelListSummary)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -4090,25 +4082,11 @@ private struct ProviderReadinessSummary: View {
     }
 
     private var summaryText: String {
-        let checkedText = validation.checkedAt.formatted(date: .abbreviated, time: .shortened)
-        if validation.selectedModelIsAvailable {
-            return "Live readiness checked \(checkedText). Selected model is available."
-        }
-
-        if validation.selectedModelIdentifier.isEmpty {
-            return "Live readiness checked \(checkedText). Select a model before routing chat."
-        }
-
-        return "Live readiness checked \(checkedText). Selected model \(validation.selectedModelIdentifier) was not returned."
+        ProviderSettingsMessaging.readinessSummary(for: provider, validation: validation)
     }
 
-    private var modelListSummary: String {
-        let models = validation.availableModels.prefix(5).joined(separator: ", ")
-        let extraCount = max(0, validation.availableModels.count - 5)
-        if extraCount == 0 {
-            return "Returned models: \(models)"
-        }
-        return "Returned models: \(models), and \(extraCount) more"
+    private var modelListSummary: String? {
+        ProviderSettingsMessaging.modelListSummary(for: validation)
     }
 }
 
