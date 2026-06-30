@@ -2088,6 +2088,10 @@ private struct AppSidebar: View {
                 .padding(.horizontal, 14)
                 .padding(.bottom, 10)
 
+            sidebarRefinementControl
+                .padding(.horizontal, 14)
+                .padding(.bottom, 8)
+
             List(selection: selectedThreadListBinding) {
                 if query.isEmpty {
                     if visibleThreads.isEmpty {
