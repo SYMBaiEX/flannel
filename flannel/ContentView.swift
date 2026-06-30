@@ -8978,6 +8978,26 @@ private struct ProviderRoutingPicker: View {
     var openProviderSetup: () -> Void
     var persist: () -> Void
 
+    private var localOnlyBinding: Binding<Bool> {
+        Binding(
+            get: { store.preferences.localOnlyMode ?? true },
+            set: { newValue in
+                store.preferences.localOnlyMode = newValue
+                persist()
+            }
+        )
+    }
+
+    private var allowCloudProvidersBinding: Binding<Bool> {
+        Binding(
+            get: { store.preferences.allowCloudProviders ?? false },
+            set: { newValue in
+                store.preferences.allowCloudProviders = newValue
+                persist()
+            }
+        )
+    }
+
     private var preferredProvider: ProviderConfiguration? {
         store.preferredProviderConfiguration
     }
@@ -9064,25 +9084,13 @@ private struct ProviderRoutingPicker: View {
             }
 
             Section("Privacy") {
-                Button {
-                    store.preferences.localOnlyMode = !(store.preferences.localOnlyMode ?? true)
-                    persist()
-                } label: {
-                    Label(
-                        (store.preferences.localOnlyMode ?? true) ? "Local-only Active" : "Local-only Disabled",
-                        systemImage: (store.preferences.localOnlyMode ?? true) ? "checkmark.shield" : "shield"
-                    )
+                Toggle(isOn: localOnlyBinding) {
+                    Label("Local-only Mode", systemImage: "lock")
                 }
                 .help("Keep routing on local servers and local CLI providers.")
 
-                Button {
-                    store.preferences.allowCloudProviders = !(store.preferences.allowCloudProviders ?? false)
-                    persist()
-                } label: {
-                    Label(
-                        (store.preferences.allowCloudProviders ?? false) ? "Cloud APIs Allowed" : "Cloud APIs Blocked",
-                        systemImage: (store.preferences.allowCloudProviders ?? false) ? "network" : "network.slash"
-                    )
+                Toggle(isOn: allowCloudProvidersBinding) {
+                    Label("Allow Cloud APIs", systemImage: "network")
                 }
                 .help("Allow or block external API-key providers from becoming active.")
             }
@@ -9093,16 +9101,6 @@ private struct ProviderRoutingPicker: View {
                 let familyProviders = providers(in: family)
                 if !familyProviders.isEmpty {
                     Section(family.title) {
-                        if let modeChoicePrompt = family.modeChoicePrompt {
-                            Button {} label: {
-                                ProviderModeBoundaryMenuRow(
-                                    prompt: modeChoicePrompt,
-                                    icon: family.icon
-                                )
-                            }
-                            .disabled(true)
-                        }
-
                         ForEach(familyProviders) { provider in
                             let modelNames = selectableModelNames(for: provider)
                             if modelNames.isEmpty {
@@ -9172,7 +9170,8 @@ private struct ProviderRoutingPicker: View {
         }
         .menuStyle(.button)
         .help("Choose provider mode for this chat")
-        .accessibilityLabel("Provider routing picker")
+        .accessibilityLabel("Provider routing")
+        .accessibilityValue(providerRoutingAccessibilityValue)
     }
 
     private func providers(in family: ProviderModeFamily) -> [ProviderConfiguration] {
@@ -9246,6 +9245,13 @@ private struct ProviderRoutingPicker: View {
     private func currentModelMenuTitle(for provider: ProviderConfiguration) -> String {
         let modelName = provider.modelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
         return modelName.isEmpty ? "Use current route" : "Use current model: \(modelName)"
+    }
+
+    private var providerRoutingAccessibilityValue: String {
+        guard let selectedProvider else {
+            return "Choose provider"
+        }
+        return "\(selectedProvider.providerPickerAccessibilityLabel), \(readiness(for: selectedProvider).text)"
     }
 
     private func readiness(for provider: ProviderConfiguration) -> ProviderRouteReadiness {
