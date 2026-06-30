@@ -2659,6 +2659,7 @@ private struct SettingsRouteRow: View {
         .padding(.vertical, 4)
         .accessibilityLabel(tab.title)
         .accessibilityValue(isSelected ? "Selected" : "")
+        .accessibilityHint(tab.detail)
     }
 }
 
@@ -2679,6 +2680,7 @@ private struct SidebarFooter: View {
                     detail: "Preferences, models, privacy",
                     systemImage: "gearshape",
                     trailingText: "⌘,",
+                    shortcutDescription: "Command comma",
                     action: openSettings
                 )
 
@@ -2702,6 +2704,7 @@ private struct SidebarFooterRow: View {
     var systemImage: String
     var tint: Color = .secondary
     var trailingText: String?
+    var shortcutDescription: String?
     var action: () -> Void
     @State private var isHovering = false
 
@@ -2742,6 +2745,12 @@ private struct SidebarFooterRow: View {
         .onHover { isHovering = $0 }
         .accessibilityLabel(title)
         .accessibilityValue(detail)
+        .accessibilityHint(accessibilityHint)
+    }
+
+    private var accessibilityHint: String {
+        guard let shortcutDescription else { return detail }
+        return "\(detail). Keyboard shortcut \(shortcutDescription)."
     }
 }
 
