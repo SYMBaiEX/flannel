@@ -2966,6 +2966,32 @@ private struct SidebarThreadRow: View {
         return preview.isEmpty ? nil : preview
     }
 
+    private var accessibilityLabelText: String {
+        var parts = [thread.title]
+        if isPinned {
+            parts.append("Favorite")
+        }
+        if isArchived {
+            parts.append("Archived")
+        }
+        if let folder {
+            parts.append("Folder \(folder.title)")
+        }
+        parts.append("updated \(thread.updatedAt.formatted(date: .abbreviated, time: .shortened))")
+        return parts.joined(separator: ", ")
+    }
+
+    private var accessibilityValueText: String {
+        var parts: [String] = []
+        if let lastMessagePreview {
+            parts.append(lastMessagePreview)
+        }
+        if !thread.tagNames.isEmpty {
+            parts.append("Tags \(thread.tagNames.sorted().joined(separator: ", "))")
+        }
+        return parts.joined(separator: ". ")
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 9) {
             Button(action: choose) {
@@ -3014,8 +3040,8 @@ private struct SidebarThreadRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(thread.title), updated \(thread.updatedAt.formatted(date: .abbreviated, time: .shortened))")
-            .accessibilityValue(lastMessagePreview ?? "")
+            .accessibilityLabel(accessibilityLabelText)
+            .accessibilityValue(accessibilityValueText)
             .accessibilityAddTraits(isSelected ? .isSelected : [])
             .help(lastMessagePreview ?? thread.title)
         }
