@@ -62,7 +62,7 @@ struct ContentView: View {
                 runCommand(id: commandID)
             }
             .persistenceIssueAlert(store: store, retrySave: persistQuietly)
-            .frame(minWidth: 1340, minHeight: 760)
+            .frame(minWidth: 1080, minHeight: 680)
             .tint(.accentColor)
             .task {
                 do {
@@ -152,7 +152,7 @@ struct ContentView: View {
             exitSettings: { exitSettingsMode() },
             persist: persistQuietly
         )
-        .navigationSplitViewColumnWidth(min: 760, ideal: 1_020)
+        .navigationSplitViewColumnWidth(min: 620, ideal: 1_020)
     }
 
     @ViewBuilder
