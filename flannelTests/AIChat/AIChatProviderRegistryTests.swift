@@ -702,6 +702,41 @@ struct AIChatProviderRegistryTests {
     }
 
     @MainActor
+    @Test("Provider matrix seeds routes from the known provider catalog")
+    func providerMatrixSeedsRoutesFromKnownProviderCatalog() throws {
+        let container = try ModelContainer(
+            for: Item.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        context.insert(Item(providerConfigurations: []))
+        try context.save()
+
+        let store = WorkspaceStore()
+        try store.loadOrCreate(in: context)
+
+        for catalogEntry in AIKnownProviderCatalog.entries {
+            let providerKind = LLMProviderKind(catalogEntry.providerKind)
+            let provider = try #require(
+                store.providerConfigurations.first {
+                    $0.kind == providerKind && $0.accessMode == catalogEntry.accessMode
+                }
+            )
+
+            #expect(provider.privacyScope == catalogEntry.privacyScope)
+            if let endpoint = catalogEntry.endpoint {
+                #expect(provider.endpoint == endpoint)
+            }
+            #expect(provider.modelIdentifier == catalogEntry.defaultModelIdentifier)
+            #expect(Set(catalogEntry.capabilities).isSubset(of: Set(provider.capabilities)))
+
+            if !catalogEntry.defaultModelIdentifier.isEmpty {
+                #expect(provider.availableModels.contains(catalogEntry.defaultModelIdentifier))
+            }
+        }
+    }
+
+    @MainActor
     @Test("Local discovery targets come from configured local provider rows")
     func localDiscoveryTargetsUseConfiguredProviderRows() throws {
         let (_, store) = try makeLoadedStore()

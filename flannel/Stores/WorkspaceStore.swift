@@ -4462,13 +4462,13 @@ final class WorkspaceStore {
                 accessMode: .localServer,
                 privacyScope: .localOnly,
                 displayName: "Local Ollama",
-                endpoint: "http://localhost:11434",
-                modelIdentifier: "llama3.1",
+                endpoint: defaultProviderEndpoint(for: .ollama),
+                modelIdentifier: defaultProviderModelIdentifier(for: .ollama),
                 isEnabled: true,
                 connectionStatus: .disconnected,
                 isLocalPreferred: true,
-                availableModels: ["llama3.1"],
-                capabilities: [.chat, .streaming, .toolCalling, .embeddings],
+                availableModels: defaultProviderAvailableModels(for: .ollama),
+                capabilities: providerRuntimeCapabilityDefaults(for: .ollama),
                 supportsStreaming: true,
                 supportsToolCalling: true,
                 supportsEmbeddings: true
@@ -4481,12 +4481,12 @@ final class WorkspaceStore {
                 accessMode: .localServer,
                 privacyScope: .localOnly,
                 displayName: "LM Studio",
-                endpoint: "http://localhost:1234",
-                modelIdentifier: "",
+                endpoint: defaultProviderEndpoint(for: .lmStudio),
+                modelIdentifier: defaultProviderModelIdentifier(for: .lmStudio),
                 isEnabled: true,
                 connectionStatus: .disconnected,
                 isLocalPreferred: true,
-                capabilities: [.chat, .streaming, .toolCalling, .embeddings, .openAICompatible, .anthropicCompatible],
+                capabilities: providerRuntimeCapabilityDefaults(for: .lmStudio),
                 supportsStreaming: true,
                 supportsToolCalling: true,
                 supportsEmbeddings: true
@@ -4499,13 +4499,13 @@ final class WorkspaceStore {
                 accessMode: .apiKey,
                 privacyScope: .externalAPI,
                 displayName: "OpenAI API",
-                endpoint: "https://api.openai.com/v1",
-                modelIdentifier: "gpt-5.5",
+                endpoint: defaultProviderEndpoint(for: .openAI),
+                modelIdentifier: defaultProviderModelIdentifier(for: .openAI),
                 isEnabled: true,
                 connectionStatus: .needsAttention,
                 lastErrorMessage: "API key must be saved in Keychain before use.",
-                availableModels: ["gpt-5.5", "gpt-5.5-mini"],
-                capabilities: [.chat, .streaming, .toolCalling, .vision, .reasoning, .structuredOutput],
+                availableModels: defaultProviderAvailableModels(for: .openAI),
+                capabilities: providerRuntimeCapabilityDefaults(for: .openAI),
                 supportsStreaming: true,
                 supportsToolCalling: true,
                 supportsVision: true,
@@ -4519,46 +4519,39 @@ final class WorkspaceStore {
                 accessMode: .apiKey,
                 privacyScope: .externalAPI,
                 displayName: "Anthropic API",
-                endpoint: "https://api.anthropic.com",
-                modelIdentifier: "claude-opus-4.7",
+                endpoint: defaultProviderEndpoint(for: .anthropic),
+                modelIdentifier: defaultProviderModelIdentifier(for: .anthropic),
                 isEnabled: false,
                 connectionStatus: .needsAttention,
                 lastErrorMessage: "API key must be saved in Keychain before use.",
-                capabilities: [.chat, .streaming, .toolCalling, .vision, .reasoning],
+                availableModels: defaultProviderAvailableModels(for: .anthropic),
+                capabilities: providerRuntimeCapabilityDefaults(for: .anthropic),
                 supportsStreaming: true,
                 supportsToolCalling: true,
                 supportsVision: true
             )
         )
 
-        let hostedProviders: [(LLMProviderKind, String, String, String, [ModelCapability])] = [
-            (.gemini, "Google Gemini API", "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.5-pro", [.chat, .streaming, .toolCalling, .vision, .openAICompatible]),
-            (.xAI, "xAI API", "https://api.x.ai/v1", "grok-4.3", [.chat, .streaming, .toolCalling, .reasoning, .openAICompatible]),
-            (.mistral, "Mistral API", "https://api.mistral.ai/v1", "mistral-large-latest", [.chat, .streaming, .toolCalling, .openAICompatible]),
-            (.groq, "Groq API", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile", [.chat, .streaming, .toolCalling, .openAICompatible]),
-            (.openRouter, "OpenRouter", "https://openrouter.ai/api/v1", "openai/gpt-5.5", [.chat, .streaming, .toolCalling, .openAICompatible]),
-            (.perplexity, "Perplexity API", "https://api.perplexity.ai", "sonar-pro", [.chat, .streaming, .webSearch, .openAICompatible]),
-            (.customOpenAICompatible, "Custom OpenAI-compatible", "http://localhost:8080/v1", "", [.chat, .streaming, .toolCalling, .openAICompatible])
-        ]
-
-        for item in hostedProviders {
+        for kind in [LLMProviderKind.gemini, .xAI, .mistral, .groq, .openRouter, .perplexity, .customOpenAICompatible] {
+            let capabilities = providerRuntimeCapabilityDefaults(for: kind)
             addIfMissing(
                 ProviderConfiguration(
-                    kind: item.0,
-                    accessMode: item.0 == .customOpenAICompatible ? .openAICompatible : .apiKey,
+                    kind: kind,
+                    accessMode: kind == .customOpenAICompatible ? .openAICompatible : .apiKey,
                     privacyScope: .externalAPI,
-                    displayName: item.1,
-                    endpoint: item.2,
-                    modelIdentifier: item.3,
+                    displayName: AIKnownProviderCatalog.entry(for: kind)?.displayName ?? "\(kind.title) API",
+                    endpoint: defaultProviderEndpoint(for: kind),
+                    modelIdentifier: defaultProviderModelIdentifier(for: kind),
                     isEnabled: false,
                     connectionStatus: .needsAttention,
                     lastErrorMessage: "Configure credentials before enabling.",
-                    capabilities: item.4,
-                    supportsStreaming: item.4.contains(.streaming),
-                    supportsToolCalling: item.4.contains(.toolCalling),
-                    supportsEmbeddings: item.4.contains(.embeddings),
-                    supportsVision: item.4.contains(.vision),
-                    supportsStructuredOutput: item.4.contains(.structuredOutput)
+                    availableModels: defaultProviderAvailableModels(for: kind),
+                    capabilities: capabilities,
+                    supportsStreaming: capabilities.contains(.streaming),
+                    supportsToolCalling: capabilities.contains(.toolCalling),
+                    supportsEmbeddings: capabilities.contains(.embeddings),
+                    supportsVision: capabilities.contains(.vision),
+                    supportsStructuredOutput: capabilities.contains(.structuredOutput)
                 )
             )
         }
@@ -4571,11 +4564,12 @@ final class WorkspaceStore {
                 privacyScope: .localCLI,
                 displayName: "ChatGPT/Codex CLI",
                 endpoint: "codex exec --json -",
-                modelIdentifier: "chatgpt-subscription",
+                modelIdentifier: defaultProviderModelIdentifier(for: .chatGPTCLI),
                 isEnabled: false,
                 connectionStatus: .needsAttention,
                 lastErrorMessage: "Requires a locally authenticated Codex or ChatGPT CLI.",
-                capabilities: [.chat, .streaming],
+                availableModels: defaultProviderAvailableModels(for: .chatGPTCLI),
+                capabilities: providerRuntimeCapabilityDefaults(for: .chatGPTCLI),
                 supportsStreaming: true,
                 supportsToolCalling: false
             )
@@ -4588,11 +4582,12 @@ final class WorkspaceStore {
                 privacyScope: .localCLI,
                 displayName: "Claude Code CLI",
                 endpoint: "claude -p --output-format stream-json --verbose",
-                modelIdentifier: "claude-subscription",
+                modelIdentifier: defaultProviderModelIdentifier(for: .claudeCodeCLI),
                 isEnabled: false,
                 connectionStatus: .needsAttention,
                 lastErrorMessage: "Requires a locally authenticated Claude Code install.",
-                capabilities: [.chat, .streaming],
+                availableModels: defaultProviderAvailableModels(for: .claudeCodeCLI),
+                capabilities: providerRuntimeCapabilityDefaults(for: .claudeCodeCLI),
                 supportsStreaming: true,
                 supportsToolCalling: false
             )
@@ -4604,12 +4599,12 @@ final class WorkspaceStore {
                 accessMode: .aiSDKBridge,
                 privacyScope: .bridgeService,
                 displayName: "Vercel AI SDK Bridge",
-                endpoint: "http://localhost:4177",
-                modelIdentifier: "",
+                endpoint: defaultProviderEndpoint(for: .vercelAISDKBridge),
+                modelIdentifier: defaultProviderModelIdentifier(for: .vercelAISDKBridge),
                 isEnabled: false,
                 connectionStatus: .needsAttention,
                 lastErrorMessage: "Optional Node 22+ local bridge. Not embedded in the Swift app.",
-                capabilities: [.chat, .streaming, .toolCalling, .embeddings, .structuredOutput],
+                capabilities: providerRuntimeCapabilityDefaults(for: .vercelAISDKBridge),
                 supportsStreaming: true,
                 supportsToolCalling: true,
                 supportsEmbeddings: true,
@@ -4638,13 +4633,13 @@ final class WorkspaceStore {
                 accessMode: .localServer,
                 privacyScope: privacyScope,
                 displayName: displayName,
-                endpoint: "http://localhost:11434",
+                endpoint: defaultProviderEndpoint(for: .ollama),
                 modelIdentifier: "",
                 isEnabled: true,
                 connectionStatus: .needsAttention,
                 lastErrorMessage: "Run local discovery or enter an installed Ollama chat model.",
                 isLocalPreferred: true,
-                capabilities: [.chat, .streaming, .toolCalling, .embeddings],
+                capabilities: providerRuntimeCapabilityDefaults(for: .ollama),
                 supportsStreaming: true,
                 supportsToolCalling: true,
                 supportsEmbeddings: true
@@ -4655,13 +4650,13 @@ final class WorkspaceStore {
                 accessMode: .localServer,
                 privacyScope: privacyScope,
                 displayName: displayName,
-                endpoint: "http://localhost:1234",
+                endpoint: defaultProviderEndpoint(for: .lmStudio),
                 modelIdentifier: "",
                 isEnabled: true,
                 connectionStatus: .needsAttention,
                 lastErrorMessage: "Start the LM Studio server, run discovery, then select a model.",
                 isLocalPreferred: true,
-                capabilities: [.chat, .streaming, .toolCalling, .embeddings, .openAICompatible],
+                capabilities: providerRuntimeCapabilityDefaults(for: .lmStudio),
                 supportsStreaming: true,
                 supportsToolCalling: true,
                 supportsEmbeddings: true
@@ -4672,13 +4667,13 @@ final class WorkspaceStore {
                 accessMode: .apiKey,
                 privacyScope: privacyScope,
                 displayName: displayName,
-                endpoint: "https://api.openai.com/v1",
-                modelIdentifier: "gpt-5.5",
+                endpoint: defaultProviderEndpoint(for: .openAI),
+                modelIdentifier: defaultProviderModelIdentifier(for: .openAI),
                 isEnabled: false,
                 connectionStatus: .needsAttention,
                 lastErrorMessage: "Save an OpenAI Platform API key in Keychain before enabling this route.",
-                availableModels: ["gpt-5.5", "gpt-5.5-mini"],
-                capabilities: [.chat, .streaming, .toolCalling, .vision, .reasoning, .structuredOutput],
+                availableModels: defaultProviderAvailableModels(for: .openAI),
+                capabilities: providerRuntimeCapabilityDefaults(for: .openAI),
                 supportsStreaming: true,
                 supportsToolCalling: true,
                 supportsVision: true,
@@ -4690,12 +4685,13 @@ final class WorkspaceStore {
                 accessMode: .apiKey,
                 privacyScope: privacyScope,
                 displayName: displayName,
-                endpoint: "https://api.anthropic.com",
-                modelIdentifier: "claude-opus-4.7",
+                endpoint: defaultProviderEndpoint(for: .anthropic),
+                modelIdentifier: defaultProviderModelIdentifier(for: .anthropic),
                 isEnabled: false,
                 connectionStatus: .needsAttention,
                 lastErrorMessage: "Save an Anthropic Console API key in Keychain before enabling this route.",
-                capabilities: [.chat, .streaming, .toolCalling, .vision, .reasoning],
+                availableModels: defaultProviderAvailableModels(for: .anthropic),
+                capabilities: providerRuntimeCapabilityDefaults(for: .anthropic),
                 supportsStreaming: true,
                 supportsToolCalling: true,
                 supportsVision: true
@@ -4707,11 +4703,12 @@ final class WorkspaceStore {
                 privacyScope: .localCLI,
                 displayName: displayName,
                 endpoint: "codex exec --json -",
-                modelIdentifier: "chatgpt-subscription",
+                modelIdentifier: defaultProviderModelIdentifier(for: .chatGPTCLI),
                 isEnabled: false,
                 connectionStatus: .needsAttention,
                 lastErrorMessage: "Requires a locally authenticated Codex or ChatGPT CLI.",
-                capabilities: [.chat, .streaming],
+                availableModels: defaultProviderAvailableModels(for: .chatGPTCLI),
+                capabilities: providerRuntimeCapabilityDefaults(for: .chatGPTCLI),
                 supportsStreaming: true
             )
         case .claudeCodeCLI:
@@ -4721,11 +4718,12 @@ final class WorkspaceStore {
                 privacyScope: .localCLI,
                 displayName: displayName,
                 endpoint: "claude -p --output-format stream-json --verbose",
-                modelIdentifier: "claude-subscription",
+                modelIdentifier: defaultProviderModelIdentifier(for: .claudeCodeCLI),
                 isEnabled: false,
                 connectionStatus: .needsAttention,
                 lastErrorMessage: "Requires a locally authenticated Claude Code install.",
-                capabilities: [.chat, .streaming],
+                availableModels: defaultProviderAvailableModels(for: .claudeCodeCLI),
+                capabilities: providerRuntimeCapabilityDefaults(for: .claudeCodeCLI),
                 supportsStreaming: true
             )
         case .customOpenAICompatible:
@@ -4739,7 +4737,7 @@ final class WorkspaceStore {
                 isEnabled: privacyScope == .localOnly,
                 connectionStatus: .needsAttention,
                 lastErrorMessage: "Enter the endpoint, model id, and optional API key before routing chat.",
-                capabilities: [.chat, .streaming, .toolCalling, .openAICompatible],
+                capabilities: providerRuntimeCapabilityDefaults(for: .customOpenAICompatible),
                 supportsStreaming: true,
                 supportsToolCalling: true
             )
@@ -4749,12 +4747,12 @@ final class WorkspaceStore {
                 accessMode: .aiSDKBridge,
                 privacyScope: .bridgeService,
                 displayName: displayName,
-                endpoint: "http://localhost:4177",
-                modelIdentifier: "",
+                endpoint: defaultProviderEndpoint(for: .vercelAISDKBridge),
+                modelIdentifier: defaultProviderModelIdentifier(for: .vercelAISDKBridge),
                 isEnabled: false,
                 connectionStatus: .needsAttention,
                 lastErrorMessage: "Run the local AI SDK bridge, then check readiness.",
-                capabilities: [.chat, .streaming, .toolCalling, .embeddings, .structuredOutput],
+                capabilities: providerRuntimeCapabilityDefaults(for: .vercelAISDKBridge),
                 supportsStreaming: true,
                 supportsToolCalling: true,
                 supportsEmbeddings: true,
@@ -4772,6 +4770,7 @@ final class WorkspaceStore {
                 isEnabled: false,
                 connectionStatus: .needsAttention,
                 lastErrorMessage: "Save this provider's API key in Keychain before enabling this route.",
+                availableModels: defaultProviderAvailableModels(for: kind),
                 capabilities: defaults.capabilities,
                 supportsStreaming: defaults.capabilities.contains(.streaming),
                 supportsToolCalling: defaults.capabilities.contains(.toolCalling),
@@ -4823,26 +4822,29 @@ final class WorkspaceStore {
         return "\(baseName) \(UUID().uuidString.prefix(6))"
     }
 
+    private func defaultProviderEndpoint(for kind: LLMProviderKind) -> String {
+        AIKnownProviderCatalog.entry(for: kind)?.endpoint ?? ""
+    }
+
+    private func defaultProviderModelIdentifier(for kind: LLMProviderKind) -> String {
+        AIKnownProviderCatalog.entry(for: kind)?.defaultModelIdentifier ?? ""
+    }
+
+    private func defaultProviderAvailableModels(for kind: LLMProviderKind) -> [String] {
+        guard let entry = AIKnownProviderCatalog.entry(for: kind) else { return [] }
+        if entry.requestBoundary == .localServer {
+            return entry.defaultModelIdentifier.isEmpty ? [] : [entry.defaultModelIdentifier]
+        }
+        return entry.normalizedRecommendedModelIdentifiers
+    }
+
     private func hostedProviderRouteDefaults(
         for kind: LLMProviderKind
     ) -> (endpoint: String, modelIdentifier: String, capabilities: [ModelCapability]) {
-        switch kind {
-        case .gemini:
-            ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.5-pro", [.chat, .streaming, .toolCalling, .vision, .openAICompatible])
-        case .xAI:
-            ("https://api.x.ai/v1", "grok-4.3", [.chat, .streaming, .toolCalling, .reasoning, .openAICompatible])
-        case .mistral:
-            ("https://api.mistral.ai/v1", "mistral-large-latest", [.chat, .streaming, .toolCalling, .openAICompatible])
-        case .groq:
-            ("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile", [.chat, .streaming, .toolCalling, .openAICompatible])
-        case .openRouter:
-            ("https://openrouter.ai/api/v1", "openai/gpt-5.5", [.chat, .streaming, .toolCalling, .openAICompatible])
-        case .perplexity:
-            ("https://api.perplexity.ai", "sonar-pro", [.chat, .streaming, .webSearch, .openAICompatible])
-        case .ollama, .lmStudio, .openAI, .anthropic, .customOpenAICompatible, .chatGPTCLI,
-             .claudeCodeCLI, .vercelAISDKBridge:
-            ("", "", [.chat, .streaming])
+        guard let entry = AIKnownProviderCatalog.entry(for: kind) else {
+            return ("", "", [.chat, .streaming])
         }
+        return (entry.endpoint ?? "", entry.defaultModelIdentifier, entry.capabilities)
     }
 
     private func reconcileHostedProviderRuntimeDefaults() {
@@ -4874,20 +4876,7 @@ final class WorkspaceStore {
     }
 
     private func providerRuntimeCapabilityDefaults(for kind: LLMProviderKind) -> [ModelCapability] {
-        switch kind {
-        case .openAI:
-            [.chat, .streaming, .toolCalling, .vision, .reasoning, .structuredOutput]
-        case .anthropic:
-            [.chat, .streaming, .toolCalling, .vision, .reasoning]
-        case .gemini, .xAI, .mistral, .groq, .openRouter, .perplexity:
-            hostedProviderRouteDefaults(for: kind).capabilities
-        case .customOpenAICompatible:
-            [.chat, .streaming, .toolCalling, .openAICompatible]
-        case .vercelAISDKBridge:
-            [.chat, .streaming, .toolCalling, .embeddings, .structuredOutput]
-        case .ollama, .lmStudio, .chatGPTCLI, .claudeCodeCLI:
-            [.chat, .streaming]
-        }
+        AIKnownProviderCatalog.entry(for: kind)?.capabilities ?? [.chat, .streaming]
     }
 
     private func reconcileProviderCapabilities(
