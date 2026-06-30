@@ -4961,44 +4961,63 @@ private struct Composer: View {
                 Button {
                     isFileImporterPresented = true
                 } label: {
-                    Label("Attach", systemImage: "paperclip")
+                    Image(systemName: "paperclip")
+                        .font(.body)
+                        .frame(width: 30, height: 28)
+                        .contentShape(Rectangle())
                 }
-                .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
                 .controlSize(.regular)
                 .disabled(isStreamingResponse)
+                .help("Attach files")
+                .accessibilityLabel("Attach files")
 
                 if !isStreamingResponse {
                     Button {
                         compare()
                     } label: {
-                        Label("Compare", systemImage: "rectangle.split.3x1")
+                        Image(systemName: "rectangle.split.3x1")
+                            .font(.body)
+                            .frame(width: 30, height: 28)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderless)
                     .controlSize(.regular)
                     .disabled(!canComparePrompt)
+                    .help("Compare with multiple models")
+                    .accessibilityLabel("Compare with multiple models")
                 }
 
                 if isStreamingResponse {
                     Button {
                         cancel()
                     } label: {
-                        Label("Stop", systemImage: "stop.fill")
+                        Image(systemName: "stop.fill")
+                            .font(.body)
+                            .frame(width: 30, height: 28)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.borderless)
                     .controlSize(.regular)
-                    .tint(.red)
+                    .foregroundStyle(.red)
+                    .help("Stop response")
+                    .accessibilityLabel("Stop response")
                 }
 
                 Button {
                     send()
                 } label: {
-                    Label("Send", systemImage: "paperplane.fill")
+                    Image(systemName: "arrow.up")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 32, height: 28)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.regular)
                 .keyboardShortcut(.return, modifiers: [.command])
                 .disabled(isStreamingResponse || !canSubmit)
+                .help("Send message")
+                .accessibilityLabel("Send message")
             }
         }
         .dropDestination(for: URL.self) { urls, _ in
