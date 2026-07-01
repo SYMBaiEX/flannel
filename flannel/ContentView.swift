@@ -5371,25 +5371,20 @@ private struct Composer: View {
                 .accessibilityLabel("Attach files")
                 .accessibilityHint(attachHelpText)
 
-                Menu {
-                    Button {
-                        compare()
-                    } label: {
-                        Label("Compare Current Prompt", systemImage: "rectangle.split.3x1")
-                    }
-                    .disabled(!canComparePrompt)
+                Button {
+                    compare()
                 } label: {
                     Image(systemName: "ellipsis.circle")
                         .font(.body)
                         .frame(width: 30, height: 28)
                         .contentShape(Rectangle())
                 }
-                .menuStyle(.borderlessButton)
+                .buttonStyle(.borderless)
                 .controlSize(.regular)
                 .flannelGlassCapsule(.clear, interactive: true)
-                .disabled(isStreamingResponse)
+                .disabled(isStreamingResponse || !canComparePrompt)
                 .help(compareHelpText)
-                .accessibilityLabel("More composer actions")
+                .accessibilityLabel("Compare current prompt")
                 .accessibilityHint(compareHelpText)
 
                 Button {
@@ -8627,6 +8622,7 @@ private struct FlowLayout<Content: View>: View {
 
 private struct _FlowWrapLayout: Layout {
     var spacing: CGFloat
+    private static let fallbackMaxWidth: CGFloat = 640
 
     init(spacing: CGFloat = 8) {
         self.spacing = spacing
@@ -8637,24 +8633,35 @@ private struct _FlowWrapLayout: Layout {
         subviews: Subviews,
         cache: inout ()
     ) -> CGSize {
-        let maxWidth = proposal.width ?? .greatestFiniteMagnitude
-        var currentX: CGFloat = 0
-        var currentY: CGFloat = 0
-        var lineHeight: CGFloat = 0
+        let maxWidth = resolvedMaxWidth(proposalWidth: proposal.width)
+        let itemSpacing = sanitizedSpacing
+        var rowWidth: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var totalHeight: CGFloat = 0
+        var widestRow: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if currentX + size.width > maxWidth, currentX > 0 {
-                currentX = 0
-                currentY += lineHeight + spacing
-                lineHeight = 0
-            }
+            let size = measuredSize(for: subview, maxWidth: maxWidth)
+            let proposedRowWidth = rowWidth == 0 ? size.width : rowWidth + itemSpacing + size.width
 
-            currentX += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
+            if proposedRowWidth > maxWidth, rowWidth > 0 {
+                widestRow = max(widestRow, rowWidth)
+                totalHeight += rowHeight + itemSpacing
+                rowWidth = size.width
+                rowHeight = size.height
+            } else {
+                rowWidth = proposedRowWidth
+                rowHeight = max(rowHeight, size.height)
+            }
         }
 
-        return CGSize(width: proposal.width ?? currentX, height: currentY + lineHeight)
+        widestRow = max(widestRow, rowWidth)
+        totalHeight += rowHeight
+
+        return CGSize(
+            width: resolvedOutputWidth(proposalWidth: proposal.width, widestRow: widestRow),
+            height: max(0, totalHeight)
+        )
     }
 
     func placeSubviews(
@@ -8663,24 +8670,76 @@ private struct _FlowWrapLayout: Layout {
         subviews: Subviews,
         cache: inout ()
     ) {
+        let maxWidth = resolvedMaxWidth(proposalWidth: proposal.width, boundsWidth: bounds.width)
+        let itemSpacing = sanitizedSpacing
+        let rowMaxX = bounds.minX + maxWidth
         var point = bounds.origin
         var lineHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if point.x + size.width > bounds.maxX, point.x > bounds.minX {
+            let size = measuredSize(for: subview, maxWidth: maxWidth)
+            let nextX = point.x == bounds.minX ? point.x + size.width : point.x + itemSpacing + size.width
+
+            if nextX > rowMaxX, point.x > bounds.minX {
                 point.x = bounds.minX
-                point.y += lineHeight + spacing
+                point.y += lineHeight + itemSpacing
                 lineHeight = 0
+            } else if point.x > bounds.minX {
+                point.x += itemSpacing
             }
 
             subview.place(
                 at: point,
                 proposal: ProposedViewSize(width: size.width, height: size.height)
             )
-            point.x += size.width + spacing
+            point.x += size.width
             lineHeight = max(lineHeight, size.height)
         }
+    }
+
+    private var sanitizedSpacing: CGFloat {
+        guard spacing.isFinite, spacing > 0 else { return 0 }
+        return spacing
+    }
+
+    private func resolvedMaxWidth(proposalWidth: CGFloat?, boundsWidth: CGFloat? = nil) -> CGFloat {
+        if let boundsWidth, boundsWidth.isFinite, boundsWidth > 0 {
+            return boundsWidth
+        }
+
+        if let proposalWidth, proposalWidth.isFinite, proposalWidth > 0 {
+            return proposalWidth
+        }
+
+        return Self.fallbackMaxWidth
+    }
+
+    private func resolvedOutputWidth(proposalWidth: CGFloat?, widestRow: CGFloat) -> CGFloat {
+        if let proposalWidth, proposalWidth.isFinite, proposalWidth > 0 {
+            return proposalWidth
+        }
+
+        return max(0, min(widestRow, Self.fallbackMaxWidth))
+    }
+
+    private func measuredSize(for subview: LayoutSubview, maxWidth: CGFloat) -> CGSize {
+        let rawIdealSize = subview.sizeThatFits(.unspecified)
+        let idealSize = sanitizedSize(rawIdealSize, maxWidth: maxWidth)
+
+        guard !rawIdealSize.width.isFinite || !rawIdealSize.height.isFinite || idealSize.width >= maxWidth else {
+            return idealSize
+        }
+
+        return sanitizedSize(
+            subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil)),
+            maxWidth: maxWidth
+        )
+    }
+
+    private func sanitizedSize(_ size: CGSize, maxWidth: CGFloat) -> CGSize {
+        let width = size.width.isFinite ? max(0, min(size.width, maxWidth)) : maxWidth
+        let height = size.height.isFinite ? max(0, size.height) : 0
+        return CGSize(width: width, height: height)
     }
 }
 
@@ -9557,12 +9616,15 @@ private struct ProviderRoutingPicker: View {
     var body: some View {
         Menu {
             Section("Current Route") {
-                ProviderRoutingCurrentMenuRow(
-                    selectedProvider: selectedProvider,
-                    routingPolicy: store.preferences.providerRoutingPolicy,
-                    readiness: selectedReadiness,
-                    isDiscoveringModels: isDiscoveringModels
-                )
+                Button { } label: {
+                    ProviderRoutingCurrentMenuRow(
+                        selectedProvider: selectedProvider,
+                        routingPolicy: store.preferences.providerRoutingPolicy,
+                        readiness: selectedReadiness,
+                        isDiscoveringModels: isDiscoveringModels
+                    )
+                }
+                .disabled(true)
 
                 Button(action: openProviderSetup) {
                     Label("Open Models & Providers", systemImage: "slider.horizontal.3")
