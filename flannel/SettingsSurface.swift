@@ -2142,6 +2142,31 @@ enum SettingsTab: String, CaseIterable, Hashable, Identifiable {
         }
     }
 
+    var sidebarDetail: String {
+        switch self {
+        case .general:
+            "Startup, history, folders"
+        case .models:
+            "Routing, keys, local servers"
+        case .knowledge:
+            "Sources, indexing, retrieval"
+        case .memory:
+            "Saved memory and recall"
+        case .tools:
+            "Permissions and tool runs"
+        case .agents:
+            "Workflows, safety, traces"
+        case .prompts:
+            "Prompt profiles"
+        case .privacy:
+            "Network, local-only, secrets"
+        case .storage:
+            "Exports and local storage"
+        case .advanced:
+            "Automations and developer bridge"
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .general:

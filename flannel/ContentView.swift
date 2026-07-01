@@ -476,7 +476,7 @@ struct ContentView: View {
         transaction.animation = nil
         withTransaction(transaction) {
             sidebarSurface = .settings
-            columnVisibility = .doubleColumn
+            columnVisibility = .all
         }
         if isEnteringSettings {
             DispatchQueue.main.async {
@@ -2137,10 +2137,8 @@ private struct AppSidebar: View {
                     focusRequest: settingsFocusRequest,
                     exitSettings: exitSettings
                 )
-                .transition(.opacity)
             } else {
                 conversationSidebar
-                    .transition(.opacity)
             }
 
             if sidebarSurface.showsConversationFooter {
@@ -2154,6 +2152,7 @@ private struct AppSidebar: View {
                 .transition(.opacity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var conversationSidebar: some View {
@@ -2682,7 +2681,7 @@ private struct SettingsSidebar: View {
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.top, 14)
+            .padding(.top, 52)
             .padding(.bottom, 12)
             .flannelSeparator(edge: .bottom, inset: 14, opacity: 0.4)
 
@@ -2696,7 +2695,7 @@ private struct SettingsSidebar: View {
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
         }
-        .frame(maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear(perform: focusExitSettingsIfRequested)
         .onChange(of: focusRequest) { _, _ in
             focusExitSettingsIfRequested()
@@ -2724,23 +2723,29 @@ private struct SettingsRouteRow: View {
     var isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: tab.systemImage)
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.secondary)
+                .font(.callout)
                 .frame(width: 18)
+                .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(tab.title)
                     .font(.callout.weight(.medium))
-                    .lineLimit(1)
-                Text(tab.detail)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(tab.sidebarDetail)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .layoutPriority(1)
         }
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 6)
         .accessibilityLabel(tab.title)
         .accessibilityValue(isSelected ? "Selected" : "")
         .accessibilityHint(tab.detail)

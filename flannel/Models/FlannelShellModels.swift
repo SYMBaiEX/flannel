@@ -25,7 +25,7 @@ nonisolated enum FlannelSidebarSurface: String, CaseIterable, Hashable, Sendable
         case .conversation:
             FlannelSidebarColumnWidth(min: 248, ideal: 280, max: 328)
         case .settings:
-            FlannelSidebarColumnWidth(min: 220, ideal: 248, max: 292)
+            FlannelSidebarColumnWidth(min: 300, ideal: 340, max: 384)
         }
     }
 }

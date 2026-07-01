@@ -27,14 +27,22 @@ struct FlannelShellModelsTests {
         #expect(FlannelSidebarSurface.settings.showsInspectorColumn == false)
     }
 
-    @Test("Settings surface is narrower than conversation surface")
-    func settingsModeUsesNarrowerSidebarWidth() {
+    @Test("Settings surface reserves more width for route descriptions")
+    func settingsModeUsesWiderSidebarWidth() {
         let conversationWidth = FlannelSidebarSurface.conversation.columnWidth
         let settingsWidth = FlannelSidebarSurface.settings.columnWidth
 
-        #expect(settingsWidth.ideal < conversationWidth.ideal)
-        #expect(settingsWidth.min < conversationWidth.min)
-        #expect(settingsWidth.max < conversationWidth.max)
+        #expect(settingsWidth.ideal > conversationWidth.ideal)
+        #expect(settingsWidth.min > conversationWidth.min)
+        #expect(settingsWidth.max > conversationWidth.max)
+    }
+
+    @Test("Settings sidebar labels stay concise")
+    func settingsSidebarLabelsStayConcise() {
+        for tab in SettingsTab.allCases {
+            #expect(tab.sidebarDetail.count <= tab.detail.count)
+            #expect(tab.sidebarDetail.count <= 40)
+        }
     }
 
     @Test("Escape exits settings surface")
