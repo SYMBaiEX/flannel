@@ -177,12 +177,16 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detailColumn: some View {
-        if sidebarSurface.showsInspectorColumn {
-            inspectorColumn
-        } else {
-            Color.clear
-                .navigationSplitViewColumnWidth(min: 0, ideal: 0, max: 0)
-        }
+        let showsInspector = sidebarSurface.showsInspectorColumn
+        inspectorColumn
+            .opacity(showsInspector ? 1 : 0)
+            .allowsHitTesting(showsInspector)
+            .accessibilityHidden(!showsInspector)
+            .navigationSplitViewColumnWidth(
+                min: showsInspector ? 320 : 0,
+                ideal: showsInspector ? 360 : 0,
+                max: showsInspector ? 420 : 0
+            )
     }
 
     private var inspectorColumn: some View {
@@ -202,7 +206,6 @@ struct ContentView: View {
             },
             persist: persistQuietly
         )
-        .navigationSplitViewColumnWidth(min: 320, ideal: 360, max: 420)
     }
 
     @ToolbarContentBuilder
@@ -469,7 +472,9 @@ struct ContentView: View {
         if isEnteringSettings {
             settingsReturnFocus = returnFocus
         }
-        withAnimation(.easeInOut(duration: 0.18)) {
+        var transaction = Transaction()
+        transaction.animation = nil
+        withTransaction(transaction) {
             sidebarSurface = .settings
             columnVisibility = .doubleColumn
         }
@@ -484,11 +489,13 @@ struct ContentView: View {
     private func exitSettingsMode(focusComposer: Bool = true) {
         let restoredVisibility: NavigationSplitViewVisibility = store.preferences.showsRightSidebar ? .all : .doubleColumn
         let returnFocus = settingsReturnFocus
-        withAnimation(.easeInOut(duration: 0.18)) {
+        var transaction = Transaction()
+        transaction.animation = nil
+        withTransaction(transaction) {
             sidebarSurface = .conversation
             columnVisibility = restoredVisibility
-            persistQuietly()
         }
+        persistQuietly()
         if focusComposer {
             requestFocus(returnFocus)
         }
@@ -500,11 +507,13 @@ struct ContentView: View {
         focusChromeWhenShown: Bool = false
     ) {
         let wasVisible = columnVisibility == .all
-        withAnimation(.easeInOut(duration: 0.18)) {
+        var transaction = Transaction()
+        transaction.animation = nil
+        withTransaction(transaction) {
             columnVisibility = isVisible ? .all : .doubleColumn
             store.preferences.showsRightSidebar = isVisible
-            persistQuietly()
         }
+        persistQuietly()
         if wasVisible != isVisible {
             announce(isVisible ? "Artifacts shown" : "Artifacts hidden")
         }
@@ -9617,12 +9626,7 @@ private struct ProviderRoutingPicker: View {
         Menu {
             Section("Current Route") {
                 Button { } label: {
-                    ProviderRoutingCurrentMenuRow(
-                        selectedProvider: selectedProvider,
-                        routingPolicy: store.preferences.providerRoutingPolicy,
-                        readiness: selectedReadiness,
-                        isDiscoveringModels: isDiscoveringModels
-                    )
+                    Label(currentRouteMenuTitle, systemImage: selectedProvider?.accessMode.icon ?? "cpu")
                 }
                 .disabled(true)
 
@@ -9674,9 +9678,9 @@ private struct ProviderRoutingPicker: View {
                         Button {
                             select(model)
                         } label: {
-                            LocalModelRoutingMenuRow(
-                                model: model,
-                                isSelected: isSelected(model)
+                            Label(
+                                localModelMenuTitle(model),
+                                systemImage: isSelected(model) ? "checkmark" : localModelMenuIcon(model)
                             )
                         }
                     }
@@ -9689,59 +9693,29 @@ private struct ProviderRoutingPicker: View {
                     Section(family.title) {
                         if let prompt = family.modeChoicePrompt {
                             Button { } label: {
-                                ProviderModeFamilyPromptMenuRow(
-                                    prompt: prompt,
-                                    icon: family.icon
-                                )
+                                Label(prompt, systemImage: family.icon)
                             }
                             .disabled(true)
                         }
 
                         ForEach(familyProviders) { provider in
                             let modelNames = selectableModelNames(for: provider)
-                            if modelNames.isEmpty {
-                                Button {
-                                    select(provider)
-                                } label: {
-                                    ProviderRoutingMenuRow(
-                                        provider: provider,
-                                        readiness: readiness(for: provider),
-                                        isPreferred: preferredProvider?.id == provider.id,
-                                        isActive: store.activeProvider?.id == provider.id
-                                    )
-                                }
-                            } else {
-                                Menu {
-                                    Button {
-                                        select(provider)
-                                    } label: {
-                                        Label(
-                                            currentModelMenuTitle(for: provider),
-                                            systemImage: preferredProvider?.id == provider.id ? "checkmark" : provider.privacyScope.icon
-                                        )
-                                    }
+                            Button {
+                                select(provider)
+                            } label: {
+                                Label(
+                                    providerMenuTitle(for: provider),
+                                    systemImage: providerMenuIcon(for: provider)
+                                )
+                            }
 
-                                    Section("Models") {
-                                        ForEach(modelNames, id: \.self) { modelName in
-                                            Button {
-                                                select(provider, modelIdentifier: modelName)
-                                            } label: {
-                                                ProviderModelRoutingMenuRow(
-                                                    modelName: modelName,
-                                                    provider: provider,
-                                                    isSelected: provider.modelIdentifier == modelName,
-                                                    isActive: store.activeProvider?.id == provider.id
-                                                        && store.activeProvider?.modelIdentifier == modelName
-                                                )
-                                            }
-                                        }
-                                    }
+                            ForEach(modelNames, id: \.self) { modelName in
+                                Button {
+                                    select(provider, modelIdentifier: modelName)
                                 } label: {
-                                    ProviderRoutingMenuRow(
-                                        provider: provider,
-                                        readiness: readiness(for: provider),
-                                        isPreferred: preferredProvider?.id == provider.id,
-                                        isActive: store.activeProvider?.id == provider.id
+                                    Label(
+                                        providerModelMenuTitle(provider: provider, modelName: modelName),
+                                        systemImage: providerModelMenuIcon(provider: provider, modelName: modelName)
                                     )
                                 }
                             }
@@ -9763,6 +9737,19 @@ private struct ProviderRoutingPicker: View {
         .help("Choose provider mode for this chat")
         .accessibilityLabel("Provider routing")
         .accessibilityValue(providerRoutingAccessibilityValue)
+    }
+
+    private var currentRouteMenuTitle: String {
+        guard let selectedProvider else {
+            return "Current: choose a provider route"
+        }
+
+        let readinessText = selectedReadiness?.text ?? "Check setup"
+        if isDiscoveringModels {
+            return "Current: discovering local models - \(selectedProvider.providerPickerRouteSummary)"
+        }
+
+        return "Current: \(selectedProvider.modeBoundaryTitle) - \(selectedProvider.providerPickerStatusLine(readinessText: readinessText, routingPolicy: store.preferences.providerRoutingPolicy))"
     }
 
     private func providers(in family: ProviderModeFamily) -> [ProviderConfiguration] {
@@ -9836,6 +9823,74 @@ private struct ProviderRoutingPicker: View {
     private func currentModelMenuTitle(for provider: ProviderConfiguration) -> String {
         let modelName = provider.modelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
         return modelName.isEmpty ? "Use current route" : "Use current model: \(modelName)"
+    }
+
+    private func providerMenuTitle(for provider: ProviderConfiguration) -> String {
+        let readiness = readiness(for: provider)
+        var parts: [String] = []
+        if store.activeProvider?.id == provider.id {
+            parts.append("Active")
+        } else if preferredProvider?.id == provider.id {
+            parts.append("Selected")
+        }
+        parts.append(provider.providerPickerRouteSummary)
+        parts.append(readiness.text)
+        return "\(provider.providerModeSelectionTitle) - \(parts.joined(separator: " - "))"
+    }
+
+    private func providerMenuIcon(for provider: ProviderConfiguration) -> String {
+        if store.activeProvider?.id == provider.id || preferredProvider?.id == provider.id {
+            return "checkmark"
+        }
+
+        return provider.accessMode.icon
+    }
+
+    private func providerModelMenuTitle(provider: ProviderConfiguration, modelName: String) -> String {
+        let isActive = store.activeProvider?.id == provider.id
+            && store.activeProvider?.modelIdentifier == modelName
+        let isSelected = provider.modelIdentifier == modelName
+        var status: [String] = []
+        if isActive {
+            status.append("Active")
+        } else if isSelected {
+            status.append("Selected")
+        }
+        status.append(provider.accessMode.title)
+        return "\(provider.displayName): \(modelName) - \(status.joined(separator: " - "))"
+    }
+
+    private func providerModelMenuIcon(provider: ProviderConfiguration, modelName: String) -> String {
+        if store.activeProvider?.id == provider.id
+            && store.activeProvider?.modelIdentifier == modelName {
+            return "checkmark"
+        }
+        if provider.modelIdentifier == modelName {
+            return "circle.inset.filled"
+        }
+        return "memorychip"
+    }
+
+    private func localModelMenuTitle(_ model: LocalModelDescriptor) -> String {
+        var parts = [model.providerKind.title]
+        if let parameterSize = model.parameterSize {
+            parts.append(parameterSize)
+        }
+        if (model.loadedInstanceCount ?? 0) > 0 {
+            parts.append("Loaded")
+        }
+        let title = model.displayName ?? model.name
+        return "\(title) - \(parts.joined(separator: " - "))"
+    }
+
+    private func localModelMenuIcon(_ model: LocalModelDescriptor) -> String {
+        if model.capabilities.contains(.vision) {
+            return "eye"
+        }
+        if model.capabilities.contains(.reasoning) {
+            return "brain.head.profile"
+        }
+        return "cpu"
     }
 
     private var providerRoutingAccessibilityValue: String {
