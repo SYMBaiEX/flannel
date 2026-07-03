@@ -796,7 +796,7 @@ enum AIKnownProviderCatalog {
             endpoint: "http://localhost:4177",
             defaultModelIdentifier: "",
             recommendedModelIdentifiers: [],
-            capabilities: [.chat, .streaming, .toolCalling, .embeddings, .structuredOutput],
+            capabilities: [.chat, .streaming, .toolCalling, .structuredOutput],
             credentialRequirement: .localBridge,
             modelDiscoveryStrategy: .bridgeHealth,
             requestBoundary: .localBridge,

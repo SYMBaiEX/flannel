@@ -4699,7 +4699,6 @@ final class WorkspaceStore {
                 capabilities: providerRuntimeCapabilityDefaults(for: .vercelAISDKBridge),
                 supportsStreaming: true,
                 supportsToolCalling: true,
-                supportsEmbeddings: true,
                 supportsStructuredOutput: true
             )
         )
@@ -4847,7 +4846,6 @@ final class WorkspaceStore {
                 capabilities: providerRuntimeCapabilityDefaults(for: .vercelAISDKBridge),
                 supportsStreaming: true,
                 supportsToolCalling: true,
-                supportsEmbeddings: true,
                 supportsStructuredOutput: true
             )
         case .gemini, .xAI, .mistral, .groq, .openRouter, .perplexity:
@@ -4961,7 +4959,9 @@ final class WorkspaceStore {
                     providerConfigurations[index].endpoint = "claude -p --output-format stream-json --verbose"
                 }
                 normalizeSubscriptionCLIProvider(at: index)
-            case .ollama, .lmStudio, .customOpenAICompatible, .vercelAISDKBridge:
+            case .vercelAISDKBridge:
+                normalizeAISDKBridgeProvider(at: index)
+            case .ollama, .lmStudio, .customOpenAICompatible:
                 break
             }
         }
@@ -5002,6 +5002,26 @@ final class WorkspaceStore {
         providerConfigurations[index].supportsEmbeddings = false
         providerConfigurations[index].supportsVision = false
         providerConfigurations[index].supportsStructuredOutput = false
+    }
+
+    private func normalizeAISDKBridgeProvider(at index: Int) {
+        providerConfigurations[index].capabilities.removeAll { capability in
+            switch capability {
+            case .chat, .streaming, .toolCalling, .structuredOutput:
+                false
+            case .embeddings, .vision, .reasoning, .webSearch, .imageGeneration, .openAICompatible, .anthropicCompatible:
+                true
+            }
+        }
+        appendCapability(.chat, toProviderAt: index)
+        appendCapability(.streaming, toProviderAt: index)
+        appendCapability(.toolCalling, toProviderAt: index)
+        appendCapability(.structuredOutput, toProviderAt: index)
+        providerConfigurations[index].supportsStreaming = true
+        providerConfigurations[index].supportsToolCalling = true
+        providerConfigurations[index].supportsEmbeddings = false
+        providerConfigurations[index].supportsVision = false
+        providerConfigurations[index].supportsStructuredOutput = true
     }
 
     private func appendCapability(_ capability: ModelCapability, toProviderAt index: Int) {

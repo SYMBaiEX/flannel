@@ -594,6 +594,8 @@ struct AIChatProviderRegistryTests {
         #expect(bridge.runtimePolicy.readinessStrategy == .aiSDKBridgeHealth)
         #expect(bridge.runtimePolicy.chatTransport == .aiSDKBridge)
         #expect(bridge.runtimePolicy.supportsChatTransport)
+        #expect(bridge.capabilities.contains(.embeddings) == false)
+        #expect(bridge.supportsEmbeddings == false)
     }
 
     @MainActor
@@ -684,6 +686,56 @@ struct AIChatProviderRegistryTests {
             #expect(provider.supportsVision == false)
             #expect(provider.supportsStructuredOutput == false)
         }
+    }
+
+    @MainActor
+    @Test("Provider matrix normalizes migrated AI SDK bridge embedding flags")
+    func providerMatrixNormalizesMigratedBridgeEmbeddingFlags() throws {
+        let container = try ModelContainer(
+            for: Item.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        context.insert(
+            Item(
+                providerConfigurations: [
+                    ProviderConfiguration(
+                        kind: .vercelAISDKBridge,
+                        accessMode: .aiSDKBridge,
+                        privacyScope: .bridgeService,
+                        displayName: "Vercel AI SDK Bridge",
+                        endpoint: "http://localhost:4177",
+                        modelIdentifier: "bridge-model",
+                        isEnabled: false,
+                        capabilities: [.chat, .streaming, .toolCalling, .embeddings, .vision, .reasoning, .structuredOutput],
+                        supportsStreaming: false,
+                        supportsToolCalling: false,
+                        supportsEmbeddings: true,
+                        supportsVision: true,
+                        supportsStructuredOutput: false
+                    )
+                ]
+            )
+        )
+        try context.save()
+
+        let store = WorkspaceStore()
+        try store.loadOrCreate(in: context)
+
+        let bridge = try #require(store.providerConfigurations.first(where: { $0.kind == .vercelAISDKBridge }))
+
+        #expect(bridge.capabilities.contains(.chat))
+        #expect(bridge.capabilities.contains(.streaming))
+        #expect(bridge.capabilities.contains(.toolCalling))
+        #expect(bridge.capabilities.contains(.structuredOutput))
+        #expect(bridge.capabilities.contains(.embeddings) == false)
+        #expect(bridge.capabilities.contains(.vision) == false)
+        #expect(bridge.capabilities.contains(.reasoning) == false)
+        #expect(bridge.supportsStreaming)
+        #expect(bridge.supportsToolCalling)
+        #expect(bridge.supportsEmbeddings == false)
+        #expect(bridge.supportsVision == false)
+        #expect(bridge.supportsStructuredOutput)
     }
 
     @MainActor
