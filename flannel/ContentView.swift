@@ -131,10 +131,10 @@ struct ContentView: View {
         .id(sidebarSurface)
     }
 
+    @ViewBuilder
     private var sidebarColumn: some View {
         let width = sidebarSurface.columnWidth
-
-        return AppSidebar(
+        let column = AppSidebar(
             store: store,
             sidebarSurface: sidebarSurface,
             selectedSettingsTab: selectedSettingsTabBinding,
@@ -154,11 +154,16 @@ struct ContentView: View {
             maxHeight: .infinity,
             alignment: .topLeading
         )
-        .navigationSplitViewColumnWidth(
-            min: width.min,
-            ideal: width.ideal,
-            max: width.max
-        )
+
+        if sidebarSurface == .settings {
+            column.navigationSplitViewColumnWidth(width.ideal)
+        } else {
+            column.navigationSplitViewColumnWidth(
+                min: width.min,
+                ideal: width.ideal,
+                max: width.max
+            )
+        }
     }
 
     private var contentColumn: some View {
@@ -2898,14 +2903,14 @@ private struct SettingsRouteRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(tab.title)
                     .font(.callout.weight(.medium))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.92)
 
                 Text(tab.sidebarDetail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.88)
             }
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, alignment: .leading)

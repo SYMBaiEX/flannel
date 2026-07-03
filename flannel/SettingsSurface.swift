@@ -2509,14 +2509,14 @@ private struct SettingsSidebarRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(tab.title)
                     .font(.callout.weight(.medium))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.92)
 
                 Text(tab.sidebarDetail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.88)
             }
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, alignment: .leading)
