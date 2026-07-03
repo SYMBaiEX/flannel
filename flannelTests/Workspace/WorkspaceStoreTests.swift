@@ -2612,20 +2612,11 @@ struct WorkspaceStoreTests {
         try "Approved local file read content".write(to: fileURL, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: fileURL) }
 
-        store.knowledgeSources.insert(
-            KnowledgeSource(
-                title: "Approved tool fixture",
-                kind: .file,
-                location: fileURL.path,
-                status: .ready
-            ),
-            at: 0
-        )
         let fileReadIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .localFileRead }))
         store.toolConfigurations[fileReadIndex].isEnabled = true
         store.toolConfigurations[fileReadIndex].permissionPolicy = .askEveryTime
 
-        let queuedRead = store.runTool(.localFileRead, query: "read fixture")
+        let queuedRead = store.runTool(.localFileRead, query: fileURL.path)
         let approvedRead = try #require(store.resolveToolApproval(queuedRead.id, approve: true))
 
         #expect(approvedRead.id == queuedRead.id)

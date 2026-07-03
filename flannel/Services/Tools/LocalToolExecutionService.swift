@@ -93,14 +93,7 @@ struct LocalToolExecutionService: Sendable {
             return completed(context, output: "Local web page reader\n\n\(text)")
 
         case .localFileRead:
-            guard let text = context.fileText?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !text.isEmpty else {
-                return unavailable(
-                    context,
-                    output: "No readable selected file or file knowledge source is available."
-                )
-            }
-            return completed(context, output: "Local file read\n\n\(text)")
+            return readLocalFile(context, query: query)
 
         case .localFileWrite:
             return writeLocalFile(context, query: query)
@@ -377,6 +370,94 @@ struct LocalToolExecutionService: Sendable {
         }
     }
 
+    private func readLocalFile(_ context: LocalToolExecutionContext, query: String) -> LocalToolExecutionResult {
+        guard let targetPath = parseLocalFileReadPath(query), !targetPath.isEmpty else {
+            if let text = context.fileText?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !text.isEmpty {
+                return completed(context, output: "Selected local file read\n\n\(text)")
+            }
+
+            return blocked(
+                context,
+                output: """
+                File read requires a target path.
+
+                Example:
+                ~/Documents/flannel-note.md
+                """
+            )
+        }
+
+        guard targetPath.range(of: "\0") == nil else {
+            return blocked(context, output: "File read rejected an invalid path.")
+        }
+
+        let expandedPath = (targetPath as NSString).expandingTildeInPath
+        let targetURL: URL
+        if let parsedURL = URL(string: expandedPath), parsedURL.isFileURL {
+            targetURL = parsedURL.standardizedFileURL
+        } else {
+            targetURL = URL(fileURLWithPath: expandedPath).standardizedFileURL
+        }
+
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: targetURL.path, isDirectory: &isDirectory) else {
+            return unavailable(context, output: "File read target does not exist: \(targetURL.path)")
+        }
+
+        guard !isDirectory.boolValue else {
+            return blocked(context, output: "File read target is a directory. Choose a file path instead.")
+        }
+
+        guard FileManager.default.isReadableFile(atPath: targetURL.path) else {
+            return unavailable(context, output: "File read target is not readable: \(targetURL.path)")
+        }
+
+        do {
+            let handle = try FileHandle(forReadingFrom: targetURL)
+            defer { try? handle.close() }
+
+            let data = handle.readData(ofLength: maximumOutputCharacters)
+            guard let text = Self.decodedToolText(from: data)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else {
+                return unavailable(context, output: "File read could not decode text from \(targetURL.path).")
+            }
+
+            let fileSize = (try? targetURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? data.count
+            let truncationNote = fileSize > maximumOutputCharacters
+                ? "\nTruncated to the first \(maximumOutputCharacters) bytes."
+                : ""
+            return completed(
+                context,
+                output: """
+                Local file read
+                File: \(targetURL.path)
+                Bytes read: \(data.count)\(truncationNote)
+
+                \(text)
+                """
+            )
+        } catch {
+            return unavailable(
+                context,
+                output: "File read failed for \(targetURL.path): \(error.localizedDescription)"
+            )
+        }
+    }
+
+    private func parseLocalFileReadPath(_ query: String) -> String? {
+        let firstLine = query
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .components(separatedBy: "\n")
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let firstLine, !firstLine.isEmpty else { return nil }
+        return strippingPathPrefix(from: firstLine)
+    }
+
     private func parseLocalFileWriteRequest(_ query: String) -> (targetPath: String?, content: String?) {
         var lines = query
             .replacingOccurrences(of: "\r\n", with: "\n")
@@ -404,12 +485,18 @@ struct LocalToolExecutionService: Sendable {
     }
 
     private func strippingPathPrefix(from line: String) -> String {
-        let prefixes = ["path:", "file:"]
+        let prefixes = ["path:", "file:", "url:"]
         let lowercasedLine = line.lowercased()
         for prefix in prefixes where lowercasedLine.hasPrefix(prefix) {
             return String(line.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return line
+    }
+
+    private static func decodedToolText(from data: Data) -> String? {
+        String(data: data, encoding: .utf8)
+            ?? String(data: data, encoding: .utf16)
+            ?? String(data: data, encoding: .ascii)
     }
 
     private func runTerminalCommand(_ context: LocalToolExecutionContext, command rawCommand: String) -> LocalToolExecutionResult {

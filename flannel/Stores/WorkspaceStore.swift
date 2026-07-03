@@ -4472,7 +4472,7 @@ final class WorkspaceStore {
             ToolConfiguration(
                 kind: .localFileRead,
                 title: "Read Files",
-                detail: "Read user-selected local files for context.",
+                detail: "Read explicit local file paths after approval.",
                 permissionPolicy: .askEveryTime
             ),
             ToolConfiguration(

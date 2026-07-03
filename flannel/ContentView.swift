@@ -11210,7 +11210,7 @@ private extension AIToolKind {
         case .webPageReader:
             "Page URL or capture to inspect"
         case .localFileRead:
-            "File path or read request"
+            "File path or file URL"
         case .localFileWrite:
             "First line: file path. Remaining lines: content to write."
         case .terminal:
@@ -11354,6 +11354,8 @@ private extension ToolConfiguration {
         switch kind {
         case .localFileWrite:
             "UTF-8 write request. Put the target path on the first line, optionally add '---', then the content to write."
+        case .localFileRead:
+            "Local file path or file:// URL to read after permission checks."
         case .terminal:
             "Shell command request. Optionally start with 'cwd: /path', then include the command to run after user approval."
         case .codeExecution:
@@ -11370,7 +11372,7 @@ private extension ToolConfiguration {
             "YouTube video URL, video id, channel, or search query."
         case .x:
             "X/Twitter post URL/id, username, or recent-search query."
-        case .webSearch, .localFileRead, .workspaceSearch, .ragRetrieval:
+        case .webSearch, .workspaceSearch, .ragRetrieval:
             queryPrompt
         }
     }
