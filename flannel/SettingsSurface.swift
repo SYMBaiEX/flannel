@@ -2514,14 +2514,14 @@ private struct SettingsSidebarRow: View {
                 Text(tab.title)
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.88)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
 
-                Text(tab.sidebarDetail)
+                Text(tab.detail)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(2...3)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
             }
@@ -2534,7 +2534,7 @@ private struct SettingsSidebarRow: View {
                 .frame(width: 18)
         }
         .labelStyle(.titleAndIcon)
-        .frame(minHeight: 48, alignment: .leading)
+        .frame(minHeight: 58, alignment: .leading)
         .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
         .help(tab.detail)
