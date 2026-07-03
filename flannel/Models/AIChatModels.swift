@@ -425,6 +425,35 @@ extension ProviderConfiguration {
         }
     }
 
+    var providerModePickerTitle: String {
+        switch kind {
+        case .openAI:
+            return "OpenAI API key"
+        case .chatGPTCLI:
+            return "ChatGPT subscription via Codex CLI"
+        case .anthropic:
+            return "Anthropic API key"
+        case .claudeCodeCLI:
+            return "Claude subscription via Claude Code"
+        case .ollama:
+            return "Ollama local server"
+        case .lmStudio:
+            return "LM Studio local server"
+        case .customOpenAICompatible:
+            return "OpenAI-compatible endpoint"
+        case .vercelAISDKBridge:
+            return "Local AI SDK bridge"
+        case .gemini, .xAI, .mistral, .groq, .openRouter, .perplexity:
+            return "\(kind.title) API key"
+        }
+    }
+
+    var providerModePickerSummary: String {
+        let model = modelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        let modelText = model.isEmpty ? "No model" : model
+        return "\(providerModeBoundaryBadge) • \(runtimeBoundary.title) • \(modelText)"
+    }
+
     var providerModeSelectionDetail: String {
         switch kind {
         case .openAI:

@@ -9934,9 +9934,9 @@ private struct ProviderRoutingPicker: View {
         } else if preferredProvider?.id == provider.id {
             parts.append("Selected")
         }
-        parts.append(provider.providerPickerRouteSummary)
+        parts.append(provider.providerModePickerSummary)
         parts.append(readiness.text)
-        return "\(provider.providerModeSelectionTitle) - \(parts.joined(separator: " - "))"
+        return "\(provider.providerModePickerTitle) - \(parts.joined(separator: " - "))"
     }
 
     private func providerMenuIcon(for provider: ProviderConfiguration) -> String {
@@ -9958,7 +9958,7 @@ private struct ProviderRoutingPicker: View {
             status.append("Selected")
         }
         status.append(provider.accessMode.title)
-        return "\(provider.displayName): \(modelName) - \(status.joined(separator: " - "))"
+        return "\(provider.providerModePickerTitle): \(modelName) - \(status.joined(separator: " - "))"
     }
 
     private func providerModelMenuIcon(provider: ProviderConfiguration, modelName: String) -> String {
