@@ -554,6 +554,12 @@ nonisolated struct ProviderSetupService: Sendable {
                 endpoint: endpoint,
                 checkedAt: checkedAt
             )
+        case .anthropicModels:
+            return await anthropicModelAvailability(
+                for: provider,
+                endpoint: endpoint,
+                checkedAt: checkedAt
+            )
         case .aiSDKBridgeHealth:
             return await aiSDKBridgeAvailability(
                 for: provider,
@@ -634,6 +640,40 @@ nonisolated struct ProviderSetupService: Sendable {
             return ProviderModelAvailability(
                 status: .ready,
                 models: modelList.data.map { ProviderAvailableModel(name: $0.id, displayName: $0.id) },
+                errorMessage: nil,
+                checkedAt: checkedAt
+            )
+        } catch {
+            return ProviderModelAvailability(
+                status: .needsAttention,
+                models: [],
+                errorMessage: error.localizedDescription,
+                checkedAt: checkedAt
+            )
+        }
+    }
+
+    private func anthropicModelAvailability(
+        for provider: ProviderConfiguration,
+        endpoint: String,
+        checkedAt: Date
+    ) async -> ProviderModelAvailability {
+        do {
+            let request = try makeAnthropicModelsRequest(for: provider, endpoint: endpoint)
+            let (data, urlResponse) = try await readinessTransport(request)
+            guard let httpResponse = urlResponse else {
+                throw ProviderReadinessError.badResponse
+            }
+            guard (200..<300).contains(httpResponse.statusCode) else {
+                throw ProviderReadinessError.badStatus(httpResponse.statusCode)
+            }
+
+            let modelList = try JSONDecoder().decode(AnthropicModelListResponse.self, from: data)
+            return ProviderModelAvailability(
+                status: .ready,
+                models: modelList.data.map {
+                    ProviderAvailableModel(name: $0.id, displayName: $0.displayName ?? $0.id)
+                },
                 errorMessage: nil,
                 checkedAt: checkedAt
             )
@@ -822,6 +862,61 @@ nonisolated struct ProviderSetupService: Sendable {
         }
 
         return request
+    }
+
+    private func makeAnthropicModelsRequest(for provider: ProviderConfiguration, endpoint: String) throws -> URLRequest {
+        var request = URLRequest(url: try Self.anthropicModelsURL(endpoint))
+        request.timeoutInterval = readinessTimeout
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+
+        guard let secretReference = parseSecretReference(provider.secretReference) else {
+            throw ProviderReadinessError.missingKeychainReference(provider.displayName)
+        }
+        let apiKey = try secretReader(secretReference).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !apiKey.isEmpty else {
+            throw ProviderReadinessError.emptyKeychainSecret(provider.displayName)
+        }
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+
+        return request
+    }
+
+    private static func anthropicModelsURL(_ rawValue: String) throws -> URL {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var components = URLComponents(string: trimmed),
+              components.scheme != nil,
+              components.host != nil else {
+            throw ProviderReadinessError.invalidEndpoint
+        }
+
+        var pathComponents = components.path
+            .split(separator: "/")
+            .map(String.init)
+        let normalizedPathComponents = pathComponents.map { $0.lowercased() }
+
+        switch normalizedPathComponents {
+        case let value where Array(value.suffix(2)) == ["v1", "models"]:
+            break
+        case let value where Array(value.suffix(2)) == ["v1", "messages"]:
+            pathComponents = Array(pathComponents.dropLast()) + ["models"]
+        case let value where value.last == "models":
+            break
+        case let value where value.last == "v1":
+            pathComponents.append("models")
+        default:
+            pathComponents.append(contentsOf: ["v1", "models"])
+        }
+
+        components.path = "/" + pathComponents.joined(separator: "/")
+        components.query = nil
+        components.fragment = nil
+
+        guard let url = components.url else {
+            throw ProviderReadinessError.invalidEndpoint
+        }
+        return url
     }
 
     private static func openAICompatibleModelsPathComponents(
@@ -1066,6 +1161,20 @@ nonisolated private struct OpenAICompatibleModelListResponse: Decodable {
         enum CodingKeys: String, CodingKey {
             case id
             case ownedBy = "owned_by"
+        }
+    }
+}
+
+nonisolated private struct AnthropicModelListResponse: Decodable {
+    var data: [Model]
+
+    struct Model: Decodable {
+        var id: String
+        var displayName: String?
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case displayName = "display_name"
         }
     }
 }

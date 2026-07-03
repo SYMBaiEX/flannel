@@ -391,6 +391,100 @@ struct ProviderSetupServiceTests {
     }
 
     @MainActor
+    @Test("Anthropic API readiness validates models with Keychain auth")
+    func anthropicReadinessUsesAuthenticatedModelsAPI() async throws {
+        let secretReference = "flannel.ai.keys:provider/anthropic/api-anthropic-com"
+        let transport = ProviderReadinessTransportRecorder(
+            responses: [
+                "https://api.anthropic.com/v1/models": .init(
+                    statusCode: 200,
+                    body: """
+                    {
+                      "data": [
+                        { "id": "claude-opus-4.7", "display_name": "Claude Opus 4.7" },
+                        { "id": "claude-sonnet-4-5", "display_name": "Claude Sonnet 4.5" }
+                      ],
+                      "has_more": false,
+                      "first_id": "claude-opus-4.7",
+                      "last_id": "claude-sonnet-4-5"
+                    }
+                    """
+                )
+            ]
+        )
+        let service = ProviderSetupService(
+            readinessTimeout: 6,
+            readinessTransport: { request in try await transport.send(request) },
+            secretReader: { reference in
+                #expect(reference.rawValue == secretReference)
+                return "anthropic-test-key"
+            }
+        )
+        let provider = ProviderConfiguration(
+            kind: .anthropic,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "Anthropic API",
+            endpoint: "https://api.anthropic.com/v1/messages",
+            modelIdentifier: "claude-opus-4.7",
+            secretReference: secretReference
+        )
+        let preferences = WorkspacePreferences(
+            allowCloudProviders: true,
+            localOnlyMode: false
+        )
+
+        let validation = await service.validateReadiness(
+            for: provider,
+            preferences: preferences
+        )
+        let requests = await transport.requests()
+
+        #expect(validation.isReady)
+        #expect(validation.connectionStatus == .ready)
+        #expect(validation.availableModels == ["claude-opus-4.7", "claude-sonnet-4-5"])
+        #expect(validation.selectedModelIsAvailable)
+        #expect(requests.map(\.url) == ["https://api.anthropic.com/v1/models"])
+        #expect(requests.map(\.timeout) == [6])
+        #expect(requests.map(\.acceptHeader) == ["application/json"])
+        #expect(requests.map(\.anthropicVersionHeader) == ["2023-06-01"])
+        #expect(requests.map(\.xAPIKeyHeader) == ["anthropic-test-key"])
+    }
+
+    @MainActor
+    @Test("Anthropic API readiness fails when Keychain secret is empty")
+    func anthropicReadinessFailsWithEmptyKeychainSecret() async throws {
+        let service = ProviderSetupService(
+            secretReader: { _ in "   " }
+        )
+        let provider = ProviderConfiguration(
+            kind: .anthropic,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "Anthropic API",
+            endpoint: "https://api.anthropic.com",
+            modelIdentifier: "claude-opus-4.7",
+            secretReference: "flannel.ai.keys:provider/anthropic/api-anthropic-com"
+        )
+        let preferences = WorkspacePreferences(
+            allowCloudProviders: true,
+            localOnlyMode: false
+        )
+
+        let validation = await service.validateReadiness(
+            for: provider,
+            preferences: preferences
+        )
+
+        #expect(validation.isReady == false)
+        #expect(validation.connectionStatus == .needsAttention)
+        #expect(validation.selectedModelIsAvailable == false)
+        #expect(validation.availableModels == [])
+        #expect(validation.report.diagnostics.contains(where: { $0.code == .providerUnavailable }))
+        #expect(validation.errorMessage?.contains("saved API key for Anthropic API is empty") == true)
+    }
+
+    @MainActor
     @Test("Readiness reports selected model missing from custom OpenAI-compatible model list")
     func customOpenAICompatibleReadinessReportsMissingModel() async throws {
         let transport = ProviderReadinessTransportRecorder(
@@ -1023,6 +1117,8 @@ private actor ProviderReadinessTransportRecorder {
         var timeout: TimeInterval
         var acceptHeader: String?
         var authorizationHeader: String?
+        var xAPIKeyHeader: String?
+        var anthropicVersionHeader: String?
         var openAIOrganizationHeader: String?
     }
 
@@ -1045,6 +1141,8 @@ private actor ProviderReadinessTransportRecorder {
                 timeout: request.timeoutInterval,
                 acceptHeader: request.value(forHTTPHeaderField: "Accept"),
                 authorizationHeader: request.value(forHTTPHeaderField: "Authorization"),
+                xAPIKeyHeader: request.value(forHTTPHeaderField: "x-api-key"),
+                anthropicVersionHeader: request.value(forHTTPHeaderField: "anthropic-version"),
                 openAIOrganizationHeader: request.value(forHTTPHeaderField: "OpenAI-Organization")
             )
         )

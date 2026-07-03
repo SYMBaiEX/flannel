@@ -576,7 +576,7 @@ struct AIChatProviderRegistryTests {
         #expect(openAI.runtimePolicy.readinessStrategy == .openAICompatibleModels)
         #expect(openAI.runtimePolicy.chatTransport == .openAIResponses)
         #expect(openAI.runtimePolicy.requiresKeychainSecret)
-        #expect(anthropic.runtimePolicy.readinessStrategy == .staticConfiguration)
+        #expect(anthropic.runtimePolicy.readinessStrategy == .anthropicModels)
         #expect(anthropic.runtimePolicy.chatTransport == .anthropicMessages)
         #expect(anthropic.runtimePolicy.requiresKeychainSecret)
 
@@ -993,8 +993,9 @@ struct AIChatProviderRegistryTests {
         #expect(anthropicAPI.leavesDeviceDirectly)
         #expect(anthropicAPI.usesOfficialAPI)
         #expect(anthropicAPI.primaryRuntimeInterface == .nativeAPI)
-        #expect(anthropicAPI.modelDiscoveryStrategy == AIProviderModelDiscoveryStrategy.staticCatalog)
-        #expect(anthropicAPI.sourceReferences.contains(where: { $0.url.contains("docs.anthropic.com/en/api/messages") }))
+        #expect(anthropicAPI.modelDiscoveryStrategy == AIProviderModelDiscoveryStrategy.anthropicModels)
+        #expect(anthropicAPI.sourceReferences.contains(where: { $0.url.contains("platform.claude.com/docs/en/api/messages") }))
+        #expect(anthropicAPI.sourceReferences.contains(where: { $0.url.contains("platform.claude.com/docs/en/api/models/list") }))
 
         #expect(claudeCLI.credentialRequirement == AIProviderCredentialRequirement.subscriptionCLI)
         #expect(claudeCLI.supportsSubscriptionCLI)

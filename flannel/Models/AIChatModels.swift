@@ -56,6 +56,7 @@ enum ProviderReadinessStrategy: String, Codable, Hashable, Sendable {
     case staticConfiguration
     case localModelDiscovery
     case openAICompatibleModels
+    case anthropicModels
     case cliCommandResolution
     case aiSDKBridgeHealth
 }
@@ -293,6 +294,8 @@ extension ProviderConfiguration {
         switch accessMode {
         case .localServer where kind == .ollama || kind == .lmStudio:
             .localModelDiscovery
+        case .apiKey where kind == .anthropic:
+            .anthropicModels
         case .openAICompatible:
             .openAICompatibleModels
         case .apiKey where kind.usesOpenAICompatibleReadiness:

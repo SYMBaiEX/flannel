@@ -321,6 +321,7 @@ enum AIProviderCredentialRequirement: String, Codable, CaseIterable, Hashable, S
 enum AIProviderModelDiscoveryStrategy: String, Codable, CaseIterable, Hashable, Sendable {
     case localServer
     case openAICompatibleModels
+    case anthropicModels
     case staticCatalog
     case cliSession
     case bridgeHealth
@@ -331,6 +332,8 @@ enum AIProviderModelDiscoveryStrategy: String, Codable, CaseIterable, Hashable, 
             "Local server discovery"
         case .openAICompatibleModels:
             "OpenAI-compatible model list"
+        case .anthropicModels:
+            "Anthropic Models API"
         case .staticCatalog:
             "Manual catalog"
         case .cliSession:
@@ -591,14 +594,15 @@ enum AIKnownProviderCatalog {
             recommendedModelIdentifiers: ["claude-opus-4.7", "claude-sonnet-4-5"],
             capabilities: [.chat, .streaming, .toolCalling, .vision, .reasoning],
             credentialRequirement: .requiredAPIKey,
-            modelDiscoveryStrategy: .staticCatalog,
+            modelDiscoveryStrategy: .anthropicModels,
             requestBoundary: .externalAPI,
             primaryRuntimeInterface: .nativeAPI,
             supportedRuntimeInterfaces: [.nativeAPI],
             discoveryCapabilities: [],
             cliContract: nil,
             sourceReferences: [
-                AIProviderSourceReference(label: "Anthropic Messages API", url: "https://docs.anthropic.com/en/api/messages")
+                AIProviderSourceReference(label: "Anthropic Messages API", url: "https://platform.claude.com/docs/en/api/messages"),
+                AIProviderSourceReference(label: "Anthropic Models API", url: "https://platform.claude.com/docs/en/api/models/list")
             ]
         ),
         AIProviderCatalogEntry(
