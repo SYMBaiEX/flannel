@@ -173,6 +173,13 @@ struct SettingsSurface: View {
             }
             .listStyle(.sidebar)
             .navigationTitle("Settings")
+            .frame(
+                minWidth: sidebarWidth.min,
+                idealWidth: sidebarWidth.ideal,
+                maxWidth: sidebarWidth.max,
+                maxHeight: .infinity,
+                alignment: .topLeading
+            )
             .navigationSplitViewColumnWidth(
                 min: sidebarWidth.min,
                 ideal: sidebarWidth.ideal,
@@ -2479,12 +2486,14 @@ private struct SettingsSidebarRow: View {
                 Text(tab.title)
                     .font(.callout.weight(.medium))
                     .lineLimit(2)
+                    .minimumScaleFactor(0.9)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(tab.sidebarDetail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.9)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -502,7 +502,7 @@ struct ContentView: View {
         transaction.animation = nil
         withTransaction(transaction) {
             sidebarSurface = .settings
-            columnVisibility = .all
+            columnVisibility = .doubleColumn
         }
         if isEnteringSettings {
             DispatchQueue.main.async {
@@ -2748,10 +2748,17 @@ private struct SettingsSidebar: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollIndicators(.automatic)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(
+            minWidth: FlannelSidebarSurface.settings.columnWidth.min,
+            idealWidth: FlannelSidebarSurface.settings.columnWidth.ideal,
+            maxWidth: FlannelSidebarSurface.settings.columnWidth.max,
+            maxHeight: .infinity,
+            alignment: .topLeading
+        )
         .onAppear(perform: focusExitSettingsIfRequested)
         .onChange(of: focusRequest) { _, _ in
             focusExitSettingsIfRequested()
@@ -2780,6 +2787,7 @@ private struct SettingsSidebar: View {
                         selectedTab = tab
                     } label: {
                         SettingsRouteRow(tab: tab, isSelected: selectedTab == tab)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(.plain)
                     .help(tab.detail)
@@ -2831,12 +2839,14 @@ private struct SettingsRouteRow: View {
                 Text(tab.title)
                     .font(.callout.weight(.medium))
                     .lineLimit(2)
+                    .minimumScaleFactor(0.9)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(tab.sidebarDetail)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .multilineTextAlignment(.leading)
+                    .minimumScaleFactor(0.9)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .layoutPriority(1)
