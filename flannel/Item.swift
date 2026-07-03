@@ -366,6 +366,22 @@ enum LocalActionStatus: String, Codable, CaseIterable, Sendable {
     case failed
 }
 
+struct WorkspaceAutomationAction: Codable, Hashable, Sendable {
+    var kind: LocalActionKind
+    var toolKind: AIToolKind?
+    var query: String?
+
+    init(
+        kind: LocalActionKind,
+        toolKind: AIToolKind? = nil,
+        query: String? = nil
+    ) {
+        self.kind = kind
+        self.toolKind = toolKind
+        self.query = query
+    }
+}
+
 struct SummaryRecord: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var title: String
@@ -1395,6 +1411,7 @@ struct WorkspaceAutomation: Identifiable, Codable, Hashable, Sendable {
     var linkedDestination: WorkspaceDestination
     var linkedProjectID: UUID?
     var actionKind: LocalActionKind
+    var action: WorkspaceAutomationAction?
     var lastRunState: AutomationRunState
     var lastRunAt: Date?
     var nextRunAt: Date?
@@ -1412,6 +1429,7 @@ struct WorkspaceAutomation: Identifiable, Codable, Hashable, Sendable {
         linkedDestination: WorkspaceDestination,
         linkedProjectID: UUID? = nil,
         actionKind: LocalActionKind,
+        action: WorkspaceAutomationAction? = nil,
         lastRunState: AutomationRunState = .idle,
         lastRunAt: Date? = nil,
         nextRunAt: Date? = nil,
@@ -1428,12 +1446,17 @@ struct WorkspaceAutomation: Identifiable, Codable, Hashable, Sendable {
         self.linkedDestination = linkedDestination
         self.linkedProjectID = linkedProjectID
         self.actionKind = actionKind
+        self.action = action
         self.lastRunState = lastRunState
         self.lastRunAt = lastRunAt
         self.nextRunAt = nextRunAt
         self.lastResultMessage = lastResultMessage
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    var resolvedAction: WorkspaceAutomationAction {
+        action ?? WorkspaceAutomationAction(kind: actionKind)
     }
 }
 

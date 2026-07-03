@@ -2323,15 +2323,24 @@ final class WorkspaceStore {
 
     func runAutomation(_ automationID: UUID) {
         guard let index = automations.firstIndex(where: { $0.id == automationID }) else { return }
+        let now = Date()
         guard preferences.automationsEnabled ?? true else {
             automations[index].lastRunState = .failed
             automations[index].lastResultMessage = "Automations are disabled in Settings."
-            automations[index].updatedAt = .now
+            automations[index].updatedAt = now
+            recordLocalAction(
+                kind: .runAutomation,
+                title: automations[index].title,
+                detail: "Automations are disabled in Settings.",
+                status: .failed,
+                destination: .automations,
+                automationID: automations[index].id
+            )
             return
         }
 
-        automations[index].lastRunAt = .now
-        automations[index].updatedAt = .now
+        automations[index].lastRunAt = now
+        automations[index].updatedAt = now
 
         if automations[index].requiresConfirmation {
             automations[index].lastRunState = .needsConfirmation
@@ -2348,30 +2357,54 @@ final class WorkspaceStore {
             return
         }
 
+        let automation = automations[index]
+        let action = automation.resolvedAction
         let resultMessage: String
-        switch automations[index].actionKind {
+        let resultState: AutomationRunState
+        let actionStatus: LocalActionStatus
+        let requiresConfirmation: Bool
+
+        switch action.kind {
         case .generateSummary:
             if let asset = currentLibraryAsset ?? assetsNeedingSummary.first {
                 selectedAssetID = asset.id
                 summarizeSelectedAsset()
                 resultMessage = "Summarized \(asset.title)."
+                resultState = .succeeded
+                actionStatus = .completed
+                requiresConfirmation = false
             } else {
                 resultMessage = "No sources currently need a summary."
+                resultState = .succeeded
+                actionStatus = .completed
+                requiresConfirmation = false
             }
         case .importTranscript:
             if let asset = pendingTranscriptAssets.first {
                 queueTranscriptImport(for: asset.id)
                 resultMessage = "Queued transcript import for \(asset.title)."
+                resultState = .succeeded
+                actionStatus = .completed
+                requiresConfirmation = false
             } else {
                 resultMessage = "No pending transcript work was found."
+                resultState = .succeeded
+                actionStatus = .completed
+                requiresConfirmation = false
             }
         case .createDraft:
             if let asset = currentLibraryAsset ?? libraryAssets.first {
                 selectedAssetID = asset.id
                 draftFromSelectedAsset()
                 resultMessage = "Created a draft from \(asset.title)."
+                resultState = .succeeded
+                actionStatus = .completed
+                requiresConfirmation = false
             } else {
                 resultMessage = "No source is available to draft from."
+                resultState = .succeeded
+                actionStatus = .completed
+                requiresConfirmation = false
             }
         case .scheduleDraft:
             if let draft = unscheduledDrafts.first {
@@ -2382,13 +2415,19 @@ final class WorkspaceStore {
                     destination: .calendar
                 )
                 resultMessage = "Scheduled \(draft.title) locally."
+                resultState = .succeeded
+                actionStatus = .completed
+                requiresConfirmation = false
             } else {
                 resultMessage = "No unscheduled draft is ready."
+                resultState = .succeeded
+                actionStatus = .completed
+                requiresConfirmation = false
             }
         case .exportDraft:
             if let draftIndex = drafts.firstIndex(where: { $0.id == (selectedDraftID ?? drafts.first?.id) }) {
-                drafts[draftIndex].lastExportedAt = .now
-                drafts[draftIndex].updatedAt = .now
+                drafts[draftIndex].lastExportedAt = now
+                drafts[draftIndex].updatedAt = now
                 recordLocalAction(
                     kind: .exportDraft,
                     title: "Prepared draft export metadata",
@@ -2396,29 +2435,90 @@ final class WorkspaceStore {
                     status: .completed,
                     destination: .drafts,
                     relatedDraftID: drafts[draftIndex].id,
-                    completedAt: .now
+                    completedAt: now
                 )
                 resultMessage = "Marked \(drafts[draftIndex].title) as exported locally."
+                resultState = .succeeded
+                actionStatus = .completed
+                requiresConfirmation = false
             } else {
                 resultMessage = "No draft is selected for export."
+                resultState = .succeeded
+                actionStatus = .completed
+                requiresConfirmation = false
             }
-        case .captureURL, .runAutomation, .runTool:
+        case .runTool:
+            if let toolKind = action.toolKind,
+               isAutomationSafeToolKind(toolKind) {
+                let result = runTool(toolKind, query: action.query ?? "")
+                resultMessage = automationResultMessage(for: result)
+                resultState = automationRunState(for: result)
+                actionStatus = result.localActionStatus
+                requiresConfirmation = result.requiresApproval
+            } else if let toolKind = action.toolKind {
+                resultMessage = "\(toolKind.rawValue) is not allowed to run autonomously. Use Tools for approval-gated network, browser, shell, code, or file-write actions."
+                resultState = .failed
+                actionStatus = .failed
+                requiresConfirmation = false
+            } else {
+                resultMessage = "This automation is missing a tool kind."
+                resultState = .failed
+                actionStatus = .failed
+                requiresConfirmation = false
+            }
+        case .captureURL, .runAutomation:
             resultMessage = "This automation type is not configured for autonomous local execution."
+            resultState = .failed
+            actionStatus = .failed
+            requiresConfirmation = false
         }
 
-        automations[index].lastRunState = .succeeded
-        automations[index].nextRunAt = nextRunDate(for: automations[index].cadence, from: .now)
+        automations[index].lastRunState = resultState
+        if resultState == .succeeded {
+            automations[index].nextRunAt = nextRunDate(for: automations[index].cadence, from: now)
+        }
         automations[index].lastResultMessage = resultMessage
-        automations[index].updatedAt = .now
+        automations[index].updatedAt = now
         recordLocalAction(
             kind: .runAutomation,
-            title: automations[index].title,
+            title: automation.title,
             detail: resultMessage,
-            status: .completed,
+            status: actionStatus,
             destination: .automations,
-            automationID: automations[index].id,
-            completedAt: .now
+            automationID: automation.id,
+            requiresConfirmation: requiresConfirmation,
+            completedAt: resultState == .succeeded ? now : nil
         )
+    }
+
+    private func isAutomationSafeToolKind(_ toolKind: AIToolKind) -> Bool {
+        switch toolKind {
+        case .workspaceSearch, .ragRetrieval:
+            true
+        case .webSearch, .webPageReader, .localFileRead, .localFileWrite, .terminal,
+             .codeExecution, .browserAutomation, .github, .notion, .youtube, .x:
+            false
+        }
+    }
+
+    private func automationRunState(for result: LocalToolExecutionResult) -> AutomationRunState {
+        switch result.status {
+        case .completed:
+            .succeeded
+        case .requiresApproval:
+            .needsConfirmation
+        case .denied, .blocked, .unavailable:
+            .failed
+        }
+    }
+
+    private func automationResultMessage(for result: LocalToolExecutionResult) -> String {
+        let status = result.status.rawValue
+            .replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2", options: .regularExpression)
+            .capitalized
+        let query = result.query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let queryLine = query.isEmpty ? "" : " Query: \(query)."
+        return "\(result.title) finished with \(status).\(queryLine)\n\n\(result.output)"
     }
 
     func confirmLocalAction(_ actionID: UUID) {
@@ -5058,6 +5158,20 @@ final class WorkspaceStore {
                 linkedDestination: .calendar,
                 linkedProjectID: selectedProjectID,
                 actionKind: .scheduleDraft
+            ),
+            WorkspaceAutomation(
+                title: "Local workspace scout",
+                detail: "Run a permission-gated local workspace search for current project context.",
+                cadence: .manual,
+                requiresConfirmation: false,
+                linkedDestination: .automations,
+                linkedProjectID: selectedProjectID,
+                actionKind: .runTool,
+                action: WorkspaceAutomationAction(
+                    kind: .runTool,
+                    toolKind: .workspaceSearch,
+                    query: "current workspace risks and next actions"
+                )
             )
         ]
     }

@@ -925,6 +925,135 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Run tool automation executes workspace search and records traces")
+    func runToolAutomationExecutesWorkspaceSearchAndRecordsTraces() throws {
+        let (_, store) = try makeLoadedStore()
+        let automation = WorkspaceAutomation(
+            title: "Scout workspace",
+            detail: "Search local context for the next safe action.",
+            cadence: .manual,
+            requiresConfirmation: false,
+            linkedDestination: .automations,
+            actionKind: .runTool,
+            action: WorkspaceAutomationAction(
+                kind: .runTool,
+                toolKind: .workspaceSearch,
+                query: "local tool workflow"
+            )
+        )
+        store.automations = [automation]
+        let initialActionCount = store.localActionHistory.count
+        let initialToolResultCount = store.toolExecutionResults.count
+
+        store.runAutomation(automation.id)
+
+        let updatedAutomation = try #require(store.automations.first)
+        #expect(updatedAutomation.lastRunState == .succeeded)
+        #expect(updatedAutomation.lastResultMessage?.contains("Workspace search for \"local tool workflow\"") == true)
+        #expect(store.toolExecutionResults.count == initialToolResultCount + 1)
+        #expect(store.toolExecutionResults.first?.toolKind == .workspaceSearch)
+        #expect(store.toolExecutionResults.first?.status == .completed)
+        #expect(store.toolExecutionResults.first?.query == "local tool workflow")
+        #expect(store.localActionHistory.count == initialActionCount + 2)
+        #expect(store.localActionHistory.first?.kind == .runAutomation)
+        #expect(store.localActionHistory.first?.status == .completed)
+        #expect(store.localActionHistory.dropFirst().first?.kind == .runTool)
+    }
+
+    @MainActor
+    @Test("Run tool automation honors disabled local tool policy")
+    func runToolAutomationHonorsDisabledLocalToolPolicy() throws {
+        let (_, store) = try makeLoadedStore()
+        let searchIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .workspaceSearch }))
+        store.toolConfigurations[searchIndex].isEnabled = false
+        let automation = WorkspaceAutomation(
+            title: "Disabled scout",
+            detail: "Attempts to search with a disabled tool.",
+            cadence: .manual,
+            requiresConfirmation: false,
+            linkedDestination: .automations,
+            actionKind: .runTool,
+            action: WorkspaceAutomationAction(
+                kind: .runTool,
+                toolKind: .workspaceSearch,
+                query: "disabled workspace search"
+            )
+        )
+        store.automations = [automation]
+
+        store.runAutomation(automation.id)
+
+        let updatedAutomation = try #require(store.automations.first)
+        #expect(updatedAutomation.lastRunState == .failed)
+        #expect(updatedAutomation.lastResultMessage?.contains("disabled") == true)
+        #expect(store.toolExecutionResults.first?.toolKind == .workspaceSearch)
+        #expect(store.toolExecutionResults.first?.status == .unavailable)
+        #expect(store.localActionHistory.first?.kind == .runAutomation)
+        #expect(store.localActionHistory.first?.status == .failed)
+    }
+
+    @MainActor
+    @Test("Run tool automation rejects network and write tools")
+    func runToolAutomationRejectsNetworkAndWriteTools() throws {
+        let (_, store) = try makeLoadedStore()
+        let automation = WorkspaceAutomation(
+            title: "Network scout",
+            detail: "Attempts to run a network tool autonomously.",
+            cadence: .manual,
+            requiresConfirmation: false,
+            linkedDestination: .automations,
+            actionKind: .runTool,
+            action: WorkspaceAutomationAction(
+                kind: .runTool,
+                toolKind: .webSearch,
+                query: "latest provider docs"
+            )
+        )
+        store.automations = [automation]
+        let initialToolResultCount = store.toolExecutionResults.count
+
+        store.runAutomation(automation.id)
+
+        let updatedAutomation = try #require(store.automations.first)
+        #expect(updatedAutomation.lastRunState == .failed)
+        #expect(updatedAutomation.lastResultMessage?.contains("not allowed to run autonomously") == true)
+        #expect(store.toolExecutionResults.count == initialToolResultCount)
+        #expect(store.localActionHistory.first?.kind == .runAutomation)
+        #expect(store.localActionHistory.first?.status == .failed)
+    }
+
+    @MainActor
+    @Test("Run tool automation honors global automations disabled")
+    func runToolAutomationHonorsGlobalAutomationsDisabled() throws {
+        let (_, store) = try makeLoadedStore()
+        store.preferences.automationsEnabled = false
+        let automation = WorkspaceAutomation(
+            title: "Disabled automations scout",
+            detail: "Should not run while automations are disabled.",
+            cadence: .manual,
+            requiresConfirmation: false,
+            linkedDestination: .automations,
+            actionKind: .runTool,
+            action: WorkspaceAutomationAction(
+                kind: .runTool,
+                toolKind: .workspaceSearch,
+                query: "local tool workflow"
+            )
+        )
+        store.automations = [automation]
+        let initialToolResultCount = store.toolExecutionResults.count
+
+        store.runAutomation(automation.id)
+
+        let updatedAutomation = try #require(store.automations.first)
+        #expect(updatedAutomation.lastRunState == .failed)
+        #expect(updatedAutomation.lastResultMessage == "Automations are disabled in Settings.")
+        #expect(store.toolExecutionResults.count == initialToolResultCount)
+        #expect(store.localActionHistory.first?.kind == .runAutomation)
+        #expect(store.localActionHistory.first?.status == .failed)
+    }
+
+    @MainActor
     @Test("Chat tool command parses workspace search alias")
     func chatToolCommandParsesWorkspaceSearchAlias() throws {
         let store = WorkspaceStore()

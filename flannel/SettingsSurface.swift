@@ -1169,6 +1169,29 @@ struct SettingsSurface: View {
                 ))
             }
 
+            Section("Workflow Automations") {
+                if store.automations.isEmpty {
+                    EmptySettingsRow(
+                        title: "No automations configured",
+                        detail: "Create local workflows to run approved read and retrieval tools from this workspace."
+                    )
+                } else {
+                    ForEach(store.automations) { automation in
+                        AutomationSettingsRow(
+                            automation: automation,
+                            toggleEnabled: {
+                                store.toggleAutomation(automation.id)
+                                persist()
+                            },
+                            run: {
+                                store.runAutomation(automation.id)
+                                persist()
+                            }
+                        )
+                    }
+                }
+            }
+
             Section("Agent Traces") {
                 if store.recentLocalActions.isEmpty {
                     EmptySettingsRow(
@@ -5720,6 +5743,93 @@ private struct ToolSettingsRow: View {
     }
 }
 
+private struct AutomationSettingsRow: View {
+    var automation: WorkspaceAutomation
+    var toggleEnabled: () -> Void
+    var run: () -> Void
+
+    private var action: WorkspaceAutomationAction {
+        automation.resolvedAction
+    }
+
+    private var actionTitle: String {
+        if action.kind == .runTool,
+           let toolKind = action.toolKind {
+            return "Run \(toolKind.settingsTitle)"
+        }
+        return action.kind.settingsTitle
+    }
+
+    private var queryText: String? {
+        let trimmedQuery = action.query?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmedQuery.isEmpty ? nil : trimmedQuery
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(automation.title)
+                        .font(.headline)
+                    Text(automation.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 10)
+
+                Toggle("Enabled", isOn: Binding(
+                    get: { automation.isEnabled },
+                    set: { _ in toggleEnabled() }
+                ))
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .help(automation.isEnabled ? "Disable automation" : "Enable automation")
+
+                Button(action: run) {
+                    Label("Run", systemImage: "play.fill")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(!automation.isEnabled)
+                .help("Run this automation now")
+            }
+
+            HStack(spacing: 10) {
+                Label(actionTitle, systemImage: action.kind.settingsSymbolName)
+                Label(automation.cadence.settingsTitle, systemImage: "clock.arrow.circlepath")
+                Label(automation.lastRunState.settingsTitle, systemImage: automation.lastRunState.settingsSymbolName)
+                    .foregroundStyle(automation.lastRunState.settingsTint)
+                if automation.requiresConfirmation {
+                    Label("Confirm first", systemImage: "checkmark.shield")
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+
+            if let queryText {
+                Text(queryText)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+            }
+
+            if let message = automation.lastResultMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !message.isEmpty {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(.vertical, 5)
+    }
+}
+
 private struct ActionTraceSettingsRow: View {
     var action: LocalActionRecord
 
@@ -5761,6 +5871,13 @@ private struct ActionTraceSettingsRow: View {
 }
 
 private extension LocalActionKind {
+    var settingsTitle: String {
+        rawValue
+            .replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2", options: .regularExpression)
+            .replacingOccurrences(of: "_", with: " ")
+            .capitalized
+    }
+
     var settingsSymbolName: String {
         switch self {
         case .captureURL:
@@ -5779,6 +5896,51 @@ private extension LocalActionKind {
             "wrench.and.screwdriver"
         case .exportDraft:
             "square.and.arrow.up"
+        }
+    }
+}
+
+private extension AutomationCadence {
+    var settingsTitle: String {
+        rawValue.capitalized
+    }
+}
+
+private extension AutomationRunState {
+    var settingsTitle: String {
+        rawValue
+            .replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2", options: .regularExpression)
+            .replacingOccurrences(of: "_", with: " ")
+            .capitalized
+    }
+
+    var settingsSymbolName: String {
+        switch self {
+        case .idle:
+            "circle"
+        case .queued:
+            "clock"
+        case .running:
+            "arrow.triangle.2.circlepath"
+        case .succeeded:
+            "checkmark.circle"
+        case .needsConfirmation:
+            "checkmark.shield"
+        case .failed:
+            "exclamationmark.triangle"
+        }
+    }
+
+    var settingsTint: Color {
+        switch self {
+        case .succeeded:
+            .green
+        case .needsConfirmation:
+            .orange
+        case .failed:
+            .red
+        case .idle, .queued, .running:
+            .secondary
         }
     }
 }
