@@ -3632,6 +3632,61 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Local discovery exposes provider health snapshots and model catalog")
+    func localDiscoveryExposesProviderHealthSnapshotsAndModelCatalog() throws {
+        let (_, store) = try makeLoadedStore()
+        let ollamaEndpoint = "http://localhost:11434"
+        let lmStudioEndpoint = "http://localhost:1234"
+        let checkedAt = Date(timeIntervalSince1970: 1_782_730_700)
+
+        store.apply([
+            LocalProviderDiscoveryResult(
+                providerKind: .ollama,
+                endpoint: ollamaEndpoint,
+                status: .ready,
+                models: [
+                    LocalModelDescriptor(
+                        name: "llama3.1",
+                        providerKind: .ollama,
+                        endpoint: ollamaEndpoint,
+                        loadedInstanceCount: 1,
+                        capabilities: [.chat, .streaming, .toolCalling]
+                    )
+                ],
+                errorMessage: "Ollama running-model metadata unavailable: timeout",
+                discoveredAt: checkedAt
+            ),
+            LocalProviderDiscoveryResult(
+                providerKind: .lmStudio,
+                endpoint: lmStudioEndpoint,
+                status: .needsAttention,
+                errorMessage: "The provider returned HTTP 503: warming up",
+                discoveredAt: checkedAt
+            )
+        ])
+
+        let catalog = store.localModelCatalog
+        let ollamaHealth = try #require(store.localProviderHealthSnapshots.first { $0.providerKind == .ollama })
+        let lmStudioHealth = try #require(store.localProviderHealthSnapshots.first { $0.providerKind == .lmStudio })
+
+        #expect(catalog.map(\.name) == ["llama3.1"])
+        #expect(ollamaHealth.status == .degraded)
+        #expect(ollamaHealth.canServeRequests)
+        #expect(ollamaHealth.endpoint?.absoluteString == ollamaEndpoint)
+        #expect(ollamaHealth.checkedAt == checkedAt)
+        #expect(ollamaHealth.lastSuccessfulCheckAt == checkedAt)
+        #expect(ollamaHealth.discoveredModelCount == 1)
+        #expect(ollamaHealth.loadedModelCount == 1)
+        #expect(ollamaHealth.warningMessage == "Ollama running-model metadata unavailable: timeout")
+        #expect(ollamaHealth.failureMessage == nil)
+        #expect(lmStudioHealth.status == .unavailable)
+        #expect(!lmStudioHealth.canServeRequests)
+        #expect(lmStudioHealth.discoveredModelCount == 0)
+        #expect(lmStudioHealth.loadedModelCount == 0)
+        #expect(lmStudioHealth.failureMessage == "The provider returned HTTP 503: warming up")
+    }
+
+    @MainActor
     @Test("Selecting discovered local chat model makes it the preferred route")
     func selectingDiscoveredLocalChatModelMakesItPreferred() throws {
         let (_, store) = try makeLoadedStore()

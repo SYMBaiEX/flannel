@@ -458,6 +458,7 @@ final class WorkspaceStore {
         root.toolConfigurations = toolConfigurations
         root.toolExecutionResults = toolExecutionResults
         root.modelComparisonRuns = modelComparisonRuns
+        root.localDiscoveryResults = localDiscoveryResults
         root.pinnedMessages = pinnedMessages
         root.archivedAssistantThreadIDs = Array(archivedAssistantThreadIDs)
         root.localMemories = localMemories
@@ -510,6 +511,7 @@ final class WorkspaceStore {
         root.toolConfigurations = []
         root.toolExecutionResults = []
         root.modelComparisonRuns = []
+        root.localDiscoveryResults = []
         root.pinnedMessages = []
         root.archivedAssistantThreadIDs = []
         root.localMemories = []
@@ -725,6 +727,71 @@ final class WorkspaceStore {
                 )
                 providerConfigurations.append(provider)
             }
+        }
+    }
+
+    var localModelCatalog: [LocalModelDescriptor] {
+        localDiscoveryResults
+            .flatMap(\.models)
+            .sorted { lhs, rhs in
+                let lhsProvider = lhs.providerKind.title
+                let rhsProvider = rhs.providerKind.title
+                if lhsProvider != rhsProvider {
+                    return lhsProvider.localizedCaseInsensitiveCompare(rhsProvider) == .orderedAscending
+                }
+
+                let lhsTitle = lhs.displayName ?? lhs.name
+                let rhsTitle = rhs.displayName ?? rhs.name
+                return lhsTitle.localizedCaseInsensitiveCompare(rhsTitle) == .orderedAscending
+            }
+    }
+
+    var localProviderHealthSnapshots: [AIProviderHealth] {
+        localDiscoveryResults.map(Self.localProviderHealthSnapshot)
+            .sorted {
+                $0.providerKind.displayName.localizedCaseInsensitiveCompare($1.providerKind.displayName) == .orderedAscending
+            }
+    }
+
+    private static func localProviderHealthSnapshot(
+        for result: LocalProviderDiscoveryResult
+    ) -> AIProviderHealth {
+        let warning = result.status == .ready ? result.errorMessage : nil
+        let failure = result.status == .ready ? nil : result.errorMessage
+        return AIProviderHealth(
+            providerKind: AIProviderKind(result.providerKind),
+            providerMode: AIKnownProviderCatalog.entry(for: result.providerKind)?.providerMode ?? .nativeAPI,
+            endpoint: URL(string: result.endpoint),
+            status: localProviderHealthStatus(for: result),
+            checkedAt: result.discoveredAt,
+            lastSuccessfulCheckAt: result.status == .ready ? result.discoveredAt : nil,
+            discoveredModelCount: result.models.count,
+            loadedModelCount: result.models.reduce(0) { partial, model in
+                partial + max(0, model.loadedInstanceCount ?? 0)
+            },
+            warningMessage: warning,
+            failureMessage: failure
+        )
+    }
+
+    private static func localProviderHealthStatus(
+        for result: LocalProviderDiscoveryResult
+    ) -> AIProviderHealthStatus {
+        switch result.status {
+        case .ready:
+            if let warning = result.errorMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !warning.isEmpty {
+                return .degraded
+            }
+            return .ready
+        case .needsAttention:
+            return .unavailable
+        case .disconnected:
+            return .unknown
+        case .syncing:
+            return .unknown
+        case .rateLimited:
+            return .degraded
         }
     }
 
@@ -4711,6 +4778,7 @@ final class WorkspaceStore {
         toolConfigurations = item.toolConfigurations ?? []
         toolExecutionResults = item.toolExecutionResults ?? []
         modelComparisonRuns = item.modelComparisonRuns ?? []
+        localDiscoveryResults = item.localDiscoveryResults ?? []
         pinnedMessages = item.pinnedMessages ?? []
         archivedAssistantThreadIDs = Set(item.archivedAssistantThreadIDs ?? [])
         localMemories = item.localMemories ?? []

@@ -32,6 +32,8 @@ struct WorkspaceSnapshotServiceTests {
         #expect(payload.workspace.toolConfigurations.map(\.kind) == [.ragRetrieval])
         #expect(payload.workspace.toolExecutionResults.map(\.title) == ["RAG lookup"])
         #expect(payload.workspace.modelComparisonRuns.map(\.prompt) == ["Compare local and hosted routes"])
+        #expect(payload.workspace.localDiscoveryResults?.first?.providerKind == .ollama)
+        #expect(payload.workspace.localDiscoveryResults?.first?.models.map(\.name) == ["llama3.1", "nomic-embed-text"])
         #expect(payload.workspace.localMemories.map(\.title) == ["Project rule"])
         #expect(payload.workspace.archivedAssistantThreadIDs == [sampleThreadID])
     }
@@ -59,6 +61,7 @@ struct WorkspaceSnapshotServiceTests {
         #expect(result.item.knowledgeSources?.first?.isWatched == true)
         #expect(result.item.toolExecutionResults?.first?.status == .completed)
         #expect(result.item.modelComparisonRuns?.first?.results.first?.providerDisplayName == "OpenAI API")
+        #expect(result.item.localDiscoveryResults?.first?.models.map(\.name) == ["llama3.1", "nomic-embed-text"])
     }
 
     @Test("Workspace snapshot import rejects unsupported schemas")
@@ -253,6 +256,30 @@ struct WorkspaceSnapshotServiceTests {
                         text: "Hosted route is best for reasoning."
                     )
                 ]
+            )
+        ]
+        store.localDiscoveryResults = [
+            LocalProviderDiscoveryResult(
+                providerKind: .ollama,
+                endpoint: "http://localhost:11434",
+                status: .ready,
+                models: [
+                    LocalModelDescriptor(
+                        name: "llama3.1",
+                        providerKind: .ollama,
+                        endpoint: "http://localhost:11434",
+                        contextWindowTokens: 8_192,
+                        loadedInstanceCount: 1,
+                        capabilities: [.chat, .streaming, .toolCalling]
+                    ),
+                    LocalModelDescriptor(
+                        name: "nomic-embed-text",
+                        providerKind: .ollama,
+                        endpoint: "http://localhost:11434",
+                        capabilities: [.embeddings]
+                    )
+                ],
+                discoveredAt: now
             )
         ]
         store.localMemories = [

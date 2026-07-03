@@ -43,6 +43,7 @@ struct WorkspaceSnapshot: Codable, Hashable, Sendable {
     var toolConfigurations: [ToolConfiguration]
     var toolExecutionResults: [LocalToolExecutionResult]
     var modelComparisonRuns: [ModelComparisonRun]
+    var localDiscoveryResults: [LocalProviderDiscoveryResult]?
     var pinnedMessages: [PinnedAssistantMessage]
     var archivedAssistantThreadIDs: [UUID]
     var localMemories: [LocalMemoryRecord]
@@ -78,6 +79,7 @@ struct WorkspaceSnapshot: Codable, Hashable, Sendable {
         toolConfigurations: [ToolConfiguration],
         toolExecutionResults: [LocalToolExecutionResult],
         modelComparisonRuns: [ModelComparisonRun],
+        localDiscoveryResults: [LocalProviderDiscoveryResult] = [],
         pinnedMessages: [PinnedAssistantMessage],
         archivedAssistantThreadIDs: [UUID],
         localMemories: [LocalMemoryRecord],
@@ -112,6 +114,7 @@ struct WorkspaceSnapshot: Codable, Hashable, Sendable {
         self.toolConfigurations = toolConfigurations
         self.toolExecutionResults = toolExecutionResults
         self.modelComparisonRuns = modelComparisonRuns
+        self.localDiscoveryResults = localDiscoveryResults
         self.pinnedMessages = pinnedMessages
         self.archivedAssistantThreadIDs = archivedAssistantThreadIDs
         self.localMemories = localMemories
@@ -170,6 +173,7 @@ struct WorkspaceSnapshotService: Sendable {
             toolConfigurations: store.toolConfigurations,
             toolExecutionResults: store.toolExecutionResults,
             modelComparisonRuns: store.modelComparisonRuns,
+            localDiscoveryResults: store.localDiscoveryResults,
             pinnedMessages: store.pinnedMessages,
             archivedAssistantThreadIDs: Array(store.archivedAssistantThreadIDs),
             localMemories: store.localMemories,
@@ -240,6 +244,7 @@ struct WorkspaceSnapshotService: Sendable {
             toolConfigurations: snapshot.toolConfigurations,
             toolExecutionResults: snapshot.toolExecutionResults,
             modelComparisonRuns: snapshot.modelComparisonRuns,
+            localDiscoveryResults: snapshot.localDiscoveryResults ?? [],
             pinnedMessages: snapshot.pinnedMessages,
             archivedAssistantThreadIDs: snapshot.archivedAssistantThreadIDs,
             localMemories: snapshot.localMemories,

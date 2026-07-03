@@ -1644,6 +1644,7 @@ final class Item {
     var toolConfigurations: [ToolConfiguration]?
     var toolExecutionResults: [LocalToolExecutionResult]?
     var modelComparisonRuns: [ModelComparisonRun]?
+    var localDiscoveryResults: [LocalProviderDiscoveryResult]?
     var pinnedMessages: [PinnedAssistantMessage]?
     var archivedAssistantThreadIDs: [UUID]?
     var localMemories: [LocalMemoryRecord]?
@@ -1679,6 +1680,7 @@ final class Item {
         toolConfigurations: [ToolConfiguration] = [],
         toolExecutionResults: [LocalToolExecutionResult] = [],
         modelComparisonRuns: [ModelComparisonRun] = [],
+        localDiscoveryResults: [LocalProviderDiscoveryResult] = [],
         pinnedMessages: [PinnedAssistantMessage] = [],
         archivedAssistantThreadIDs: [UUID] = [],
         localMemories: [LocalMemoryRecord] = [],
@@ -1713,6 +1715,7 @@ final class Item {
         self.toolConfigurations = toolConfigurations
         self.toolExecutionResults = toolExecutionResults
         self.modelComparisonRuns = modelComparisonRuns
+        self.localDiscoveryResults = localDiscoveryResults
         self.pinnedMessages = pinnedMessages
         self.archivedAssistantThreadIDs = archivedAssistantThreadIDs
         self.localMemories = localMemories
