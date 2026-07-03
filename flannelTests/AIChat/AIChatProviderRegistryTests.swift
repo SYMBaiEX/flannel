@@ -557,6 +557,17 @@ struct AIChatProviderRegistryTests {
     }
 
     @MainActor
+    @Test("Provider access mode presentation icons stay shared across chat surfaces")
+    func providerAccessModePresentationIconsStayShared() {
+        #expect(ProviderAccessMode.localServer.icon == "desktopcomputer")
+        #expect(ProviderAccessMode.apiKey.icon == "key")
+        #expect(ProviderAccessMode.subscriptionCLI.icon == "terminal")
+        #expect(ProviderAccessMode.openAICompatible.icon == "arrow.left.arrow.right")
+        #expect(ProviderAccessMode.anthropicCompatible.icon == "text.bubble")
+        #expect(ProviderAccessMode.aiSDKBridge.icon == "shippingbox")
+    }
+
+    @MainActor
     @Test("Provider runtime policy centralizes readiness and chat transport modes")
     func providerRuntimePolicyCentralizesModeMatrix() throws {
         let (_, store) = try makeLoadedStore()
