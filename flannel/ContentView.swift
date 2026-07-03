@@ -8703,9 +8703,7 @@ private struct KnowledgeSourceCard: View {
     }
 
     private var modelOptions: [String] {
-        let discovered = store.localDiscoveryResults.flatMap(\.models).map(\.name)
-        let configured = store.providerConfigurations.flatMap(\.availableModels)
-        return Array(Set([LocalEmbeddingService.deterministicModelIdentifier] + discovered + configured)).sorted()
+        store.embeddingModelOptions
     }
 
     var body: some View {

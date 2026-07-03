@@ -779,6 +779,26 @@ final class WorkspaceStore {
             }
     }
 
+    var embeddingModelOptions: [String] {
+        var candidates = [LocalEmbeddingService.deterministicModelIdentifier]
+        candidates += localModelCatalog
+            .filter { $0.capabilities.contains(.embeddings) }
+            .map(\.name)
+
+        for provider in providerConfigurations where provider.supportsEmbeddings {
+            let discoveredEmbeddingNames = discoveredEmbeddingModels(for: provider).map(\.name)
+            if provider.accessMode == .localServer, !discoveredEmbeddingNames.isEmpty {
+                candidates += discoveredEmbeddingNames
+            } else {
+                candidates.append(provider.modelIdentifier)
+                candidates += provider.availableModels
+                candidates += provider.discoveredModelNames
+            }
+        }
+
+        return Self.sortedUniqueModelNames(candidates)
+    }
+
     var localProviderHealthSnapshots: [AIProviderHealth] {
         localDiscoveryResults.map(Self.localProviderHealthSnapshot)
             .sorted {
@@ -934,6 +954,11 @@ final class WorkspaceStore {
         localDiscoveryResults.first {
             $0.providerKind == kind && $0.endpoint == endpoint
         }?.models ?? []
+    }
+
+    private func discoveredEmbeddingModels(for provider: ProviderConfiguration) -> [LocalModelDescriptor] {
+        discoveredModelsForLocalProvider(kind: provider.kind, endpoint: provider.endpoint)
+            .filter { $0.capabilities.contains(.embeddings) }
     }
 
     private func applySelectedLocalModelRuntime(
@@ -6494,6 +6519,15 @@ final class WorkspaceStore {
               ProviderSetupService.shared.isEligibleForActivation(provider, preferences: preferences),
               ProviderSetupService.shared.report(for: provider, preferences: preferences).hasBlockingIssues == false else {
             return false
+        }
+
+        if provider.accessMode == .localServer {
+            let discoveredModels = discoveredModelsForLocalProvider(kind: provider.kind, endpoint: provider.endpoint)
+            if !discoveredModels.isEmpty {
+                return discoveredModels.contains { model in
+                    model.name == modelIdentifier && model.capabilities.contains(.embeddings)
+                }
+            }
         }
 
         return provider.modelIdentifier == modelIdentifier
