@@ -3687,6 +3687,44 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Local provider health snapshots keep endpoint specific identity")
+    func localProviderHealthSnapshotsKeepEndpointSpecificIdentity() throws {
+        let (_, store) = try makeLoadedStore()
+        let firstEndpoint = "http://localhost:11434"
+        let secondEndpoint = "http://localhost:11435"
+
+        store.apply([
+            LocalProviderDiscoveryResult(
+                providerKind: .ollama,
+                endpoint: firstEndpoint,
+                status: .ready,
+                models: [
+                    LocalModelDescriptor(
+                        name: "llama3.1",
+                        providerKind: .ollama,
+                        endpoint: firstEndpoint,
+                        capabilities: [.chat, .streaming]
+                    )
+                ]
+            ),
+            LocalProviderDiscoveryResult(
+                providerKind: .ollama,
+                endpoint: secondEndpoint,
+                status: .needsAttention,
+                errorMessage: "Connection refused"
+            )
+        ])
+
+        let healthIDs = store.localProviderHealthSnapshots.map(\.id)
+        let endpoints = store.localProviderHealthSnapshots
+            .compactMap { $0.endpoint?.absoluteString }
+            .sorted()
+
+        #expect(healthIDs.count == Set(healthIDs).count)
+        #expect(endpoints == [firstEndpoint, secondEndpoint])
+    }
+
+    @MainActor
     @Test("Selecting discovered local chat model makes it the preferred route")
     func selectingDiscoveredLocalChatModelMakesItPreferred() throws {
         let (_, store) = try makeLoadedStore()

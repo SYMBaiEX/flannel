@@ -238,7 +238,11 @@ struct AIProviderHealth: Identifiable, Codable, Hashable, Sendable {
     var failureMessage: String?
 
     var id: String {
-        "\(providerKind.rawValue):\(providerMode.rawValue)"
+        [
+            providerKind.rawValue,
+            providerMode.rawValue,
+            endpoint?.absoluteString ?? "default"
+        ].joined(separator: ":")
     }
 
     var canServeRequests: Bool {
