@@ -98,6 +98,7 @@ struct ContentView: View {
                 }
                 startLocalProviderAutoDiscovery()
                 synchronizeKnowledgeSourceWatchers()
+                await rebuildQueuedKnowledgeOnStartupIfNeeded()
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
@@ -337,9 +338,7 @@ struct ContentView: View {
             inspectorVisible: columnVisibility == .all,
             canPresentInspector: sidebarSurface.showsInspectorColumn,
             hasKnowledgeSources: !store.knowledgeSources.isEmpty,
-            hasQueuedKnowledgeSources: store.knowledgeSources.contains { source in
-                source.status == .queued || source.status == .stale || source.status == .notIndexed
-            },
+            hasQueuedKnowledgeSources: store.hasKnowledgeSourcesNeedingIndexRebuild,
             providerRoutingPolicy: store.preferences.providerRoutingPolicy
         )
     }
@@ -398,6 +397,13 @@ struct ContentView: View {
             await store.rebuildKnowledgeIndexManifestsUsingConfiguredEmbeddings(onlyQueued: true)
             persistQuietly()
         }
+    }
+
+    private func rebuildQueuedKnowledgeOnStartupIfNeeded() async {
+        guard store.hasKnowledgeSourcesNeedingIndexRebuild else { return }
+
+        await store.rebuildKnowledgeIndexManifestsUsingConfiguredEmbeddings(onlyQueued: true)
+        persistQuietly()
     }
 
     private func runCommand(_ command: FlannelCommand) {

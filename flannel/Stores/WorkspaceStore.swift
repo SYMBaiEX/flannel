@@ -4195,6 +4195,14 @@ final class WorkspaceStore {
         )
     }
 
+    var hasKnowledgeSourcesNeedingIndexRebuild: Bool {
+        knowledgeSources.contains { source in
+            source.status == .queued
+                || source.status == .stale
+                || source.status == .notIndexed
+        }
+    }
+
     @discardableResult
     func addKnowledgeSource(
         title rawTitle: String,

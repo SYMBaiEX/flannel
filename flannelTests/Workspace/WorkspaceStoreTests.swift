@@ -972,6 +972,48 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Queued stale and unindexed knowledge sources need startup rebuild")
+    func queuedStaleAndUnindexedKnowledgeSourcesNeedStartupRebuild() throws {
+        let (_, store) = try makeLoadedStore()
+        let readySource = KnowledgeSource(
+            title: "Ready",
+            kind: .workspaceNotes,
+            location: "ready",
+            status: .ready
+        )
+        let queuedSource = KnowledgeSource(
+            title: "Queued",
+            kind: .workspaceNotes,
+            location: "queued",
+            status: .queued
+        )
+        let staleSource = KnowledgeSource(
+            title: "Stale",
+            kind: .workspaceNotes,
+            location: "stale",
+            status: .stale
+        )
+        let unindexedSource = KnowledgeSource(
+            title: "Unindexed",
+            kind: .workspaceNotes,
+            location: "unindexed",
+            status: .notIndexed
+        )
+
+        store.knowledgeSources = [readySource]
+        #expect(store.hasKnowledgeSourcesNeedingIndexRebuild == false)
+
+        store.knowledgeSources = [readySource, queuedSource]
+        #expect(store.hasKnowledgeSourcesNeedingIndexRebuild)
+
+        store.knowledgeSources = [readySource, staleSource]
+        #expect(store.hasKnowledgeSourcesNeedingIndexRebuild)
+
+        store.knowledgeSources = [readySource, unindexedSource]
+        #expect(store.hasKnowledgeSourcesNeedingIndexRebuild)
+    }
+
+    @MainActor
     @Test("Knowledge rebuild writes failed manifest metadata for unreadable source")
     func knowledgeRebuildWritesFailedManifestMetadataForUnreadableSource() throws {
         let (_, store) = try makeLoadedStore()
