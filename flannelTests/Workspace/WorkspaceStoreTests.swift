@@ -90,6 +90,76 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Template system prompt beats default profile")
+    func templateSystemPromptBeatsDefaultProfile() throws {
+        let (_, store) = try makeLoadedStore()
+        store.promptProfiles = [
+            SystemPromptProfile(
+                title: "Global Default",
+                detail: "Should not override template chats.",
+                prompt: "GLOBAL DEFAULT PROMPT",
+                isDefault: true
+            )
+        ]
+        store.preferences.defaultSystemPromptProfileID = store.promptProfiles[0].id
+        let template = ChatTemplate(
+            title: "Template Runtime",
+            detail: "Uses a dedicated system prompt.",
+            systemPrompt: "TEMPLATE PROMPT for {{thread_title}}.",
+            starterPrompt: "Starter for {{thread_title}}."
+        )
+
+        let thread = store.createAssistantThread(from: template)
+
+        #expect(thread.messages.first?.role == .system)
+        #expect(thread.messages.first?.text == "TEMPLATE PROMPT for Template Runtime.")
+        #expect(store.effectiveSystemPrompt(for: thread) == "TEMPLATE PROMPT for Template Runtime.")
+        #expect(store.renderChatTemplateStarterPrompt(template, for: thread) == "Starter for Template Runtime.")
+    }
+
+    @MainActor
+    @Test("Template variables render against new thread and source scope")
+    func templateVariablesRenderAgainstNewThreadAndSourceScope() throws {
+        let (_, store) = try makeLoadedStore()
+        let selectedSources = Array(store.knowledgeSources.prefix(2))
+        let selectedSourceIDs = selectedSources.map(\.id)
+        let expectedSourceTitles = selectedSources.map(\.title).sorted().joined(separator: ", ")
+        let template = ChatTemplate(
+            title: "Scoped Variable Research",
+            detail: "Renders against the target thread.",
+            systemPrompt: "Thread {{thread_title}} tags {{thread_tags}} sources {{knowledge_source_count}}: {{knowledge_sources}}.",
+            starterPrompt: "Start {{thread_title}} with {{knowledge_source_count}} sources.",
+            tagNames: ["RAG", "Local"],
+            knowledgeSourceIDs: selectedSourceIDs
+        )
+
+        let thread = store.createAssistantThread(from: template)
+
+        #expect(thread.messages.first?.text == "Thread Scoped Variable Research tags rag, local sources 2: \(expectedSourceTitles).")
+        #expect(store.renderChatTemplateStarterPrompt(template, for: thread) == "Start Scoped Variable Research with 2 sources.")
+    }
+
+    @MainActor
+    @Test("Chat template upsert preserves valid scoped knowledge sources")
+    func chatTemplateUpsertPreservesValidScopedKnowledgeSources() throws {
+        let (_, store) = try makeLoadedStore()
+        let sourceIDs = Array(store.knowledgeSources.prefix(2).map(\.id))
+        let firstSourceID = try #require(sourceIDs.first)
+        let secondSourceID = try #require(sourceIDs.dropFirst().first)
+        let staleSourceID = UUID()
+
+        store.upsert(ChatTemplate(
+            title: "  Scoped Knowledge Template  ",
+            detail: "Uses selected local sources.",
+            systemPrompt: "Stay grounded.",
+            knowledgeSourceIDs: [secondSourceID, staleSourceID, firstSourceID, firstSourceID]
+        ))
+
+        let template = try #require(store.chatTemplates.first { $0.title == "Scoped Knowledge Template" })
+        #expect(template.knowledgeSourceIDs == [secondSourceID, firstSourceID])
+    }
+
+    @MainActor
     @Test("Thread-scoped retrieval only returns selected knowledge sources")
     func threadScopedRetrievalFiltersKnowledgeSources() throws {
         let (_, store) = try makeLoadedStore()

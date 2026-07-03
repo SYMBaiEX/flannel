@@ -1471,37 +1471,50 @@ final class WorkspaceStore {
         normalizePromptProfileState()
     }
 
-    func renderChatTemplateSystemPrompt(_ template: ChatTemplate, now: Date = .now) -> String {
-        let rendered = renderPromptTemplate(template.systemPrompt, now: now)
+    func renderChatTemplateSystemPrompt(
+        _ template: ChatTemplate,
+        for thread: AssistantThread? = nil,
+        now: Date = .now
+    ) -> String {
+        let rendered = renderPromptTemplate(
+            template.systemPrompt,
+            now: now,
+            thread: thread,
+            knowledgeSourceIDs: template.knowledgeSourceIDs
+        )
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if rendered.isEmpty {
-            return defaultSystemPrompt(now: now)
+            return defaultSystemPrompt(for: thread, now: now)
                 ?? "You are Flannel, a local-first macOS AI assistant."
         }
         return rendered
     }
 
-    func renderChatTemplateStarterPrompt(_ template: ChatTemplate, now: Date = .now) -> String {
-        let rendered = renderPromptTemplate(template.starterPrompt, now: now)
+    func renderChatTemplateStarterPrompt(
+        _ template: ChatTemplate,
+        for thread: AssistantThread? = nil,
+        now: Date = .now
+    ) -> String {
+        let rendered = renderPromptTemplate(
+            template.starterPrompt,
+            now: now,
+            thread: thread,
+            knowledgeSourceIDs: template.knowledgeSourceIDs
+        )
         return rendered.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : rendered
     }
 
     @discardableResult
     func createAssistantThread(from template: ChatTemplate? = nil, folderID: UUID? = nil) -> AssistantThread {
-        let systemPrompt = template.map { renderChatTemplateSystemPrompt($0) }
-            ?? defaultSystemPrompt()
-            ?? "You are Flannel, a local-first macOS AI assistant."
         let resolvedFolderID = folderID.flatMap { candidate in
             chatFolders.contains(where: { $0.id == candidate }) ? candidate : nil
         }
         let title = template?.title.trimmingCharacters(in: .whitespacesAndNewlines)
         let knowledgeSourceIDs = validatedKnowledgeSourceIDs(template?.knowledgeSourceIDs ?? [])
-        let thread = AssistantThread(
+        var thread = AssistantThread(
             title: title?.isEmpty == false ? title! : "New AI Chat",
             mode: template?.mode ?? .workspaceCopilot,
-            messages: [
-                AssistantMessage(role: .system, text: systemPrompt)
-            ],
+            messages: [],
             tagNames: canonicalTags(template?.tagNames ?? []),
             knowledgeSourceIDs: knowledgeSourceIDs,
             folderID: resolvedFolderID,
@@ -1510,6 +1523,12 @@ final class WorkspaceStore {
             pinnedAssetID: selectedAssetID,
             pinnedCalendarEntryID: selectedCalendarEntryID
         )
+        let systemPrompt = template.map { renderChatTemplateSystemPrompt($0, for: thread) }
+            ?? defaultSystemPrompt(for: thread)
+            ?? "You are Flannel, a local-first macOS AI assistant."
+        thread.messages = [
+            AssistantMessage(role: .system, text: systemPrompt)
+        ]
 
         assistantThreads.insert(thread, at: 0)
         selectedAssistantThreadID = thread.id
@@ -3117,26 +3136,64 @@ final class WorkspaceStore {
     }
 
     func defaultSystemPrompt(now: Date = .now) -> String? {
+        defaultSystemPrompt(for: currentAssistantThread, now: now)
+    }
+
+    func defaultSystemPrompt(for thread: AssistantThread?, now: Date = .now) -> String? {
         let profile = promptProfiles.first { $0.id == preferences.defaultSystemPromptProfileID }
             ?? promptProfiles.first(where: \.isDefault)
         guard let profile else { return nil }
 
-        let rendered = renderPromptProfile(profile, now: now)
+        let rendered = renderPromptProfile(profile, for: thread, now: now)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return rendered.isEmpty ? nil : rendered
     }
 
+    func effectiveSystemPrompt(for thread: AssistantThread? = nil, now: Date = .now) -> String? {
+        let targetThread = thread ?? currentAssistantThread
+        if let threadPrompt = targetThread?.messages.first(where: { $0.role == .system })?.text,
+           !threadPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let rendered = renderPromptTemplate(
+                threadPrompt,
+                now: now,
+                thread: targetThread,
+                knowledgeSourceIDs: targetThread?.knowledgeSourceIDs
+            )
+            let trimmed = rendered.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+
+        return defaultSystemPrompt(for: targetThread, now: now)
+    }
+
     func renderPromptProfile(_ profile: SystemPromptProfile, now: Date = .now) -> String {
-        renderPromptTemplate(profile.prompt, now: now)
+        renderPromptProfile(profile, for: currentAssistantThread, now: now)
+    }
+
+    func renderPromptProfile(
+        _ profile: SystemPromptProfile,
+        for thread: AssistantThread?,
+        now: Date = .now
+    ) -> String {
+        renderPromptTemplate(profile.prompt, now: now, thread: thread, knowledgeSourceIDs: thread?.knowledgeSourceIDs)
     }
 
     func renderPromptTemplate(_ template: String, now: Date = .now) -> String {
+        renderPromptTemplate(template, now: now, thread: currentAssistantThread, knowledgeSourceIDs: nil)
+    }
+
+    private func renderPromptTemplate(
+        _ template: String,
+        now: Date = .now,
+        thread: AssistantThread?,
+        knowledgeSourceIDs: [UUID]?
+    ) -> String {
         guard !template.isEmpty,
               let regex = try? NSRegularExpression(pattern: #"\{\{\s*([A-Za-z0-9_]+)\s*\}\}"#) else {
             return template
         }
 
-        let variables = promptVariableValues(now: now)
+        let variables = promptVariableValues(now: now, thread: thread, knowledgeSourceIDs: knowledgeSourceIDs)
         let source = template as NSString
         let matches = regex.matches(
             in: template,
@@ -3156,10 +3213,21 @@ final class WorkspaceStore {
     }
 
     func promptVariableValues(now: Date = .now) -> [String: String] {
+        promptVariableValues(now: now, thread: currentAssistantThread, knowledgeSourceIDs: nil)
+    }
+
+    private func promptVariableValues(
+        now: Date = .now,
+        thread: AssistantThread?,
+        knowledgeSourceIDs: [UUID]?
+    ) -> [String: String] {
         let provider = activeProvider
-        let thread = currentAssistantThread
+        let thread = thread ?? currentAssistantThread
         let project = currentProject
-        let knowledgeTitles = knowledgeSources
+        let scopedIDs = knowledgeSourceIDs ?? thread?.knowledgeSourceIDs
+        let sourceScope = scopedIDs?.isEmpty == false ? Set(scopedIDs ?? []) : nil
+        let scopedKnowledgeSources = knowledgeSourcesForScope(sourceScope)
+        let knowledgeTitles = scopedKnowledgeSources
             .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
             .prefix(5)
             .map(\.title)
@@ -3178,7 +3246,7 @@ final class WorkspaceStore {
             "thread_title": thread?.title ?? "New Chat",
             "thread_tags": threadTags.isEmpty ? "none" : threadTags,
             "project": project?.title ?? "No project selected",
-            "knowledge_source_count": "\(knowledgeSources.count)",
+            "knowledge_source_count": "\(scopedKnowledgeSources.count)",
             "knowledge_sources": knowledgeTitles.isEmpty ? "none" : knowledgeTitles
         ]
     }

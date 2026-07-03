@@ -1327,6 +1327,7 @@ struct SettingsSurface: View {
                             providerKinds: LLMProviderKind.allCases,
                             accessModes: ProviderAccessMode.allCases,
                             toolKinds: AIToolKind.allCases,
+                            knowledgeSources: store.knowledgeSources,
                             delete: {
                                 store.deleteChatTemplate(templateID)
                                 persist()
@@ -6098,6 +6099,7 @@ private struct ChatTemplateSettingsRow: View {
     var providerKinds: [LLMProviderKind]
     var accessModes: [ProviderAccessMode]
     var toolKinds: [AIToolKind]
+    var knowledgeSources: [KnowledgeSource]
     var delete: () -> Void
     var persist: () -> Void
 
@@ -6115,6 +6117,27 @@ private struct ChatTemplateSettingsRow: View {
     private var toolSummary: String {
         let names = template.requiredToolKinds.map(\.settingsTitle)
         return names.isEmpty ? "No required tools" : names.joined(separator: ", ")
+    }
+
+    private var availableKnowledgeSources: [KnowledgeSource] {
+        knowledgeSources.sorted { lhs, rhs in
+            lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+        }
+    }
+
+    private var selectedKnowledgeSourceIDs: Set<UUID> {
+        Set(template.knowledgeSourceIDs)
+    }
+
+    private var knowledgeSummary: String {
+        let selectedCount = availableKnowledgeSources.filter { selectedKnowledgeSourceIDs.contains($0.id) }.count
+        if selectedCount == 0 {
+            return "Use workspace knowledge defaults"
+        }
+        if selectedCount == 1 {
+            return "1 scoped knowledge source"
+        }
+        return "\(selectedCount) scoped knowledge sources"
     }
 
     var body: some View {
@@ -6258,6 +6281,41 @@ private struct ChatTemplateSettingsRow: View {
                             .foregroundStyle(.secondary)
                     }
 
+                    DisclosureGroup {
+                        if availableKnowledgeSources.isEmpty {
+                            Text("Add local files, folders, web pages, repositories, chat history, or workspace notes from Knowledge settings before scoping this template.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.top, 6)
+                        } else {
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 210), spacing: 6, alignment: .leading)],
+                                alignment: .leading,
+                                spacing: 6
+                            ) {
+                                ForEach(availableKnowledgeSources) { source in
+                                    Toggle(isOn: knowledgeSourceBinding(for: source.id)) {
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(source.title)
+                                                .lineLimit(1)
+                                                .truncationMode(.middle)
+                                            Text("\(source.kind.settingsTitle) - \(source.status.settingsTitle)")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    .toggleStyle(.checkbox)
+                                }
+                            }
+                            .padding(.top, 6)
+                        }
+                    } label: {
+                        Label(knowledgeSummary, systemImage: "books.vertical")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+
                     Text("\(template.mode.settingsTitle) - \(template.routeSummary)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -6275,6 +6333,26 @@ private struct ChatTemplateSettingsRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private func knowledgeSourceBinding(for sourceID: UUID) -> Binding<Bool> {
+        Binding(
+            get: { template.knowledgeSourceIDs.contains(sourceID) },
+            set: { isSelected in
+                if isSelected {
+                    if !template.knowledgeSourceIDs.contains(sourceID) {
+                        template.knowledgeSourceIDs.append(sourceID)
+                    }
+                } else {
+                    template.knowledgeSourceIDs.removeAll { $0 == sourceID }
+                }
+                template.knowledgeSourceIDs = availableKnowledgeSources
+                    .map(\.id)
+                    .filter { template.knowledgeSourceIDs.contains($0) }
+                template.updatedAt = .now
+                persist()
+            }
+        )
     }
 }
 

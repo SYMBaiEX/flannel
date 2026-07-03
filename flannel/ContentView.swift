@@ -592,8 +592,8 @@ struct ContentView: View {
     }
 
     private func newChat(from template: ChatTemplate? = nil, folderID: UUID? = nil) {
-        let starterPrompt = template.map { store.renderChatTemplateStarterPrompt($0) } ?? ""
-        store.createAssistantThread(from: template, folderID: folderID)
+        let thread = store.createAssistantThread(from: template, folderID: folderID)
+        let starterPrompt = template.map { store.renderChatTemplateStarterPrompt($0, for: thread) } ?? ""
         composerText = starterPrompt
         composerAttachments = []
         requestComposerFocus()
@@ -680,8 +680,10 @@ struct ContentView: View {
         additionalSystemPrompt: String? = nil,
         toolsEnabled: Bool = true
     ) {
-        let rawHistory = store.assistantThreads.first(where: { $0.id == sourceThreadID })?.messages ?? []
-        let baseSystemPrompt = store.defaultSystemPrompt()
+        let sourceThread = store.assistantThreads.first(where: { $0.id == sourceThreadID })
+        let rawHistory = sourceThread?.messages ?? []
+        let providerHistory = rawHistory.filter { $0.role != .system }
+        let baseSystemPrompt = store.effectiveSystemPrompt(for: sourceThread)
         let localMemoryContext = store.localMemoryPromptContext(for: messageText)
         let contextAssembler = ChatContextAssemblyService()
 
@@ -692,7 +694,7 @@ struct ContentView: View {
                     additionalSystemPrompt: additionalSystemPrompt,
                     localMemoryContext: localMemoryContext,
                     retrievalPacket: retrievalPacket,
-                    history: rawHistory,
+                    history: providerHistory,
                     provider: provider
                 )
             )
@@ -711,7 +713,7 @@ struct ContentView: View {
                     .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
                     .joined(separator: "\n\n"),
-                history: rawHistory
+                history: providerHistory
             )
             if let messageID = appendDeterministicResponse(
                 for: messageText,
@@ -1565,7 +1567,7 @@ struct ContentView: View {
                 for: prompt,
                 knowledgeSourceIDs: store.currentThreadKnowledgeSourceScope()
             )
-            let baseSystemPrompt = store.defaultSystemPrompt()
+            let baseSystemPrompt = store.effectiveSystemPrompt()
             let systemPrompt = [baseSystemPrompt, retrievalPacket.promptContext]
                 .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
