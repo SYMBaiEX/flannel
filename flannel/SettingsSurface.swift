@@ -3288,6 +3288,43 @@ private struct ProviderNextStepCallout: View {
     }
 }
 
+private struct ProviderSourceReferences: View {
+    var references: [AIProviderSourceReference]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("References", systemImage: "book.pages")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array(referenceRows.enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: 10) {
+                        ForEach(row) { reference in
+                            if let url = URL(string: reference.url) {
+                                Link(destination: url) {
+                                    Label(reference.label, systemImage: "arrow.up.right.square")
+                                        .labelStyle(.titleAndIcon)
+                                }
+                                .font(.caption)
+                                .help(reference.url)
+                                .accessibilityHint("Opens \(reference.url)")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var referenceRows: [[AIProviderSourceReference]] {
+        stride(from: 0, to: references.count, by: 2).map { startIndex in
+            Array(references[startIndex..<min(startIndex + 2, references.count)])
+        }
+    }
+}
+
 private struct ProviderSettingsRow: View {
     @Binding var provider: ProviderConfiguration
     var isPreferred: Bool
@@ -3376,6 +3413,10 @@ private struct ProviderSettingsRow: View {
             ProviderNextStepCallout(step: nextStep)
 
             ProviderSetupSummary(provider: provider, report: report)
+
+            if !sourceReferences.isEmpty {
+                ProviderSourceReferences(references: sourceReferences)
+            }
 
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
                 GridRow {
@@ -3606,6 +3647,10 @@ private struct ProviderSettingsRow: View {
         Array(Set(provider.availableModels)).sorted {
             $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
         }
+    }
+
+    private var sourceReferences: [AIProviderSourceReference] {
+        AIKnownProviderCatalog.entry(for: provider.kind)?.sourceReferences ?? []
     }
 
     private var showsSecretConfiguration: Bool {

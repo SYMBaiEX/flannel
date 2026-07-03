@@ -550,8 +550,9 @@ enum AIKnownProviderCatalog {
             discoveryCapabilities: [.nativeModelCatalog, .openAICompatibleModelList],
             cliContract: nil,
             sourceReferences: [
-                AIProviderSourceReference(label: "LM Studio REST API", url: "https://lmstudio.ai/docs/app/api/endpoints/rest"),
-                AIProviderSourceReference(label: "LM Studio OpenAI compatibility", url: "https://lmstudio.ai/docs/developer/openai-compat")
+                AIProviderSourceReference(label: "LM Studio REST API", url: "https://lmstudio.ai/docs/developer/rest"),
+                AIProviderSourceReference(label: "LM Studio local server", url: "https://lmstudio.ai/docs/developer/core/server"),
+                AIProviderSourceReference(label: "LM Studio model list", url: "https://lmstudio.ai/docs/developer/openai-compat/models")
             ]
         ),
         AIProviderCatalogEntry(
@@ -755,6 +756,7 @@ enum AIKnownProviderCatalog {
             ),
             sourceReferences: [
                 AIProviderSourceReference(label: "Codex CLI reference", url: "https://developers.openai.com/codex/cli/reference"),
+                AIProviderSourceReference(label: "Codex non-interactive mode", url: "https://developers.openai.com/codex/noninteractive"),
                 AIProviderSourceReference(label: "Codex CLI authentication", url: "https://developers.openai.com/codex/cli/authentication")
             ]
         ),
@@ -784,7 +786,8 @@ enum AIKnownProviderCatalog {
             ),
             sourceReferences: [
                 AIProviderSourceReference(label: "Claude Code CLI reference", url: "https://code.claude.com/docs/en/cli-reference"),
-                AIProviderSourceReference(label: "Claude Code authentication", url: "https://docs.anthropic.com/en/docs/claude-code/settings")
+                AIProviderSourceReference(label: "Claude Code authentication", url: "https://code.claude.com/docs/en/authentication"),
+                AIProviderSourceReference(label: "Claude Code data usage", url: "https://docs.anthropic.com/en/docs/claude-code/data-usage")
             ]
         ),
         AIProviderCatalogEntry(

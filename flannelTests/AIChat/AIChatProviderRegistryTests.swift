@@ -986,6 +986,7 @@ struct AIChatProviderRegistryTests {
         #expect(chatGPTCLI.cliContract?.supportsPromptViaStdin == true)
         #expect(chatGPTCLI.capabilities == [ModelCapability.chat, .streaming])
         #expect(chatGPTCLI.sourceReferences.contains(where: { $0.url.contains("developers.openai.com/codex/cli/reference") }))
+        #expect(chatGPTCLI.sourceReferences.contains(where: { $0.url.contains("developers.openai.com/codex/noninteractive") }))
 
         #expect(anthropicAPI.credentialRequirement == AIProviderCredentialRequirement.requiredAPIKey)
         #expect(anthropicAPI.requiresKeychainSecret)
@@ -1005,6 +1006,8 @@ struct AIChatProviderRegistryTests {
         #expect(claudeCLI.cliContract?.supportsPromptViaStdin == false)
         #expect(claudeCLI.capabilities == [ModelCapability.chat, .streaming])
         #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("code.claude.com/docs/en/cli-reference") }))
+        #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("code.claude.com/docs/en/authentication") }))
+        #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("docs.anthropic.com/en/docs/claude-code/data-usage") }))
     }
 
     @Test("Known provider catalog advertises local discovery and hosted model descriptors")
@@ -1031,6 +1034,8 @@ struct AIChatProviderRegistryTests {
         #expect(lmStudio.supportsNativeModelCatalogDiscovery)
         #expect(lmStudio.supportsOpenAICompatibleModelDiscovery)
         #expect(lmStudio.capabilities.contains(ModelCapability.openAICompatible))
+        #expect(lmStudio.sourceReferences.contains(where: { $0.url.contains("lmstudio.ai/docs/developer/rest") }))
+        #expect(lmStudio.sourceReferences.contains(where: { $0.url.contains("lmstudio.ai/docs/developer/openai-compat/models") }))
 
         #expect(perplexity.modelDescriptors.first?.capabilities.contains(AIModelCapability.retrieval) == true)
         #expect(perplexity.normalizedRecommendedModelIdentifiers.contains("sonar-pro"))
