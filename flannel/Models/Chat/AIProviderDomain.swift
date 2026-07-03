@@ -765,7 +765,7 @@ enum AIKnownProviderCatalog {
             sourceReferences: [
                 AIProviderSourceReference(label: "Codex CLI reference", url: "https://developers.openai.com/codex/cli/reference"),
                 AIProviderSourceReference(label: "Codex non-interactive mode", url: "https://developers.openai.com/codex/noninteractive"),
-                AIProviderSourceReference(label: "Codex CLI authentication", url: "https://developers.openai.com/codex/cli/authentication")
+                AIProviderSourceReference(label: "Codex authentication and subscription access", url: "https://developers.openai.com/codex/auth")
             ]
         ),
         AIProviderCatalogEntry(
@@ -794,8 +794,8 @@ enum AIKnownProviderCatalog {
             ),
             sourceReferences: [
                 AIProviderSourceReference(label: "Claude Code CLI reference", url: "https://code.claude.com/docs/en/cli-reference"),
-                AIProviderSourceReference(label: "Claude Code authentication", url: "https://code.claude.com/docs/en/authentication"),
-                AIProviderSourceReference(label: "Claude Code data usage", url: "https://docs.anthropic.com/en/docs/claude-code/data-usage")
+                AIProviderSourceReference(label: "Claude Code authentication", url: "https://code.claude.com/docs/en/iam"),
+                AIProviderSourceReference(label: "Claude Code data usage", url: "https://code.claude.com/docs/en/data-usage")
             ]
         ),
         AIProviderCatalogEntry(

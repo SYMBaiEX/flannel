@@ -218,9 +218,9 @@ enum ProviderModeFamily: String, CaseIterable, Identifiable, Hashable, Sendable 
     var modeChoicePrompt: String? {
         switch self {
         case .openAIChatGPT:
-            "Choose one access route. OpenAI Platform API keys, ChatGPT sign-in, and Codex CLI auth stay separate."
+            "Choose one access route. OpenAI Platform API keys, ChatGPT subscription sign-in, and Codex CLI auth stay separate."
         case .anthropicClaude:
-            "Choose one access route. Anthropic Console API keys and Claude Code account sign-in stay separate."
+            "Choose one access route. Anthropic Console API keys and Claude Code Pro, Max, Team, Enterprise, or Console sign-in stay separate."
         case .localModels, .hostedAPIs, .customEndpoints:
             nil
         }
@@ -467,11 +467,11 @@ extension ProviderConfiguration {
         case .openAI:
             return "Official OpenAI API route. Requires a Keychain API key; it is not ChatGPT or Codex CLI access."
         case .chatGPTCLI:
-            return "Local account CLI route. Uses the configured Codex/ChatGPT command; ChatGPT plan sign-in or Codex API-key auth stays inside that CLI."
+            return "Local account CLI route. Uses the configured Codex command; ChatGPT subscription sign-in or Codex API-key auth stays inside that CLI."
         case .anthropic:
             return "Official Anthropic API route. Requires a Keychain API key; it is not Claude Code account access."
         case .claudeCodeCLI:
-            return "Local Claude Code account route. Uses Claude Code print mode; it does not read an Anthropic Console key from this row."
+            return "Local Claude Code account route. Uses Claude Code print mode with a signed-in Pro, Max, Team, Enterprise, or Console account; it does not read an Anthropic Console key from this row."
         case .ollama:
             return "Local Ollama chat route using the selected discovered or manual model."
         case .lmStudio:
@@ -530,7 +530,7 @@ extension ProviderConfiguration {
         case .openAI:
             return "Official OpenAI API mode. Requests leave this Mac and bill through the OpenAI Platform API key stored by Keychain reference. This is separate from ChatGPT or Codex CLI access."
         case .chatGPTCLI:
-            return "Local ChatGPT/Codex CLI mode. Flannel invokes an authenticated local CLI session; ChatGPT plan sign-in or Codex API-key auth stays inside that tool."
+            return "Local ChatGPT/Codex CLI mode. Flannel invokes an authenticated local CLI session; ChatGPT subscription sign-in or Codex API-key auth stays inside that tool."
         case .anthropic:
             return "Official Anthropic API mode. Requests leave this Mac and bill through the Anthropic Console API key stored by Keychain reference. This is separate from Claude Code account access."
         case .claudeCodeCLI:

@@ -226,7 +226,7 @@ struct AIChatProviderRegistryTests {
     @Test("Selected provider fallback chain tries the selected route before local-safe fallbacks")
     func selectedProviderFallbackChainStartsWithSelectedThenLocalSafeRoutes() throws {
         let (_, store) = try makeLoadedStore()
-        let selectedCloud = ProviderConfiguration(
+        var selectedCloud = ProviderConfiguration(
             id: UUID(uuidString: "a1a5ac0d-bf75-4d8b-9fd5-0a8663d62e1c")!,
             kind: .openAI,
             accessMode: .apiKey,
@@ -234,7 +234,6 @@ struct AIChatProviderRegistryTests {
             displayName: "Selected OpenAI route",
             endpoint: "https://api.openai.com/v1",
             modelIdentifier: "gpt-5.5",
-            secretReference: "flannel.test.openai",
             isEnabled: true,
             connectionStatus: .ready,
             capabilities: [.chat, .streaming, .toolCalling],
@@ -255,7 +254,7 @@ struct AIChatProviderRegistryTests {
             capabilities: [.chat, .streaming],
             supportsStreaming: true
         )
-        let cloudFallback = ProviderConfiguration(
+        var cloudFallback = ProviderConfiguration(
             id: UUID(uuidString: "63cf71db-10a2-40a9-9a4d-69b275bbf197")!,
             kind: .groq,
             accessMode: .apiKey,
@@ -263,12 +262,15 @@ struct AIChatProviderRegistryTests {
             displayName: "Groq fallback",
             endpoint: "https://api.groq.com/openai/v1",
             modelIdentifier: "llama-3.3-70b-versatile",
-            secretReference: "flannel.test.groq",
             isEnabled: true,
             connectionStatus: .ready,
             capabilities: [.chat, .streaming],
             supportsStreaming: true
         )
+        selectedCloud.secretReference = ProviderSetupService.shared
+            .canonicalSecretReferenceString(for: selectedCloud)
+        cloudFallback.secretReference = ProviderSetupService.shared
+            .canonicalSecretReferenceString(for: cloudFallback)
 
         store.providerConfigurations = [cloudFallback, selectedCloud, localFallback]
         store.preferences.localOnlyMode = false
@@ -367,7 +369,7 @@ struct AIChatProviderRegistryTests {
         #expect(openAIAPI.providerModePickerSummary.contains("API key"))
         #expect(chatGPTCLI.providerModePickerSummary.contains("Account CLI"))
         #expect(openAIAPI.providerModeSelectionDetail.contains("not ChatGPT or Codex CLI access"))
-        #expect(chatGPTCLI.providerModeSelectionDetail.contains("ChatGPT plan sign-in or Codex API-key auth"))
+        #expect(chatGPTCLI.providerModeSelectionDetail.contains("ChatGPT subscription sign-in or Codex API-key auth"))
         #expect(openAIAPI.providerModeBoundaryBadge == "API key")
         #expect(chatGPTCLI.providerModeBoundaryBadge == "Account CLI")
         #expect(openAIAPI.runtimeBoundary == .externalAPI)
@@ -461,7 +463,7 @@ struct AIChatProviderRegistryTests {
 
         #expect(chatGPTCLI.modeBoundaryTitle == "ChatGPT/Codex CLI")
         #expect(chatGPTCLI.modeBoundaryDetail.contains("authenticated local CLI session"))
-        #expect(chatGPTCLI.modeBoundaryDetail.contains("ChatGPT plan sign-in or Codex API-key auth"))
+        #expect(chatGPTCLI.modeBoundaryDetail.contains("ChatGPT subscription sign-in or Codex API-key auth"))
 
         #expect(anthropicAPI.modeBoundaryTitle == "Anthropic API key")
         #expect(anthropicAPI.modeBoundaryDetail.contains("Anthropic Console API key"))
@@ -499,7 +501,7 @@ struct AIChatProviderRegistryTests {
         #expect(chatGPTCLI.providerModeChoiceDetail.contains("Account CLI"))
         #expect(chatGPTCLI.providerModeChoiceDetail.contains("Local CLI"))
         #expect(chatGPTCLI.providerModeSelectionDetail.contains("Local account CLI route"))
-        #expect(chatGPTCLI.providerModeSelectionDetail.contains("ChatGPT plan sign-in or Codex API-key auth"))
+        #expect(chatGPTCLI.providerModeSelectionDetail.contains("ChatGPT subscription sign-in or Codex API-key auth"))
         #expect(chatGPTCLI.providerPickerAccessibilityLabel.contains("ChatGPT/Codex CLI, Account CLI"))
         #expect(chatGPTCLI.providerPickerAccessibilityLabel.contains("Local CLI"))
 
@@ -987,6 +989,7 @@ struct AIChatProviderRegistryTests {
         #expect(chatGPTCLI.capabilities == [ModelCapability.chat, .streaming])
         #expect(chatGPTCLI.sourceReferences.contains(where: { $0.url.contains("developers.openai.com/codex/cli/reference") }))
         #expect(chatGPTCLI.sourceReferences.contains(where: { $0.url.contains("developers.openai.com/codex/noninteractive") }))
+        #expect(chatGPTCLI.sourceReferences.contains(where: { $0.url.contains("developers.openai.com/codex/auth") }))
 
         #expect(anthropicAPI.credentialRequirement == AIProviderCredentialRequirement.requiredAPIKey)
         #expect(anthropicAPI.requiresKeychainSecret)
@@ -1007,8 +1010,8 @@ struct AIChatProviderRegistryTests {
         #expect(claudeCLI.cliContract?.supportsPromptViaStdin == false)
         #expect(claudeCLI.capabilities == [ModelCapability.chat, .streaming])
         #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("code.claude.com/docs/en/cli-reference") }))
-        #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("code.claude.com/docs/en/authentication") }))
-        #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("docs.anthropic.com/en/docs/claude-code/data-usage") }))
+        #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("code.claude.com/docs/en/iam") }))
+        #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("code.claude.com/docs/en/data-usage") }))
     }
 
     @Test("Known provider catalog advertises local discovery and hosted model descriptors")

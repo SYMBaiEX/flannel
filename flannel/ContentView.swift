@@ -9976,17 +9976,17 @@ private struct ProviderRouteMenuTemplate: Identifiable, Hashable {
                     kind: .openAI,
                     accessMode: .apiKey,
                     privacyScope: .externalAPI,
-                    title: "OpenAI API Key Route",
+                    title: "OpenAI Platform API Key",
                     systemImage: "key",
-                    helpText: "Create and select an official OpenAI API route. It will need a Keychain API key before it can become active."
+                    helpText: "Create and select an official OpenAI Platform API route. Usage bills through the API key saved in Keychain, separate from ChatGPT subscription or Codex CLI access."
                 ),
                 ProviderRouteMenuTemplate(
                     kind: .chatGPTCLI,
                     accessMode: .subscriptionCLI,
                     privacyScope: .localCLI,
-                    title: "ChatGPT/Codex CLI Route",
+                    title: "ChatGPT Subscription via Codex CLI",
                     systemImage: "terminal",
-                    helpText: "Create and select a local ChatGPT/Codex CLI route. Account sign-in stays inside the CLI."
+                    helpText: "Create and select a local Codex CLI route. Flannel runs codex exec --json - while ChatGPT subscription or Codex API-key auth stays inside the CLI."
                 )
             ]
         case .anthropicClaude:
@@ -9995,17 +9995,17 @@ private struct ProviderRouteMenuTemplate: Identifiable, Hashable {
                     kind: .anthropic,
                     accessMode: .apiKey,
                     privacyScope: .externalAPI,
-                    title: "Anthropic API Key Route",
+                    title: "Anthropic Console API Key",
                     systemImage: "key",
-                    helpText: "Create and select an official Anthropic API route. It will need a Keychain API key before it can become active."
+                    helpText: "Create and select an official Anthropic API route. Usage uses the Anthropic Console key saved in Keychain, separate from Claude Code account access."
                 ),
                 ProviderRouteMenuTemplate(
                     kind: .claudeCodeCLI,
                     accessMode: .subscriptionCLI,
                     privacyScope: .localCLI,
-                    title: "Claude Code CLI Route",
+                    title: "Claude Plan via Claude Code CLI",
                     systemImage: "terminal",
-                    helpText: "Create and select a local Claude Code CLI route using print mode."
+                    helpText: "Create and select a Claude Code account route. Flannel runs claude -p in print mode while Claude Pro, Max, Team, Enterprise, or Console auth stays inside Claude Code."
                 )
             ]
         case .hostedAPIs:

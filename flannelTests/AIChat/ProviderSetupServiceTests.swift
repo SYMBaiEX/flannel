@@ -899,7 +899,7 @@ struct ProviderSetupServiceTests {
 
         let commands = await commandRecorder.commands()
         #expect(commands.count == 2)
-        #expect(commands.first?.arguments == ["auth", "status"])
+        #expect(commands.first?.arguments == ["auth", "status", "--text"])
         #expect(commands.last?.arguments.contains("-p") == true)
         #expect(commands.last?.arguments.contains("--output-format") == true)
     }

@@ -4316,13 +4316,13 @@ private extension ProviderConfiguration {
     var settingsSetupInstruction: String {
         switch kind {
         case .openAI:
-            "API-key route for the OpenAI Platform API. ChatGPT/Codex CLI access is configured as a separate local CLI route."
+            "API-key route for the OpenAI Platform API. Usage bills through the Keychain key; ChatGPT subscription and Codex CLI auth are configured as a separate local CLI route."
         case .chatGPTCLI:
-            "Account CLI route for ChatGPT/Codex. Flannel runs the configured local command; ChatGPT plan sign-in or Codex API-key auth stays inside that CLI."
+            "Account CLI route for ChatGPT/Codex. Flannel runs the configured local Codex command; ChatGPT subscription sign-in or Codex API-key auth stays inside that CLI."
         case .anthropic:
             "API-key route for the Anthropic API. Claude Code account access belongs to Claude Code CLI, not this API-key route."
         case .claudeCodeCLI:
-            "Account CLI route for Claude Code. Flannel runs Claude Code print mode through a local authenticated install."
+            "Account CLI route for Claude Code. Flannel runs Claude Code print mode through a local install authenticated with Claude Pro, Max, Team, Enterprise, or Console."
         case .ollama:
             "Local Ollama server route. No API key is required; start Ollama and run local discovery to hydrate models."
         case .lmStudio:
@@ -4430,7 +4430,7 @@ private extension ProviderConfiguration {
         case .lmStudio:
             "Local server route. Use LM Studio's local server endpoint; start the server in LM Studio before validating."
         case .openAI:
-            "API-key route. Use the OpenAI Platform API base URL. This is separate from ChatGPT/Codex CLI access."
+            "API-key route. Use the OpenAI Platform API base URL. This is separate from ChatGPT subscription and Codex CLI access."
         case .anthropic:
             "API-key route. Use the Anthropic API base URL. This is separate from Claude Code account access."
         case .gemini:
@@ -4519,7 +4519,7 @@ private extension ProviderConfiguration {
     var settingsSecretReferenceHelp: String {
         switch kind {
         case .openAI:
-            "Save an OpenAI Platform API key here. ChatGPT/Codex CLI auth belongs to the ChatGPT/Codex CLI provider."
+            "Save an OpenAI Platform API key here. ChatGPT subscription and Codex CLI auth belong to the ChatGPT/Codex CLI provider."
         case .anthropic:
             "Save an Anthropic Console API key here. Claude Code account sign-in belongs to the Claude Code CLI provider."
         case .gemini:
@@ -4567,7 +4567,14 @@ private extension ProviderConfiguration {
         case .localServer:
             return "Start the local server and select a model"
         case .subscriptionCLI:
-            return "Use the account already signed in to the local CLI"
+            switch kind {
+            case .chatGPTCLI:
+                return "Use the ChatGPT subscription or Codex API-key auth already signed in to Codex CLI"
+            case .claudeCodeCLI:
+                return "Use the Claude Code account already signed in to the local CLI"
+            default:
+                return "Use the account already signed in to the local CLI"
+            }
         case .aiSDKBridge:
             return "Configured by the local bridge service"
         case .apiKey, .openAICompatible, .anthropicCompatible:
@@ -4655,7 +4662,14 @@ private extension ProviderConfiguration {
         case .apiKey:
             "Routes chat to the hosted provider API with a Keychain API key."
         case .subscriptionCLI:
-            "Routes chat through the signed-in local command-line tool."
+            switch kind {
+            case .chatGPTCLI:
+                "Routes chat through the signed-in Codex CLI using ChatGPT subscription or Codex API-key auth."
+            case .claudeCodeCLI:
+                "Routes chat through the signed-in Claude Code CLI using print mode."
+            default:
+                "Routes chat through the signed-in local command-line tool."
+            }
         case .openAICompatible:
             "Routes chat to an OpenAI-compatible endpoint; the endpoint decides whether it is local or remote."
         case .anthropicCompatible:
