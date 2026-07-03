@@ -2898,24 +2898,35 @@ private struct SettingsRouteRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: tab.systemImage)
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.secondary)
                 .font(.callout)
                 .frame(width: 20, alignment: .center)
+                .padding(.top, 2)
 
-            Text(tab.title)
-                .font(.callout.weight(.medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.9)
-                .multilineTextAlignment(.leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tab.title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.88)
+                    .multilineTextAlignment(.leading)
+
+                Text(tab.sidebarDetail)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+            }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(1)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
         .padding(.horizontal, 8)
-        .padding(.vertical, 8)
+        .padding(.vertical, 7)
         .background(rowBackgroundStyle, in: rowShape)
         .overlay {
             rowShape.strokeBorder(

@@ -500,6 +500,13 @@ struct SettingsSurface: View {
                     )
                 }
 
+                if !store.localProviderHealthSnapshots.isEmpty {
+                    LocalDiscoveryHealthSummary(
+                        healthSnapshots: store.localProviderHealthSnapshots,
+                        localModelCatalog: store.localModelCatalog
+                    )
+                }
+
                 if store.localDiscoveryResults.isEmpty {
                     EmptySettingsRow(
                         title: "No local discovery results",
@@ -2503,13 +2510,23 @@ private struct SettingsSidebarRow: View {
 
     var body: some View {
         Label {
-            Text(tab.title)
-                .font(.callout.weight(.medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.92)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .layoutPriority(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tab.title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.88)
+                    .multilineTextAlignment(.leading)
+
+                Text(tab.sidebarDetail)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
         } icon: {
             Image(systemName: tab.systemImage)
                 .symbolRenderingMode(.hierarchical)
@@ -2517,7 +2534,8 @@ private struct SettingsSidebarRow: View {
                 .frame(width: 18)
         }
         .labelStyle(.titleAndIcon)
-        .padding(.vertical, 5)
+        .frame(minHeight: 48, alignment: .leading)
+        .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
         .help(tab.detail)
         .accessibilityHint(tab.detail)
@@ -4742,6 +4760,141 @@ private extension LLMProviderKind {
         case .vercelAISDKBridge:
             "curlybraces"
         }
+    }
+}
+
+private struct LocalDiscoveryHealthSummary: View {
+    var healthSnapshots: [AIProviderHealth]
+    var localModelCatalog: [LocalModelDescriptor]
+
+    private var readyProviderCount: Int {
+        healthSnapshots.filter(\.canServeRequests).count
+    }
+
+    private var loadedModelCount: Int {
+        healthSnapshots.reduce(0) { $0 + $1.loadedModelCount }
+    }
+
+    private var embeddingModelCount: Int {
+        localModelCatalog.filter { $0.capabilities.contains(.embeddings) }.count
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+                GridRow {
+                    summaryMetric(
+                        "Providers",
+                        value: "\(readyProviderCount)/\(healthSnapshots.count)",
+                        systemImage: "checkmark.circle"
+                    )
+                    summaryMetric(
+                        "Models",
+                        value: "\(localModelCatalog.count)",
+                        systemImage: "cpu"
+                    )
+                    summaryMetric(
+                        "Loaded",
+                        value: "\(loadedModelCount)",
+                        systemImage: "memorychip"
+                    )
+                    summaryMetric(
+                        "Embeddings",
+                        value: "\(embeddingModelCount)",
+                        systemImage: "text.magnifyingglass"
+                    )
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(healthSnapshots) { health in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Label(health.providerKind.displayName, systemImage: statusSystemImage(for: health.status))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(statusColor(for: health.status))
+
+                        Text(health.endpoint?.absoluteString ?? "No endpoint")
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+
+                        Spacer()
+
+                        Text(providerDetail(health))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let message = health.warningMessage ?? health.failureMessage,
+                       !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(message)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func summaryMetric(
+        _ title: String,
+        value: String,
+        systemImage: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Label(title, systemImage: systemImage)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+        }
+        .frame(minWidth: 84, alignment: .leading)
+    }
+
+    private func providerDetail(_ health: AIProviderHealth) -> String {
+        let modelText = health.discoveredModelCount == 1
+            ? "1 model"
+            : "\(health.discoveredModelCount) models"
+        let loadedText = health.loadedModelCount == 1
+            ? "1 loaded"
+            : "\(health.loadedModelCount) loaded"
+        return "\(humanized(health.status.rawValue)) - \(modelText) - \(loadedText)"
+    }
+
+    private func statusSystemImage(for status: AIProviderHealthStatus) -> String {
+        switch status {
+        case .ready:
+            "checkmark.circle"
+        case .degraded:
+            "exclamationmark.triangle"
+        case .unavailable, .misconfigured:
+            "xmark.circle"
+        case .unknown:
+            "questionmark.circle"
+        }
+    }
+
+    private func statusColor(for status: AIProviderHealthStatus) -> Color {
+        switch status {
+        case .ready:
+            .green
+        case .degraded:
+            .orange
+        case .unavailable, .misconfigured:
+            .red
+        case .unknown:
+            .secondary
+        }
+    }
+
+    private func humanized(_ rawValue: String) -> String {
+        rawValue
+            .replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2", options: .regularExpression)
+            .replacingOccurrences(of: "_", with: " ")
+            .capitalized
     }
 }
 
