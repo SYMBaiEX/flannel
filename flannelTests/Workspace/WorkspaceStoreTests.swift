@@ -3573,6 +3573,65 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Local discovery refreshes selected local chat model capabilities exactly")
+    func localDiscoveryRefreshesSelectedLocalChatModelCapabilitiesExactly() throws {
+        let (_, store) = try makeLoadedStore()
+        let endpoint = "http://localhost:1234"
+        store.providerConfigurations = [
+            ProviderConfiguration(
+                kind: .lmStudio,
+                accessMode: .localServer,
+                privacyScope: .localOnly,
+                displayName: "LM Studio",
+                endpoint: endpoint,
+                modelIdentifier: "basic-local",
+                capabilities: [.chat, .streaming, .toolCalling, .vision, .embeddings],
+                supportsStreaming: true,
+                supportsToolCalling: true,
+                supportsEmbeddings: true,
+                supportsVision: true,
+                contextWindowTokens: 131_072
+            )
+        ]
+
+        store.apply([
+            LocalProviderDiscoveryResult(
+                providerKind: .lmStudio,
+                endpoint: endpoint,
+                status: .ready,
+                models: [
+                    LocalModelDescriptor(
+                        name: "basic-local",
+                        providerKind: .lmStudio,
+                        endpoint: endpoint,
+                        contextWindowTokens: 8_192,
+                        capabilities: [.chat, .streaming, .openAICompatible]
+                    ),
+                    LocalModelDescriptor(
+                        name: "embed-local",
+                        providerKind: .lmStudio,
+                        endpoint: endpoint,
+                        capabilities: [.embeddings, .openAICompatible]
+                    )
+                ]
+            )
+        ])
+
+        let provider = try #require(store.providerConfigurations.first)
+        #expect(provider.modelIdentifier == "basic-local")
+        #expect(provider.contextWindowTokens == 8_192)
+        #expect(provider.capabilities.contains(.chat))
+        #expect(provider.capabilities.contains(.streaming))
+        #expect(provider.capabilities.contains(.openAICompatible))
+        #expect(provider.capabilities.contains(.embeddings))
+        #expect(!provider.capabilities.contains(.toolCalling))
+        #expect(!provider.capabilities.contains(.vision))
+        #expect(!provider.supportsToolCalling)
+        #expect(!provider.supportsVision)
+        #expect(provider.supportsEmbeddings)
+    }
+
+    @MainActor
     @Test("Selecting discovered local chat model makes it the preferred route")
     func selectingDiscoveredLocalChatModelMakesItPreferred() throws {
         let (_, store) = try makeLoadedStore()
@@ -3621,6 +3680,78 @@ struct WorkspaceStoreTests {
         #expect(store.preferences.preferredProviderID == selectedID)
         #expect(store.preferences.providerRoutingPolicy == .selectedProvider)
         #expect(store.activeProvider?.id == selectedID)
+    }
+
+    @MainActor
+    @Test("Selecting discovered local chat model clears stale chat-only capabilities")
+    func selectingDiscoveredLocalChatModelClearsStaleChatOnlyCapabilities() throws {
+        let (_, store) = try makeLoadedStore()
+        let endpoint = "http://localhost:1234"
+        store.providerConfigurations = [
+            ProviderConfiguration(
+                kind: .lmStudio,
+                accessMode: .localServer,
+                privacyScope: .localOnly,
+                displayName: "LM Studio",
+                endpoint: endpoint,
+                modelIdentifier: "vision-tool-model",
+                availableModels: ["vision-tool-model"],
+                capabilities: [.chat, .streaming, .toolCalling, .vision, .reasoning],
+                supportsStreaming: true,
+                supportsToolCalling: true,
+                supportsEmbeddings: false,
+                supportsVision: true,
+                contextWindowTokens: 65_536
+            )
+        ]
+        store.localDiscoveryResults = [
+            LocalProviderDiscoveryResult(
+                providerKind: .lmStudio,
+                endpoint: endpoint,
+                status: .ready,
+                models: [
+                    LocalModelDescriptor(
+                        name: "plain-chat",
+                        providerKind: .lmStudio,
+                        endpoint: endpoint,
+                        contextWindowTokens: 4_096,
+                        capabilities: [.chat, .streaming, .openAICompatible]
+                    ),
+                    LocalModelDescriptor(
+                        name: "embed-local",
+                        providerKind: .lmStudio,
+                        endpoint: endpoint,
+                        capabilities: [.embeddings, .openAICompatible]
+                    )
+                ]
+            )
+        ]
+
+        let providerID = store.selectDiscoveredLocalModelForChat(
+            LocalModelDescriptor(
+                name: "plain-chat",
+                providerKind: .lmStudio,
+                endpoint: endpoint,
+                contextWindowTokens: 4_096,
+                capabilities: [.chat, .streaming, .openAICompatible]
+            )
+        )
+
+        let selectedID = try #require(providerID)
+        let provider = try #require(store.providerConfigurations.first(where: { $0.id == selectedID }))
+
+        #expect(provider.modelIdentifier == "plain-chat")
+        #expect(provider.contextWindowTokens == 4_096)
+        #expect(provider.capabilities.contains(.chat))
+        #expect(provider.capabilities.contains(.streaming))
+        #expect(provider.capabilities.contains(.openAICompatible))
+        #expect(provider.capabilities.contains(.embeddings))
+        #expect(!provider.capabilities.contains(.toolCalling))
+        #expect(!provider.capabilities.contains(.vision))
+        #expect(!provider.capabilities.contains(.reasoning))
+        #expect(!provider.supportsToolCalling)
+        #expect(!provider.supportsVision)
+        #expect(provider.supportsEmbeddings)
     }
 
     @MainActor

@@ -10126,7 +10126,8 @@ private struct ProviderRoutingPicker: View {
 
             ForEach(ProviderModeFamily.allCases) { family in
                 let familyProviders = providers(in: family)
-                if !familyProviders.isEmpty {
+                let missingRoutes = missingRouteTemplates(in: family)
+                if !familyProviders.isEmpty || !missingRoutes.isEmpty {
                     Section(family.title) {
                         if let prompt = family.modeChoicePrompt {
                             Button { } label: {
@@ -10135,7 +10136,6 @@ private struct ProviderRoutingPicker: View {
                             .disabled(true)
                         }
 
-                        let missingRoutes = missingRouteTemplates(in: family)
                         if !missingRoutes.isEmpty {
                             ForEach(missingRoutes) { template in
                                 Button {

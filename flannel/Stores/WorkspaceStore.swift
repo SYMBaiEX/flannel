@@ -678,11 +678,23 @@ final class WorkspaceStore {
                 providerConfigurations[index].connectionStatus = .ready
                 providerConfigurations[index].lastValidatedAt = result.discoveredAt
                 providerConfigurations[index].lastErrorMessage = nil
-                providerConfigurations[index].capabilities = Array(Set(providerConfigurations[index].capabilities + discoveredCapabilities))
-                providerConfigurations[index].supportsStreaming = providerConfigurations[index].supportsStreaming || hasStreamingModel
-                providerConfigurations[index].supportsToolCalling = providerConfigurations[index].supportsToolCalling || hasToolModel
-                providerConfigurations[index].supportsEmbeddings = providerConfigurations[index].supportsEmbeddings || hasEmbeddingModel
-                providerConfigurations[index].supportsVision = providerConfigurations[index].supportsVision || hasVisionModel
+                if let selectedModel = Self.localModelDescriptor(
+                    named: providerConfigurations[index].modelIdentifier,
+                    in: result.models
+                ) {
+                    applySelectedLocalModelRuntime(
+                        selectedModel,
+                        allDiscoveredModels: result.models,
+                        toProviderAt: index,
+                        preserveExistingContextWhenMissing: true
+                    )
+                } else {
+                    providerConfigurations[index].capabilities = Array(Set(providerConfigurations[index].capabilities + discoveredCapabilities))
+                    providerConfigurations[index].supportsStreaming = providerConfigurations[index].supportsStreaming || hasStreamingModel
+                    providerConfigurations[index].supportsToolCalling = providerConfigurations[index].supportsToolCalling || hasToolModel
+                    providerConfigurations[index].supportsEmbeddings = providerConfigurations[index].supportsEmbeddings || hasEmbeddingModel
+                    providerConfigurations[index].supportsVision = providerConfigurations[index].supportsVision || hasVisionModel
+                }
                 if providerConfigurations[index].contextWindowTokens == nil {
                     let selectedModel = providerConfigurations[index].modelIdentifier
                     let selectedModelDescriptor = result.models.first(where: { $0.name == selectedModel })
@@ -774,19 +786,15 @@ final class WorkspaceStore {
                 providerConfigurations[index].discoveredModelNames + [model.name]
             )
             providerConfigurations[index].staleDiscoveredModelNames.removeAll { $0 == model.name }
-            providerConfigurations[index].capabilities = Array(
-                Set(providerConfigurations[index].capabilities + model.capabilities)
-            ).sorted { $0.rawValue < $1.rawValue }
-            providerConfigurations[index].supportsStreaming = providerConfigurations[index].supportsStreaming
-                || model.capabilities.contains(.streaming)
-            providerConfigurations[index].supportsToolCalling = providerConfigurations[index].supportsToolCalling
-                || model.capabilities.contains(.toolCalling)
-            providerConfigurations[index].supportsEmbeddings = providerConfigurations[index].supportsEmbeddings
-                || model.capabilities.contains(.embeddings)
-            providerConfigurations[index].supportsVision = providerConfigurations[index].supportsVision
-                || model.capabilities.contains(.vision)
-            providerConfigurations[index].contextWindowTokens = model.contextWindowTokens
-                ?? providerConfigurations[index].contextWindowTokens
+            applySelectedLocalModelRuntime(
+                model,
+                allDiscoveredModels: discoveredModelsForLocalProvider(
+                    kind: model.providerKind,
+                    endpoint: model.endpoint
+                ),
+                toProviderAt: index,
+                preserveExistingContextWhenMissing: false
+            )
 
             let providerID = providerConfigurations[index].id
             _ = selectPreferredProviderForChat(providerID)
@@ -817,6 +825,57 @@ final class WorkspaceStore {
         providerConfigurations.append(provider)
         _ = selectPreferredProviderForChat(provider.id)
         return provider.id
+    }
+
+    private func discoveredModelsForLocalProvider(
+        kind: LLMProviderKind,
+        endpoint: String
+    ) -> [LocalModelDescriptor] {
+        localDiscoveryResults.first {
+            $0.providerKind == kind && $0.endpoint == endpoint
+        }?.models ?? []
+    }
+
+    private func applySelectedLocalModelRuntime(
+        _ model: LocalModelDescriptor,
+        allDiscoveredModels: [LocalModelDescriptor],
+        toProviderAt index: Int,
+        preserveExistingContextWhenMissing: Bool
+    ) {
+        let providerSupportsEmbeddings = if allDiscoveredModels.isEmpty {
+            providerConfigurations[index].supportsEmbeddings
+        } else {
+            allDiscoveredModels.contains { $0.capabilities.contains(.embeddings) }
+        }
+        var routeCapabilities = Set(model.capabilities)
+        if providerSupportsEmbeddings {
+            routeCapabilities.insert(.embeddings)
+        }
+
+        providerConfigurations[index].capabilities = Self.sortedUniqueCapabilities(Array(routeCapabilities))
+        providerConfigurations[index].supportsStreaming = model.capabilities.contains(.streaming)
+        providerConfigurations[index].supportsToolCalling = model.capabilities.contains(.toolCalling)
+        providerConfigurations[index].supportsEmbeddings = providerSupportsEmbeddings
+            || model.capabilities.contains(.embeddings)
+        providerConfigurations[index].supportsVision = model.capabilities.contains(.vision)
+        providerConfigurations[index].supportsStructuredOutput = model.capabilities.contains(.structuredOutput)
+
+        if let contextWindowTokens = model.contextWindowTokens {
+            providerConfigurations[index].contextWindowTokens = contextWindowTokens
+        } else if !preserveExistingContextWhenMissing {
+            providerConfigurations[index].contextWindowTokens = nil
+        }
+    }
+
+    private static func localModelDescriptor(
+        named rawModelName: String,
+        in models: [LocalModelDescriptor]
+    ) -> LocalModelDescriptor? {
+        let modelName = rawModelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !modelName.isEmpty else { return nil }
+        return models.first {
+            $0.name == modelName || $0.displayName == modelName
+        }
     }
 
     private static func sortedUniqueModelNames(_ modelNames: [String]) -> [String] {
@@ -3339,6 +3398,21 @@ final class WorkspaceStore {
         providerConfigurations[index].availableModels = Self.sortedUniqueModelNames(
             providerConfigurations[index].availableModels + [modelIdentifier]
         )
+        let discoveredLocalModels = discoveredModelsForLocalProvider(
+            kind: providerConfigurations[index].kind,
+            endpoint: providerConfigurations[index].endpoint
+        )
+        if let localModel = Self.localModelDescriptor(
+            named: modelIdentifier,
+            in: discoveredLocalModels
+        ) {
+            applySelectedLocalModelRuntime(
+                localModel,
+                allDiscoveredModels: discoveredLocalModels,
+                toProviderAt: index,
+                preserveExistingContextWhenMissing: false
+            )
+        }
         providerConfigurations[index].isEnabled = true
         preferences.preferredProviderID = providerID
         preferences.providerRoutingPolicy = .selectedProvider
