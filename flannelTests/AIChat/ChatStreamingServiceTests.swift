@@ -93,7 +93,7 @@ struct ChatStreamingServiceTests {
 
     @Test("OpenAI-compatible parser accepts tool-call arguments encoded as JSON object")
     func openAICompatibleParserAcceptsToolCallArgumentsAsObject() throws {
-        let line = #"data: {"id":"chatcmpl-local","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_json_obj","type":"function","function":{"name":"workspace_search","arguments":{"query":"local","limit":3}}]},"finish_reason":null}]}"#
+        let line = #"data: {"id":"chatcmpl-local","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_json_obj","type":"function","function":{"name":"workspace_search","arguments":{"query":"local","limit":3}}}]},"finish_reason":null}]}"#
 
         let event = try ChatStreamingService.parseOpenAICompatibleEvent(line)
         guard case .toolCallDelta(let toolCall) = event else {
@@ -316,6 +316,44 @@ struct ChatStreamingServiceTests {
         let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
         let streamOptions = try #require(json["stream_options"] as? [String: Any])
         #expect(streamOptions["include_usage"] as? Bool == true)
+    }
+
+    @Test("Streaming HTTP failures include status and response preview")
+    @MainActor
+    func streamingHTTPFailuresIncludeStatusAndResponsePreview() async throws {
+        let provider = ProviderConfiguration(
+            kind: .lmStudio,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "LM Studio",
+            endpoint: "http://localhost:1234",
+            modelIdentifier: "local-model"
+        )
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ChatStreamingURLProtocolStub.self]
+        ChatStreamingURLProtocolStub.statusCode = 429
+        ChatStreamingURLProtocolStub.responseBody = Data(
+            #"{"error":{"message":"Rate limit exceeded for local-model."}}"#.utf8
+        )
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let service = ChatStreamingService(session: session)
+
+        do {
+            for try await _ in service.streamEvents(
+                for: ChatStreamingRequest(
+                    provider: provider,
+                    messages: [AssistantMessage(role: .user, text: "Hello")]
+                )
+            ) {
+                Issue.record("Unexpected stream event")
+            }
+            Issue.record("Expected HTTP status failure")
+        } catch let error as ChatStreamingError {
+            #expect(error == .badStatus(429, #"{"error":{"message":"Rate limit exceeded for local-model."}}"#))
+            #expect(error.localizedDescription.contains("HTTP 429"))
+            #expect(error.localizedDescription.contains("Rate limit exceeded for local-model."))
+        }
     }
 
     @Test("LM Studio request includes local advanced generation overrides")
@@ -1564,4 +1602,38 @@ struct ChatStreamingServiceTests {
             try? keychain.delete(reference)
         })
     }
+}
+
+private final class ChatStreamingURLProtocolStub: URLProtocol, @unchecked Sendable {
+    static var statusCode = 200
+    static var responseBody = Data()
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let url = request.url,
+              let response = HTTPURLResponse(
+                url: url,
+                statusCode: Self.statusCode,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+              ) else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        if !Self.responseBody.isEmpty {
+            client?.urlProtocol(self, didLoad: Self.responseBody)
+        }
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }

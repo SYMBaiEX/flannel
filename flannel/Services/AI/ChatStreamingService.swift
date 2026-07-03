@@ -313,9 +313,12 @@ struct ChatStreamingService: Sendable {
                     let urlRequest = try makeURLRequest(for: request)
                     let (bytes, response) = try await session.bytes(for: urlRequest)
 
-                    guard let httpResponse = response as? HTTPURLResponse,
-                          (200..<300).contains(httpResponse.statusCode) else {
-                        throw ChatStreamingError.badStatus
+                    guard let httpResponse = response as? HTTPURLResponse else {
+                        throw ChatStreamingError.badStatus(nil, nil)
+                    }
+                    guard (200..<300).contains(httpResponse.statusCode) else {
+                        let bodyPreview = await Self.errorBodyPreview(from: bytes)
+                        throw ChatStreamingError.badStatus(httpResponse.statusCode, bodyPreview)
                     }
 
                     for try await line in bytes.lines {
@@ -898,6 +901,36 @@ struct ChatStreamingService: Sendable {
     private func keychainReference(from rawValue: String?) -> KeychainSecretReference? {
         ProviderSetupService.shared.parseSecretReference(rawValue)
     }
+
+    private static func errorBodyPreview(
+        from bytes: URLSession.AsyncBytes,
+        limit: Int = 1_024
+    ) async -> String? {
+        var data = Data()
+        do {
+            for try await byte in bytes {
+                try Task.checkCancellation()
+                if data.count < limit {
+                    data.append(contentsOf: [byte])
+                }
+                if data.count >= limit {
+                    break
+                }
+            }
+        } catch {
+            return nil
+        }
+
+        guard !data.isEmpty,
+              let rawText = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        let compactText = rawText
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return compactText.isEmpty ? nil : compactText
+    }
 }
 
 enum ChatStreamingError: LocalizedError, Equatable {
@@ -907,7 +940,7 @@ enum ChatStreamingError: LocalizedError, Equatable {
     case unsupportedProviderMode(String)
     case unreadableAttachment(String, String)
     case attachmentTooLarge(String, Int)
-    case badStatus
+    case badStatus(Int?, String?)
 
     var errorDescription: String? {
         switch self {
@@ -923,8 +956,17 @@ enum ChatStreamingError: LocalizedError, Equatable {
             "Flannel could not read the image attachment \(title): \(detail)"
         case .attachmentTooLarge(let title, let limit):
             "\(title) is larger than Flannel's \(ByteCountFormatter.string(fromByteCount: Int64(limit), countStyle: .file)) native image payload limit."
-        case .badStatus:
-            "The provider returned a non-success HTTP status."
+        case .badStatus(let statusCode, let bodyPreview):
+            switch (statusCode, bodyPreview) {
+            case (.some(let statusCode), .some(let bodyPreview)):
+                "The provider returned HTTP \(statusCode): \(bodyPreview)"
+            case (.some(let statusCode), .none):
+                "The provider returned HTTP \(statusCode)."
+            case (.none, .some(let bodyPreview)):
+                "The provider returned a non-success HTTP status: \(bodyPreview)"
+            case (.none, .none):
+                "The provider returned a non-success HTTP status."
+            }
         }
     }
 }
