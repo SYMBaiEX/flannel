@@ -2920,10 +2920,10 @@ private struct SettingsRouteRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
 
-                Text(tab.detail)
+                Text(tab.sidebarDetail)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
-                    .lineLimit(2...3)
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
             }

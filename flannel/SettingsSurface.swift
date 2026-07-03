@@ -94,7 +94,7 @@ struct SettingsSurface: View {
         Group {
             if usesSidebarNavigation {
                 sidebarSettings
-                    .frame(minWidth: 760, idealWidth: 860, minHeight: 540, idealHeight: 650)
+                    .frame(minWidth: 920, idealWidth: 1_080, minHeight: 540, idealHeight: 650)
             } else {
                 routedSettings
                     .searchable(text: searchTextBinding, placement: .toolbar, prompt: "Search settings")
@@ -2534,10 +2534,10 @@ private struct SettingsSidebarRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
 
-                Text(tab.detail)
+                Text(tab.sidebarDetail)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
-                    .lineLimit(2...3)
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
             }
