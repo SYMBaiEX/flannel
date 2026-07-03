@@ -835,12 +835,12 @@ struct WorkspaceStoreTests {
             }
         }
 
-        let savedReport = try #require(try store.saveProviderAPIKey(providerID, secret: "sk-flannel-delete-test"))
+        let savedReport = try #require(try store.saveProviderAPIKey(providerID, secret: "fixture-flannel-delete-test"))
         let reference = try #require(ProviderSetupService.shared.parseSecretReference(store.providerConfigurations[providerIndex].secretReference))
         savedReference = reference
 
         #expect(savedReport.hasBlockingIssues == false)
-        #expect(try KeychainSecretStore().read(reference) == "sk-flannel-delete-test")
+        #expect(try KeychainSecretStore().read(reference) == "fixture-flannel-delete-test")
 
         let deleteResult = try #require(try store.deleteProviderAPIKey(providerID))
         let updatedProvider = try #require(store.providerConfigurations.first { $0.id == providerID })
@@ -872,7 +872,7 @@ struct WorkspaceStoreTests {
             }
         }
 
-        _ = try #require(try store.saveProviderAPIKey(providerID, secret: "sk-flannel-shared-delete-test"))
+        _ = try #require(try store.saveProviderAPIKey(providerID, secret: "fixture-flannel-shared-delete-test"))
         let reference = try #require(ProviderSetupService.shared.parseSecretReference(store.providerConfigurations[providerIndex].secretReference))
         savedReference = reference
         let duplicate = try #require(store.duplicateProviderRoute(providerID))
@@ -885,7 +885,7 @@ struct WorkspaceStoreTests {
         #expect(deleteResult.retentionReason == .sharedReference(routeCount: 1))
         #expect(updatedProvider.secretReference == nil)
         #expect(duplicatedProvider.secretReference == reference.rawValue)
-        #expect(try KeychainSecretStore().read(reference) == "sk-flannel-shared-delete-test")
+        #expect(try KeychainSecretStore().read(reference) == "fixture-flannel-shared-delete-test")
     }
 
     @MainActor
@@ -895,7 +895,7 @@ struct WorkspaceStoreTests {
         let providerIndex = try #require(store.providerConfigurations.firstIndex { $0.kind == .openAI && $0.accessMode == .apiKey })
         let providerID = store.providerConfigurations[providerIndex].id
         let reference = try KeychainSecretStore().save(
-            "sk-flannel-noncanonical-delete-test",
+            "fixture-flannel-noncanonical-delete-test",
             account: "provider/openai/manual-\(UUID().uuidString)",
             service: "flannel.tests.other"
         )
@@ -908,7 +908,7 @@ struct WorkspaceStoreTests {
         #expect(deleteResult.keychainSecretDeleted == false)
         #expect(deleteResult.retentionReason == .noncanonicalReference)
         #expect(updatedProvider.secretReference == nil)
-        #expect(try KeychainSecretStore().read(reference) == "sk-flannel-noncanonical-delete-test")
+        #expect(try KeychainSecretStore().read(reference) == "fixture-flannel-noncanonical-delete-test")
     }
 
     @MainActor

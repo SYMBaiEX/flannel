@@ -251,7 +251,7 @@ struct ProviderSetupServiceTests {
             readinessTransport: { request in try await transport.send(request) },
             secretReader: { reference in
                 #expect(reference.rawValue == secretReference)
-                return "sk-test-live-readiness"
+                return "fixture-live-readiness-secret"
             }
         )
         let provider = ProviderConfiguration(
@@ -279,7 +279,7 @@ struct ProviderSetupServiceTests {
         #expect(validation.availableModels == ["gpt-4.1", "gpt-4.1-mini"])
         #expect(validation.selectedModelIsAvailable)
         #expect(requests.map(\.url) == ["https://api.openai.com/v1/models"])
-        #expect(requests.map(\.authorizationHeader) == ["Bearer sk-test-live-readiness"])
+        #expect(requests.map(\.authorizationHeader) == ["Bearer fixture-live-readiness-secret"])
         #expect(requests.map(\.openAIOrganizationHeader) == ["org_live_readiness"])
     }
 

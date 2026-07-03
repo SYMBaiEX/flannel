@@ -4,6 +4,10 @@ Flannel is a local-first macOS SwiftUI app focused on private chat, model routin
 
 This repository documents a working implementation, not a roadmap-only feature list.
 
+## License
+
+Flannel is released under the MIT License. See [LICENSE](LICENSE).
+
 ## Current scope
 
 - Local-first app defaults with default local-only routing and explicit provider activation checks.

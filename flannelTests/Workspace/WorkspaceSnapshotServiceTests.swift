@@ -22,7 +22,7 @@ struct WorkspaceSnapshotServiceTests {
         #expect(payload.workspace.selectedDestination == .home)
         #expect(payload.workspace.providerConfigurations.map(\.displayName) == ["OpenAI API", "Local Ollama"])
         #expect(payload.workspace.providerConfigurations.first?.secretReference == "keychain://openai")
-        #expect(payload.workspace.providerConfigurations.first?.secretReference != "sk-test-secret")
+        #expect(payload.workspace.providerConfigurations.first?.secretReference != "fixture-secret-value")
         #expect(payload.workspace.assistantThreads.map(\.title) == ["Local RAG Thread"])
         #expect(payload.workspace.chatFolders.map(\.title) == ["Research"])
         #expect(payload.workspace.promptProfiles.map(\.title) == ["Careful Local Assistant"])

@@ -1,10 +1,57 @@
+# macOS
 .DS_Store
-.build/
-DerivedData/
-*.xcuserstate
-xcuserdata/
-*.xcresult
-Build/
-build/
+.AppleDouble
+.LSOverride
+Icon?
+
+# Local editor and Codex state
+.codex/
+.vscode/
+.idea/
 *.swp
 *.swo
+
+# Swift Package Manager / build output
+.build/
+Build/
+build/
+DerivedData/
+*.dSYM/
+*.profraw
+*.profdata
+
+# Xcode user-local state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.moved-aside
+*.xcresult
+*.xcarchive
+
+# App signing, provisioning, and export products
+*.mobileprovision
+*.provisionprofile
+*.p8
+*.p12
+*.cer
+*.developerprofile
+ExportOptions.plist
+
+# Local runtime data and logs
+*.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.store
+*.trace
+
+# Environment files and plaintext credential material
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.private
+*.secret
+secrets/
+private/
