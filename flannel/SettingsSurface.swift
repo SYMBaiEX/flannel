@@ -37,6 +37,8 @@ struct SettingsSurface: View {
     @State private var ollamaPullMessage: String?
     @State private var deletingOllamaModelID: String?
     @State private var inspectingOllamaModelID: String?
+    @State private var loadingLMStudioModelID: String?
+    @State private var unloadingLMStudioModelID: String?
     @State private var inspectedOllamaModelInfo: OllamaModelInfo?
     @State private var modelInspectionMessage: String?
     @State private var newChatFolderTitle = ""
@@ -510,7 +512,19 @@ struct SettingsSurface: View {
                             result: result,
                             deletingModelID: deletingOllamaModelID,
                             inspectingModelID: inspectingOllamaModelID,
+                            loadingModelID: loadingLMStudioModelID,
+                            unloadingModelID: unloadingLMStudioModelID,
                             useModel: selectLocalModel,
+                            loadModel: { model in
+                                Task {
+                                    await loadLMStudioModel(model)
+                                }
+                            },
+                            unloadModel: { model in
+                                Task {
+                                    await unloadLMStudioModel(model)
+                                }
+                            },
                             inspectModel: { model in
                                 Task {
                                     await inspectOllamaModel(model)
@@ -1974,6 +1988,59 @@ struct SettingsSurface: View {
         }
 
         deletingOllamaModelID = nil
+    }
+
+    private func loadLMStudioModel(_ model: LocalModelDescriptor) async {
+        guard model.providerKind == .lmStudio,
+              loadingLMStudioModelID == nil else { return }
+
+        loadingLMStudioModelID = model.id
+        localDiscoveryMessage = "Loading \(model.displayName ?? model.name) in LM Studio..."
+
+        do {
+            let result = try await LocalModelManagementService().loadLMStudioModel(
+                model: model.name,
+                endpoint: model.endpoint
+            )
+            if let instanceID = result.instanceID {
+                localDiscoveryMessage = "Loaded \(model.displayName ?? model.name) as \(instanceID). Refreshing discovery..."
+            } else {
+                localDiscoveryMessage = "Loaded \(model.displayName ?? model.name). Refreshing discovery..."
+            }
+            await discoverLocalModels()
+            localDiscoveryMessage = "Loaded \(model.displayName ?? model.name) in LM Studio."
+        } catch {
+            localDiscoveryMessage = error.localizedDescription
+        }
+
+        loadingLMStudioModelID = nil
+    }
+
+    private func unloadLMStudioModel(_ model: LocalModelDescriptor) async {
+        guard model.providerKind == .lmStudio,
+              unloadingLMStudioModelID == nil else { return }
+
+        guard let instanceID = model.loadedInstanceIDs?.first else {
+            localDiscoveryMessage = "Run discovery again to get the loaded LM Studio instance ID for \(model.displayName ?? model.name)."
+            return
+        }
+
+        unloadingLMStudioModelID = model.id
+        localDiscoveryMessage = "Unloading \(model.displayName ?? model.name) from LM Studio..."
+
+        do {
+            _ = try await LocalModelManagementService().unloadLMStudioModel(
+                instanceID: instanceID,
+                endpoint: model.endpoint
+            )
+            localDiscoveryMessage = "Unloaded \(model.displayName ?? model.name). Refreshing discovery..."
+            await discoverLocalModels()
+            localDiscoveryMessage = "Unloaded \(model.displayName ?? model.name) from LM Studio."
+        } catch {
+            localDiscoveryMessage = error.localizedDescription
+        }
+
+        unloadingLMStudioModelID = nil
     }
 
     private func removeCachedLocalModel(_ model: LocalModelDescriptor) {
@@ -4614,7 +4681,11 @@ private struct LocalDiscoverySettingsRow: View {
     var result: LocalProviderDiscoveryResult
     var deletingModelID: String?
     var inspectingModelID: String?
+    var loadingModelID: String?
+    var unloadingModelID: String?
     var useModel: (LocalModelDescriptor) -> Void
+    var loadModel: (LocalModelDescriptor) -> Void
+    var unloadModel: (LocalModelDescriptor) -> Void
     var inspectModel: (LocalModelDescriptor) -> Void
     var deleteModel: (LocalModelDescriptor) -> Void
     @State private var pendingDeleteModel: LocalModelDescriptor?
@@ -4673,6 +4744,10 @@ private struct LocalDiscoverySettingsRow: View {
                             useModel(model)
                         }
                         .disabled(!model.capabilities.contains(.chat))
+
+                        if model.providerKind == .lmStudio {
+                            lmStudioRuntimeControl(for: model)
+                        }
 
                         if model.providerKind == .ollama {
                             Button {
@@ -4744,6 +4819,52 @@ private struct LocalDiscoverySettingsRow: View {
                 Text("This removes \(pendingDeleteModel.name) and its local Ollama data from \(pendingDeleteModel.endpoint).")
             }
         }
+    }
+
+    @ViewBuilder
+    private func lmStudioRuntimeControl(for model: LocalModelDescriptor) -> some View {
+        if (model.loadedInstanceCount ?? 0) > 0 {
+            Button {
+                unloadModel(model)
+            } label: {
+                if unloadingModelID == model.id {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Label("Unload from LM Studio", systemImage: "stop.circle")
+                        .labelStyle(.iconOnly)
+                }
+            }
+            .buttonStyle(.borderless)
+            .disabled(localModelActionInFlight || model.loadedInstanceIDs?.isEmpty != false)
+            .help(model.loadedInstanceIDs?.isEmpty == false
+                  ? "Unload this model from LM Studio"
+                  : "Run discovery again to get this model's LM Studio instance ID")
+            .accessibilityLabel("Unload \(model.displayName ?? model.name) from LM Studio")
+        } else {
+            Button {
+                loadModel(model)
+            } label: {
+                if loadingModelID == model.id {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Label("Load in LM Studio", systemImage: "play.circle")
+                        .labelStyle(.iconOnly)
+                }
+            }
+            .buttonStyle(.borderless)
+            .disabled(localModelActionInFlight)
+            .help("Load this model in LM Studio")
+            .accessibilityLabel("Load \(model.displayName ?? model.name) in LM Studio")
+        }
+    }
+
+    private var localModelActionInFlight: Bool {
+        deletingModelID != nil
+            || inspectingModelID != nil
+            || loadingModelID != nil
+            || unloadingModelID != nil
     }
 
     private var statusText: String {

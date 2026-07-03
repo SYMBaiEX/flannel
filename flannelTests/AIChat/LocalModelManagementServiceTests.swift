@@ -70,6 +70,143 @@ struct LocalModelManagementServiceTests {
         #expect(json["verbose"] as? Bool == true)
     }
 
+    @Test("LM Studio load request uses native management endpoint")
+    func lmStudioLoadRequestUsesNativeEndpoint() throws {
+        let service = LocalModelManagementService(timeout: 11)
+
+        for endpoint in [
+            " http://localhost:1234 ",
+            " http://localhost:1234/v1 ",
+            " http://localhost:1234/v1/models ",
+            " http://localhost:1234/api/v1/models "
+        ] {
+            let request = try service.makeLMStudioLoadRequest(
+                endpoint: endpoint,
+                model: " google/gemma-4-26b-a4b ",
+                contextLength: 32768
+            )
+
+            #expect(request.url?.absoluteString == "http://localhost:1234/api/v1/models/load")
+            #expect(request.httpMethod == "POST")
+            #expect(request.timeoutInterval == 11)
+            #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+
+            let body = try #require(request.httpBody)
+            let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            #expect(json["model"] as? String == "google/gemma-4-26b-a4b")
+            #expect(json["context_length"] as? Int == 32768)
+            #expect(json["echo_load_config"] as? Bool == true)
+        }
+    }
+
+    @Test("LM Studio unload request uses native management endpoint")
+    func lmStudioUnloadRequestUsesNativeEndpoint() throws {
+        let service = LocalModelManagementService(timeout: 13)
+
+        let request = try service.makeLMStudioUnloadRequest(
+            endpoint: "http://localhost:1234/api/v1/models",
+            instanceID: " google/gemma-4-26b-a4b "
+        )
+
+        #expect(request.url?.absoluteString == "http://localhost:1234/api/v1/models/unload")
+        #expect(request.httpMethod == "POST")
+        #expect(request.timeoutInterval == 13)
+        #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+
+        let body = try #require(request.httpBody)
+        let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        #expect(json["instance_id"] as? String == "google/gemma-4-26b-a4b")
+        #expect(json["model"] == nil)
+    }
+
+    @Test("LM Studio load parser decodes instance and echoed config")
+    func lmStudioLoadParserDecodesResponse() throws {
+        let data = Data(
+            """
+            {
+              "type": "llm",
+              "instance_id": "google/gemma-4-26b-a4b",
+              "load_time_seconds": 2.4,
+              "status": "loaded",
+              "load_config": {
+                "context_length": 32768,
+                "eval_batch_size": 1024,
+                "flash_attention": true,
+                "num_experts": 8,
+                "offload_kv_cache_to_gpu": false
+              }
+            }
+            """.utf8
+        )
+
+        let result = try LocalModelManagementService.parseLMStudioLoadResponse(
+            data,
+            model: "google/gemma-4-26b-a4b",
+            endpoint: "http://localhost:1234"
+        )
+
+        #expect(result.model == "google/gemma-4-26b-a4b")
+        #expect(result.endpoint == "http://localhost:1234")
+        #expect(result.responseType == "llm")
+        #expect(result.instanceID == "google/gemma-4-26b-a4b")
+        #expect(result.loadTimeSeconds == 2.4)
+        #expect(result.status == "loaded")
+        #expect(result.contextLength == 32768)
+    }
+
+    @Test("LM Studio unload parser requires and returns instance id")
+    func lmStudioUnloadParserDecodesResponse() throws {
+        let data = Data(
+            """
+            {
+              "instance_id": "google/gemma-4-26b-a4b"
+            }
+            """.utf8
+        )
+
+        let result = try LocalModelManagementService.parseLMStudioUnloadResponse(
+            data,
+            endpoint: "http://localhost:1234"
+        )
+
+        #expect(result.instanceID == "google/gemma-4-26b-a4b")
+        #expect(result.endpoint == "http://localhost:1234")
+    }
+
+    @MainActor
+    @Test("Local model descriptor decodes legacy cached models")
+    func localModelDescriptorDecodesLegacyCachedModels() throws {
+        let data = Data(
+            """
+            {
+              "id": "lmStudio:http://localhost:1234:google/gemma-4-26b-a4b",
+              "name": "google/gemma-4-26b-a4b",
+              "displayName": "Gemma 4 26B A4B",
+              "publisher": "google",
+              "providerKind": "lmStudio",
+              "endpoint": "http://localhost:1234",
+              "family": "gemma4",
+              "parameterSize": "26B-A4B",
+              "quantization": "Q4_K_M",
+              "format": "gguf",
+              "contextWindowTokens": 4096,
+              "loadedInstanceCount": 1,
+              "sizeBytes": 17990911801,
+              "selectedVariant": "q4_k_m",
+              "capabilities": ["chat", "streaming", "openAICompatible"]
+            }
+            """.utf8
+        )
+
+        let model = try JSONDecoder().decode(LocalModelDescriptor.self, from: data)
+
+        #expect(model.name == "google/gemma-4-26b-a4b")
+        #expect(model.providerKind == .lmStudio)
+        #expect(model.loadedInstanceCount == 1)
+        #expect(model.loadedInstanceIDs == nil)
+        #expect(model.capabilities.contains(.chat))
+    }
+
     @Test("Ollama show parser decodes details, capabilities, and mixed metadata")
     func ollamaShowParserDecodesModelInfo() throws {
         let data = Data(
@@ -166,6 +303,26 @@ struct LocalModelManagementServiceTests {
             _ = try LocalModelManagementService().makeOllamaShowRequest(
                 endpoint: "http://localhost:11434",
                 model: "   "
+            )
+        }
+    }
+
+    @Test("LM Studio load request rejects missing model names")
+    func lmStudioLoadRequestRejectsMissingModel() {
+        #expect(throws: LocalModelManagementError.missingModelName) {
+            _ = try LocalModelManagementService().makeLMStudioLoadRequest(
+                endpoint: "http://localhost:1234",
+                model: "   "
+            )
+        }
+    }
+
+    @Test("LM Studio unload request rejects missing instance ids")
+    func lmStudioUnloadRequestRejectsMissingInstanceID() {
+        #expect(throws: LocalModelManagementError.missingInstanceID) {
+            _ = try LocalModelManagementService().makeLMStudioUnloadRequest(
+                endpoint: "http://localhost:1234",
+                instanceID: "   "
             )
         }
     }
@@ -303,6 +460,7 @@ struct LocalModelManagementServiceTests {
         #expect(llm.format == "gguf")
         #expect(llm.contextWindowTokens == 4096)
         #expect(llm.loadedInstanceCount == 1)
+        #expect(llm.loadedInstanceIDs == ["google/gemma-4-26b-a4b"])
         #expect(llm.sizeBytes == 17_990_911_801)
         #expect(llm.selectedVariant == "google/gemma-4-26b-a4b@q4_k_m")
         #expect(llm.capabilities.contains(.chat))
@@ -350,6 +508,7 @@ struct LocalModelManagementServiceTests {
         #expect(model.displayName == "GPT OSS 20B")
         #expect(model.contextWindowTokens == 131072)
         #expect(model.loadedInstanceCount == 1)
+        #expect(model.loadedInstanceIDs == ["openai/gpt-oss-20b"])
         #expect(model.capabilities.contains(.chat))
         #expect(model.capabilities.contains(.streaming))
     }

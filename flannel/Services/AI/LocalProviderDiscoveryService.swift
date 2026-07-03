@@ -294,6 +294,7 @@ struct LocalProviderDiscoveryService: Sendable {
                     .first
                     ?? model.maxContextLength,
                 loadedInstanceCount: model.loadedInstances?.count ?? 0,
+                loadedInstanceIDs: loadedInstanceIDs(from: model.loadedInstances),
                 sizeBytes: model.sizeBytes,
                 selectedVariant: model.selectedVariant,
                 capabilities: lmStudioCapabilities(for: model)
@@ -326,6 +327,7 @@ struct LocalProviderDiscoveryService: Sendable {
                     .first
                     ?? model.maxContextLength,
                 loadedInstanceCount: model.loadedInstances?.count,
+                loadedInstanceIDs: loadedInstanceIDs(from: model.loadedInstances),
                 sizeBytes: model.sizeBytes,
                 selectedVariant: model.selectedVariant,
                 capabilities: openAICompatibleCapabilities(for: model)
@@ -352,10 +354,22 @@ struct LocalProviderDiscoveryService: Sendable {
                 .first
                 ?? model.maxContextLength,
             loadedInstanceCount: model.loadedInstances?.count ?? 0,
+            loadedInstanceIDs: loadedInstanceIDs(from: model.loadedInstances),
             sizeBytes: model.sizeBytes,
             selectedVariant: model.selectedVariant,
             capabilities: lmStudioFallbackCapabilities(for: model)
         )
+    }
+
+    private static func loadedInstanceIDs(
+        from loadedInstances: [LMStudioNativeModelsDiscoveryResponse.LoadedInstance]?
+    ) -> [String]? {
+        let ids = loadedInstances?
+            .compactMap { instance -> String? in
+                let trimmed = instance.id?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return trimmed.isEmpty ? nil : trimmed
+            } ?? []
+        return ids.isEmpty ? nil : ids
     }
 
     private static func runningOllamaModelLookup(
@@ -750,7 +764,11 @@ struct LocalProviderDiscoveryService: Sendable {
             .map(String.init)
 
         let normalizedPathComponents = pathComponents.map { $0.lowercased() }
-        if normalizedPathComponents.suffix(2) == ["v1", "models"] {
+        if normalizedPathComponents.suffix(3) == ["api", "v1", "models"] {
+            pathComponents.removeLast(3)
+        } else if normalizedPathComponents.suffix(2) == ["api", "v1"] {
+            pathComponents.removeLast(2)
+        } else if normalizedPathComponents.suffix(2) == ["v1", "models"] {
             pathComponents.removeLast(2)
         } else if normalizedPathComponents.last == "v1" {
             pathComponents.removeLast()

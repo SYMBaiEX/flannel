@@ -212,6 +212,21 @@ nonisolated struct OllamaModelInfo: Identifiable, Hashable, Sendable {
     }
 }
 
+nonisolated struct LMStudioModelLoadResult: Hashable, Sendable {
+    var model: String
+    var endpoint: String
+    var responseType: String?
+    var instanceID: String?
+    var loadTimeSeconds: Double?
+    var status: String?
+    var contextLength: Int?
+}
+
+nonisolated struct LMStudioModelUnloadResult: Hashable, Sendable {
+    var instanceID: String
+    var endpoint: String
+}
+
 nonisolated struct OllamaModelInfoDetails: Codable, Hashable, Sendable {
     var parentModel: String?
     var format: String?
@@ -233,6 +248,7 @@ nonisolated struct OllamaModelInfoDetails: Codable, Hashable, Sendable {
 nonisolated enum LocalModelManagementError: LocalizedError, Equatable {
     case invalidEndpoint
     case missingModelName
+    case missingInstanceID
     case badStatus(Int)
     case providerError(String)
 
@@ -241,7 +257,9 @@ nonisolated enum LocalModelManagementError: LocalizedError, Equatable {
         case .invalidEndpoint:
             "The local model endpoint is not a valid URL."
         case .missingModelName:
-            "Enter an Ollama model name before starting a pull."
+            "Enter a local model name before starting the action."
+        case .missingInstanceID:
+            "Run discovery again to get the loaded LM Studio instance ID."
         case .badStatus(let statusCode):
             "The local model provider returned HTTP \(statusCode)."
         case .providerError(let message):
@@ -365,6 +383,51 @@ struct LocalModelManagementService: Sendable {
         )
     }
 
+    func loadLMStudioModel(
+        model rawModel: String,
+        endpoint rawEndpoint: String,
+        contextLength: Int? = nil
+    ) async throws -> LMStudioModelLoadResult {
+        let model = rawModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rootEndpoint = try nativeLMStudioEndpoint(rawEndpoint)
+        let request = try makeLMStudioLoadRequest(
+            endpoint: rootEndpoint,
+            model: model,
+            contextLength: contextLength
+        )
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LocalModelManagementError.badStatus(-1)
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw LocalModelManagementError.badStatus(httpResponse.statusCode)
+        }
+        return try Self.parseLMStudioLoadResponse(
+            data,
+            model: model,
+            endpoint: rootEndpoint
+        )
+    }
+
+    func unloadLMStudioModel(
+        instanceID rawInstanceID: String,
+        endpoint rawEndpoint: String
+    ) async throws -> LMStudioModelUnloadResult {
+        let rootEndpoint = try nativeLMStudioEndpoint(rawEndpoint)
+        let request = try makeLMStudioUnloadRequest(
+            endpoint: rootEndpoint,
+            instanceID: rawInstanceID
+        )
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LocalModelManagementError.badStatus(-1)
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw LocalModelManagementError.badStatus(httpResponse.statusCode)
+        }
+        return try Self.parseLMStudioUnloadResponse(data, endpoint: rootEndpoint)
+    }
+
     func makeOllamaDeleteRequest(
         endpoint rawEndpoint: String,
         model rawModel: String
@@ -408,6 +471,55 @@ struct LocalModelManagementService: Sendable {
         return request
     }
 
+    func makeLMStudioLoadRequest(
+        endpoint rawEndpoint: String,
+        model rawModel: String,
+        contextLength: Int? = nil
+    ) throws -> URLRequest {
+        let model = rawModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !model.isEmpty else {
+            throw LocalModelManagementError.missingModelName
+        }
+
+        let rootEndpoint = try nativeLMStudioEndpoint(rawEndpoint)
+        let url = try endpoint(rootEndpoint, appending: ["api", "v1", "models", "load"])
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = timeout
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(
+            LMStudioLoadRequestPayload(
+                model: model,
+                contextLength: contextLength,
+                echoLoadConfig: true
+            )
+        )
+        return request
+    }
+
+    func makeLMStudioUnloadRequest(
+        endpoint rawEndpoint: String,
+        instanceID rawInstanceID: String
+    ) throws -> URLRequest {
+        let instanceID = rawInstanceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !instanceID.isEmpty else {
+            throw LocalModelManagementError.missingInstanceID
+        }
+
+        let rootEndpoint = try nativeLMStudioEndpoint(rawEndpoint)
+        let url = try endpoint(rootEndpoint, appending: ["api", "v1", "models", "unload"])
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = timeout
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(
+            LMStudioUnloadRequestPayload(instanceID: instanceID)
+        )
+        return request
+    }
+
     nonisolated static func parseOllamaPullLine(_ line: String) throws -> OllamaModelPullUpdate? {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -437,6 +549,34 @@ struct LocalModelManagementService: Sendable {
         )
     }
 
+    nonisolated static func parseLMStudioLoadResponse(
+        _ data: Data,
+        model: String,
+        endpoint: String
+    ) throws -> LMStudioModelLoadResult {
+        let response = try JSONDecoder().decode(LMStudioLoadResponsePayload.self, from: data)
+        return LMStudioModelLoadResult(
+            model: model,
+            endpoint: endpoint,
+            responseType: response.responseType?.trimmedNonEmpty,
+            instanceID: response.instanceID?.trimmedNonEmpty,
+            loadTimeSeconds: response.loadTimeSeconds,
+            status: response.status?.trimmedNonEmpty,
+            contextLength: response.loadConfig?.contextLength
+        )
+    }
+
+    nonisolated static func parseLMStudioUnloadResponse(
+        _ data: Data,
+        endpoint: String
+    ) throws -> LMStudioModelUnloadResult {
+        let response = try JSONDecoder().decode(LMStudioUnloadResponsePayload.self, from: data)
+        guard let instanceID = response.instanceID?.trimmedNonEmpty else {
+            throw LocalModelManagementError.missingInstanceID
+        }
+        return LMStudioModelUnloadResult(instanceID: instanceID, endpoint: endpoint)
+    }
+
     private func endpoint(_ rawValue: String, appending pathComponents: [String]) throws -> URL {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard var components = URLComponents(string: trimmed),
@@ -455,6 +595,37 @@ struct LocalModelManagementService: Sendable {
             throw LocalModelManagementError.invalidEndpoint
         }
         return url
+    }
+
+    private func nativeLMStudioEndpoint(_ rawValue: String) throws -> String {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var components = URLComponents(string: trimmed),
+              components.scheme != nil,
+              components.host != nil else {
+            throw LocalModelManagementError.invalidEndpoint
+        }
+
+        var pathComponents = components.path
+            .split(separator: "/")
+            .map(String.init)
+        let normalizedPathComponents = pathComponents.map { $0.lowercased() }
+        if normalizedPathComponents.suffix(3) == ["api", "v1", "models"] {
+            pathComponents.removeLast(3)
+        } else if normalizedPathComponents.suffix(2) == ["api", "v1"] {
+            pathComponents.removeLast(2)
+        } else if normalizedPathComponents.suffix(2) == ["v1", "models"] {
+            pathComponents.removeLast(2)
+        } else if normalizedPathComponents.last == "v1" {
+            pathComponents.removeLast()
+        }
+
+        components.path = pathComponents.isEmpty ? "" : "/" + pathComponents.joined(separator: "/")
+        components.query = nil
+        components.fragment = nil
+        guard let url = components.url else {
+            throw LocalModelManagementError.invalidEndpoint
+        }
+        return url.absoluteString
     }
 
     private nonisolated static func parseOllamaDate(_ rawValue: String?) -> Date? {
@@ -485,6 +656,26 @@ private nonisolated struct OllamaShowRequestPayload: Encodable {
     var verbose: Bool
 }
 
+private nonisolated struct LMStudioLoadRequestPayload: Encodable {
+    var model: String
+    var contextLength: Int?
+    var echoLoadConfig: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case contextLength = "context_length"
+        case echoLoadConfig = "echo_load_config"
+    }
+}
+
+private nonisolated struct LMStudioUnloadRequestPayload: Encodable {
+    var instanceID: String
+
+    enum CodingKeys: String, CodingKey {
+        case instanceID = "instance_id"
+    }
+}
+
 private nonisolated struct OllamaShowResponsePayload: Decodable {
     var modifiedAtRawValue: String?
     var modelfile: String?
@@ -506,5 +697,44 @@ private nonisolated struct OllamaShowResponsePayload: Decodable {
         case details
         case modelInfo = "model_info"
         case capabilities
+    }
+}
+
+private nonisolated struct LMStudioLoadResponsePayload: Decodable {
+    var responseType: String?
+    var instanceID: String?
+    var loadTimeSeconds: Double?
+    var status: String?
+    var loadConfig: LoadConfig?
+
+    enum CodingKeys: String, CodingKey {
+        case responseType = "type"
+        case instanceID = "instance_id"
+        case loadTimeSeconds = "load_time_seconds"
+        case status
+        case loadConfig = "load_config"
+    }
+
+    struct LoadConfig: Decodable {
+        var contextLength: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case contextLength = "context_length"
+        }
+    }
+}
+
+private nonisolated struct LMStudioUnloadResponsePayload: Decodable {
+    var instanceID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case instanceID = "instance_id"
+    }
+}
+
+private extension String {
+    nonisolated var trimmedNonEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

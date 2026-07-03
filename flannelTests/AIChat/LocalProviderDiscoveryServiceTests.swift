@@ -360,6 +360,7 @@ struct LocalProviderDiscoveryServiceTests {
         #expect(model.format == "gguf")
         #expect(model.contextWindowTokens == 32768)
         #expect(model.loadedInstanceCount == 1)
+        #expect(model.loadedInstanceIDs == ["loaded-gemma"])
         #expect(model.sizeBytes == 18_038_862_643)
         #expect(model.selectedVariant == "4bit")
         #expect(model.capabilities.contains(.chat))
@@ -374,6 +375,41 @@ struct LocalProviderDiscoveryServiceTests {
             "http://localhost:1234/api/v1/models",
             "http://localhost:1234/v1/models"
         ])
+    }
+
+    @MainActor
+    @Test("LM Studio native discovery accepts api v1 models endpoints")
+    func lmStudioNativeDiscoveryAcceptsAPIV1ModelsEndpoint() async throws {
+        let transport = LocalDiscoveryTransportRecorder(
+            responses: [
+                "http://localhost:1234/api/v1/models": .init(
+                    statusCode: 200,
+                    body: """
+                    {
+                      "models": [
+                        {
+                          "type": "llm",
+                          "publisher": "Qwen",
+                          "key": "qwen/qwen3-14b",
+                          "display_name": "Qwen 3 14B"
+                        }
+                      ]
+                    }
+                    """
+                )
+            ]
+        )
+        let service = LocalProviderDiscoveryService(
+            transport: { request in try await transport.send(request) }
+        )
+
+        let results = await service.discover(targets: [(.lmStudio, "http://localhost:1234/api/v1/models")])
+        let result = try #require(results.first)
+        let requests = await transport.requests()
+
+        #expect(result.status == .ready)
+        #expect(result.models.first?.name == "qwen/qwen3-14b")
+        #expect(requests.map(\.url) == ["http://localhost:1234/api/v1/models"])
     }
 
     @MainActor
@@ -402,6 +438,9 @@ struct LocalProviderDiscoveryServiceTests {
                       "config": {
                         "context_length": 65536
                       }
+                    },
+                    {
+                      "id": "loaded-qwen-second"
                     }
                   ],
                   "capabilities": {
@@ -422,7 +461,8 @@ struct LocalProviderDiscoveryServiceTests {
 
         #expect(models.map(\.name) == ["qwen/qwen3-14b", "text-embedding-nomic-embed-text-v1.5"])
         #expect(chat.contextWindowTokens == 65536)
-        #expect(chat.loadedInstanceCount == 1)
+        #expect(chat.loadedInstanceCount == 2)
+        #expect(chat.loadedInstanceIDs == ["loaded-qwen", "loaded-qwen-second"])
         #expect(chat.capabilities.contains(.chat))
         #expect(chat.capabilities.contains(.streaming))
         #expect(chat.capabilities.contains(.toolCalling))

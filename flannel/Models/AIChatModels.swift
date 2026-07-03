@@ -668,6 +668,7 @@ struct LocalModelDescriptor: Identifiable, Codable, Hashable, Sendable {
     var format: String?
     var contextWindowTokens: Int?
     var loadedInstanceCount: Int?
+    var loadedInstanceIDs: [String]?
     var sizeBytes: Int64?
     var sizeVRAMBytes: Int64?
     var modifiedAt: Date?
@@ -688,6 +689,7 @@ struct LocalModelDescriptor: Identifiable, Codable, Hashable, Sendable {
         format: String? = nil,
         contextWindowTokens: Int? = nil,
         loadedInstanceCount: Int? = nil,
+        loadedInstanceIDs: [String]? = nil,
         sizeBytes: Int64? = nil,
         sizeVRAMBytes: Int64? = nil,
         modifiedAt: Date? = nil,
@@ -707,6 +709,7 @@ struct LocalModelDescriptor: Identifiable, Codable, Hashable, Sendable {
         self.format = format
         self.contextWindowTokens = contextWindowTokens
         self.loadedInstanceCount = loadedInstanceCount
+        self.loadedInstanceIDs = loadedInstanceIDs
         self.sizeBytes = sizeBytes
         self.sizeVRAMBytes = sizeVRAMBytes
         self.modifiedAt = modifiedAt
