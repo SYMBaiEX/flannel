@@ -399,7 +399,12 @@ extension ProviderConfiguration {
     }
 
     var providerPickerAccessibilityLabel: String {
-        "\(modeBoundaryTitle), \(providerPickerRouteSummary)"
+        switch kind {
+        case .ollama, .lmStudio:
+            "\(providerModeChoiceTitle), \(providerPickerRouteSummary)"
+        default:
+            "\(modeBoundaryTitle), \(providerPickerRouteSummary)"
+        }
     }
 
     var providerModeSelectionTitle: String {
@@ -457,7 +462,7 @@ extension ProviderConfiguration {
     var providerModeSelectionDetail: String {
         switch kind {
         case .openAI:
-            return "Official OpenAI Platform API route. Requires a Keychain API key; it is not ChatGPT or Codex CLI access."
+            return "Official OpenAI API route. Requires a Keychain API key; it is not ChatGPT or Codex CLI access."
         case .chatGPTCLI:
             return "Local account CLI route. Uses the configured Codex/ChatGPT command; ChatGPT plan sign-in or Codex API-key auth stays inside that CLI."
         case .anthropic:

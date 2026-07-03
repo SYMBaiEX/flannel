@@ -861,7 +861,20 @@ struct ContentView: View {
                     await runAutoApprovedRequestedToolCallsIfNeeded(in: assistantMessageID, threadID: sourceThreadID)
                     return
                 } catch {
-                    if error is CancellationError || Task.isCancelled {
+                    let toolCalls = toolCallRecords(from: toolCallAccumulator.toolCalls, startedAt: attemptStartedAt)
+                    let nextProviderName = attemptIndex < streamAttempts.count - 1
+                        ? streamAttempts[attemptIndex + 1].provider.displayName
+                        : nil
+                    let failureDecision = ChatProviderFallbackPolicy.decisionAfterStreamFailure(
+                        providerName: attempt.provider.displayName,
+                        nextProviderName: nextProviderName,
+                        errorDescription: error.localizedDescription,
+                        emittedText: !streamedText.isEmpty,
+                        emittedToolCalls: !toolCalls.isEmpty,
+                        isCancellation: error is CancellationError || Task.isCancelled
+                    )
+
+                    if failureDecision == .cancel {
                         await MainActor.run {
                             if isStreamingResponse {
                                 stopStreamingMessage(assistantMessageID, in: sourceThreadID)
@@ -870,9 +883,20 @@ struct ContentView: View {
                         return
                     }
 
-                    let toolCalls = toolCallRecords(from: toolCallAccumulator.toolCalls, startedAt: attemptStartedAt)
-                    if streamedText.isEmpty && toolCalls.isEmpty && attemptIndex < streamAttempts.count - 1 {
-                        lastFailure = (attempt.provider.displayName, error.localizedDescription)
+                    if case .retryNextProvider(let reason, let retryNotice) = failureDecision {
+                        lastFailure = (attempt.provider.displayName, reason)
+                        if let retryNotice {
+                            await MainActor.run {
+                                updateAssistantToolCalls(assistantMessageID, in: sourceThreadID, toolCalls: toolCalls)
+                                store.updateAssistantMessage(
+                                    assistantMessageID,
+                                    in: sourceThreadID,
+                                    text: retryNotice,
+                                    citations: retrievalPacket.citations
+                                )
+                                persistQuietly()
+                            }
+                        }
                         continue
                     }
 
