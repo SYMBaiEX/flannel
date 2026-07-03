@@ -155,20 +155,27 @@ struct SettingsSurface: View {
     }
 
     private var sidebarSettings: some View {
-        NavigationSplitView {
+        let sidebarWidth = FlannelSidebarSurface.settings.columnWidth
+
+        return NavigationSplitView {
             List(selection: optionalSelectedTabBinding) {
                 ForEach(SettingsNavigationSection.allCases) { section in
                     Section(section.title) {
                         ForEach(section.tabs) { tab in
                             SettingsSidebarRow(tab: tab)
                                 .tag(Optional(tab))
+                                .listRowInsets(EdgeInsets(top: 4, leading: 14, bottom: 4, trailing: 10))
                         }
                     }
                 }
             }
             .listStyle(.sidebar)
             .navigationTitle("Settings")
-            .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 260)
+            .navigationSplitViewColumnWidth(
+                min: sidebarWidth.min,
+                ideal: sidebarWidth.ideal,
+                max: sidebarWidth.max
+            )
         } detail: {
             routedSettings
         }
@@ -2401,11 +2408,28 @@ private struct SettingsSidebarRow: View {
 
     var body: some View {
         Label {
-            Text(tab.title)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tab.title)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(tab.sidebarDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         } icon: {
             Image(systemName: tab.systemImage)
                 .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
         }
+        .labelStyle(.titleAndIcon)
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
         .help(tab.detail)
     }
 }

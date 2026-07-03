@@ -35,9 +35,9 @@ struct FlannelShellModelsTests {
         #expect(settingsWidth.ideal > conversationWidth.ideal)
         #expect(settingsWidth.min > conversationWidth.min)
         #expect(settingsWidth.max > conversationWidth.max)
-        #expect(settingsWidth.min >= 336)
-        #expect(settingsWidth.ideal >= 372)
-        #expect(settingsWidth.max >= 440)
+        #expect(settingsWidth.min >= 360)
+        #expect(settingsWidth.ideal >= 396)
+        #expect(settingsWidth.max >= 500)
     }
 
     @Test("Settings sidebar labels stay concise")
@@ -46,6 +46,14 @@ struct FlannelShellModelsTests {
             #expect(tab.sidebarDetail.count <= tab.detail.count)
             #expect(tab.sidebarDetail.count <= 40)
         }
+    }
+
+    @Test("Settings sidebar uses compact copy for dense routes")
+    func settingsSidebarUsesCompactCopyForDenseRoutes() {
+        #expect(SettingsTab.general.sidebarDetail == "Startup, history, folders")
+        #expect(SettingsTab.models.sidebarDetail == "Routing, keys, local servers")
+        #expect(SettingsTab.knowledge.sidebarDetail == "Sources, indexing, retrieval")
+        #expect(SettingsTab.privacy.sidebarDetail == "Network, local-only, secrets")
     }
 
     @Test("Escape exits settings surface")
