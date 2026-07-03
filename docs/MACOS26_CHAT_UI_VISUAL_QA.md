@@ -68,6 +68,7 @@ This is a single-window experience: sidebar/chat/composer/artifact/settings tran
 - Models settings shows active provider, selected provider, network mode, runnable provider count, and last local discovery before the editable provider rows.
 - Models settings includes a readiness audit action that checks every provider route and reports the ready vs needs-attention summary without opening another window.
 - Models settings includes Ollama pull and delete controls that show progress, confirm destructive deletion, and refresh local discovery after completion.
+- Models settings includes compact LM Studio load/unload controls that operate on native loaded instance IDs, avoid destructive styling, and refresh local discovery after completion.
 - Local discovery rows show provider display names, canonical identifiers, publisher/family/quantization/format metadata, context length, loaded instance count, installed size, VRAM usage when reported, and capability labels without turning embedding-only models into chat routes.
 - Toolbar settings search filters provider setup and local discovery rows without adding another search field.
 - The top action row includes `Exit Settings`.

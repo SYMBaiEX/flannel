@@ -179,7 +179,7 @@ These references keep Flannel's provider and macOS architecture vocabulary align
 - Discovery updates `ProviderConfiguration.availableModels`, `lastValidatedAt`, `connectionStatus`, `lastErrorMessage`, provider capabilities, embedding support, tool support, vision support, and missing context-window defaults when ready.
 - Ollama discovery preserves installed model metadata from `/api/tags` and enriches currently loaded models with `/api/ps` fields such as context length, loaded state, VRAM size, and expiry when the local Ollama version exposes them.
 - Ollama model inspection is available from Models settings via `POST /api/show`, rendering Modelfile, parameters, template, license, capabilities, and raw `model_info` metadata in a local sheet.
-- LM Studio native discovery preserves display name, publisher, architecture, parameter count, quantization, file format, installed size, loaded instance count, context window, selected variant, and capability flags for vision/tool-use/reasoning. The OpenAI-compatible `/v1/models` fallback remains available when the native route is unavailable.
+- LM Studio native discovery preserves display name, publisher, architecture, parameter count, quantization, file format, installed size, loaded instance count, loaded instance identifiers for runtime unload, context window, selected variant, and capability flags for vision/tool-use/reasoning. The OpenAI-compatible `/v1/models` fallback remains available when the native route is unavailable.
 - Embedding-only local models are discoverable for local RAG, but they are not considered runnable chat providers and cannot be selected as the active chat model from Settings.
 - Discovery starts automatically on first load when no local discovery results are present, and can still be refreshed manually.
 - Discovery from chat and Settings includes both default endpoints and configured Ollama/LM Studio endpoints, with target deduplication.
@@ -192,6 +192,11 @@ These references keep Flannel's provider and macOS architecture vocabulary align
   - Uses `DELETE /api/delete` with the selected local model name.
   - Exposes a destructive confirmation action from Ollama discovery rows.
   - Removes deleted model names from the cached provider list before refreshing discovery.
+- LM Studio model runtime management is implemented in `LocalModelManagementService`:
+  - Uses `POST /api/v1/models/load` with the selected model key and echoed load configuration.
+  - Uses `POST /api/v1/models/unload` with the discovered `loaded_instances[].id`.
+  - Normalizes common configured endpoint forms such as `/v1`, `/v1/models`, `/api/v1`, and `/api/v1/models` before calling native management routes.
+  - Exposes non-destructive load/unload actions from LM Studio discovery rows and refreshes discovery after each action.
 
 ## 8. Tool execution, permissions, and result surface
 
@@ -464,7 +469,9 @@ Future milestones:
 
 - Apple Liquid Glass adoption guidance: https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass
 - Ollama API reference: https://github.com/ollama/ollama/blob/main/docs/api.md
-- LM Studio REST API endpoints: https://lmstudio.ai/docs/app/api/endpoints/rest
+- LM Studio REST API endpoints: https://lmstudio.ai/docs/developer/rest
+- LM Studio model load endpoint: https://lmstudio.ai/docs/developer/rest/load
+- LM Studio model unload endpoint: https://lmstudio.ai/docs/developer/rest/unload
 - OpenAI API docs for Responses, streaming, and tools: https://platform.openai.com/docs/api-reference/responses
 - Claude Code CLI reference: https://docs.anthropic.com/en/docs/claude-code/cli-reference
 - Vercel AI SDK documentation: https://ai-sdk.dev/docs
