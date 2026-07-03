@@ -3358,6 +3358,90 @@ final class WorkspaceStore {
         }
     }
 
+    @discardableResult
+    func appendComparisonResultToCurrentChat(
+        runID: UUID,
+        resultID: UUID,
+        now: Date = .now
+    ) -> UUID? {
+        guard let run = modelComparisonRuns.first(where: { $0.id == runID }),
+              let result = run.results.first(where: { $0.id == resultID }) else {
+            return nil
+        }
+
+        let responseText = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !responseText.isEmpty else { return nil }
+
+        var thread = currentAssistantThread ?? AssistantThread(
+            title: Self.threadTitle(from: run.prompt),
+            mode: .workspaceCopilot,
+            createdAt: now,
+            updatedAt: now
+        )
+        thread.pinnedProjectID = selectedProjectID
+        thread.pinnedDraftID = selectedDraftID
+        thread.pinnedAssetID = selectedAssetID
+        thread.pinnedCalendarEntryID = selectedCalendarEntryID
+
+        if thread.messages.isEmpty {
+            thread.messages.append(
+                AssistantMessage(
+                    role: .user,
+                    text: run.prompt,
+                    createdAt: now,
+                    updatedAt: now,
+                    referencedEntityIDs: [
+                        thread.pinnedProjectID,
+                        thread.pinnedDraftID,
+                        thread.pinnedAssetID,
+                        thread.pinnedCalendarEntryID
+                    ].compactMap { $0 },
+                    citations: run.citations
+                )
+            )
+        }
+
+        let runStatus: AssistantMessageRunStatus = switch result.status {
+        case .completed:
+            .completed
+        case .failed:
+            .failed
+        case .queued, .streaming:
+            .stopped
+        }
+        let message = AssistantMessage(
+            role: .assistant,
+            text: responseText,
+            createdAt: result.completedAt ?? now,
+            updatedAt: result.completedAt ?? now,
+            referencedEntityIDs: [
+                thread.pinnedProjectID,
+                thread.pinnedDraftID,
+                thread.pinnedAssetID,
+                thread.pinnedCalendarEntryID
+            ].compactMap { $0 },
+            citations: run.citations,
+            providerDisplayName: result.providerDisplayName,
+            modelIdentifier: result.modelIdentifier,
+            inputTokenCount: result.inputTokenCount,
+            outputTokenCount: result.outputTokenCount,
+            latencyMilliseconds: result.latencyMilliseconds,
+            firstTokenLatencyMilliseconds: result.firstTokenLatencyMilliseconds,
+            estimatedCostMicros: result.estimatedCostMicros,
+            providerAccessMode: result.accessMode,
+            providerPrivacyScope: result.privacyScope,
+            runStatus: runStatus,
+            startedAt: result.startedAt,
+            completedAt: result.completedAt ?? now,
+            tokenCountsAreEstimated: result.tokenCountsAreEstimated
+        )
+        thread.messages.append(message)
+        thread.updatedAt = now
+        assistantThreads.upsert(thread, matching: \.id)
+        selectedAssistantThreadID = thread.id
+        return message.id
+    }
+
     func isProviderAllowedByPreferences(_ provider: ProviderConfiguration) -> Bool {
         guard provider.isEnabled else { return false }
         return ProviderSetupService.shared.isEligibleForActivation(

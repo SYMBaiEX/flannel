@@ -226,6 +226,7 @@ struct ContentView: View {
             discoverModels: { discoverLocalModels() },
             collapseArtifacts: { setInspectorVisibility(false) },
             copyComparisonResult: copyComparisonResult,
+            useComparisonResultInChat: useComparisonResultInChat,
             useComparisonResultProvider: useComparisonResultProvider,
             openSettingsTab: { tab in
                 enterSettingsMode(tab, returnFocus: .inspector)
@@ -1626,6 +1627,27 @@ struct ContentView: View {
         pasteboard.clearContents()
         pasteboard.setString(result.text, forType: .string)
         selectedComparisonResultID = result.id
+    }
+
+    private func useComparisonResultInChat(_ result: ModelComparisonResult) {
+        let selectedRun = selectedComparisonRunID.flatMap { runID in
+            store.modelComparisonRuns.first { run in
+                run.id == runID && run.results.contains(where: { $0.id == result.id })
+            }
+        }
+        let run = selectedRun ?? store.modelComparisonRuns.first { run in
+            run.results.contains(where: { $0.id == result.id })
+        }
+        guard let run,
+              store.appendComparisonResultToCurrentChat(runID: run.id, resultID: result.id) != nil else {
+            return
+        }
+
+        selectedComparisonRunID = run.id
+        selectedComparisonResultID = result.id
+        store.selectedDestination = .home
+        requestComposerFocus()
+        persistQuietly()
     }
 
     private func useComparisonResultProvider(_ result: ModelComparisonResult) {
@@ -5958,6 +5980,7 @@ private struct ModelComparisonSurface: View {
     var runComparison: () -> Void
     var cancelComparison: () -> Void
     var copyResult: (ModelComparisonResult) -> Void
+    var useResultInChat: (ModelComparisonResult) -> Void
     var useResultProvider: (ModelComparisonResult) -> Void
     var persist: () -> Void
 
@@ -6142,6 +6165,7 @@ private struct ModelComparisonSurface: View {
                 citationPreviews: { store.knowledgeCitationPreviews(for: $0) },
                 selectResult: { selectedResultID = $0.id },
                 copyResult: copyResult,
+                useResultInChat: useResultInChat,
                 useResultProvider: useResultProvider
             )
         } else {
@@ -6299,6 +6323,7 @@ private struct ComparisonRunSurface: View {
     var citationPreviews: ([AIChatCitation]) -> [KnowledgeCitationPreview]
     var selectResult: (ModelComparisonResult) -> Void
     var copyResult: (ModelComparisonResult) -> Void
+    var useResultInChat: (ModelComparisonResult) -> Void
     var useResultProvider: (ModelComparisonResult) -> Void
 
     private var completedCount: Int {
@@ -6353,7 +6378,8 @@ private struct ComparisonRunSurface: View {
                             isSelected: selectedResultID == result.id,
                             select: { selectResult(result) },
                             copy: { copyResult(result) },
-                            useForChat: { useResultProvider(result) }
+                            useInChat: { useResultInChat(result) },
+                            useModel: { useResultProvider(result) }
                         )
                             .frame(width: 340)
                     }
@@ -6383,7 +6409,8 @@ private struct ComparisonResultCard: View {
     var isSelected: Bool
     var select: () -> Void
     var copy: () -> Void
-    var useForChat: () -> Void
+    var useInChat: () -> Void
+    var useModel: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -6469,7 +6496,9 @@ private struct ComparisonResultCard: View {
                 Spacer(minLength: 8)
                 IconOnlyButton(title: "Copy result", systemImage: "doc.on.doc", action: copy)
                     .disabled(result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                IconOnlyButton(title: "Use model for chat", systemImage: "checkmark.circle", action: useForChat)
+                IconOnlyButton(title: "Use result in chat", systemImage: "text.bubble", action: useInChat)
+                    .disabled(result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                IconOnlyButton(title: "Use model for chat", systemImage: "checkmark.circle", action: useModel)
             }
         }
         .padding(12)
@@ -8911,6 +8940,7 @@ private struct InspectorSurface: View {
     var discoverModels: () -> Void
     var collapseArtifacts: () -> Void
     var copyComparisonResult: (ModelComparisonResult) -> Void
+    var useComparisonResultInChat: (ModelComparisonResult) -> Void
     var useComparisonResultProvider: (ModelComparisonResult) -> Void
     var openSettingsTab: (SettingsTab) -> Void
     var persist: () -> Void
@@ -9068,6 +9098,7 @@ private struct InspectorSurface: View {
                 selectedResultID: selectedComparisonResultID,
                 isRunningComparison: isRunningComparison,
                 copyResult: copyComparisonResult,
+                useResultInChat: useComparisonResultInChat,
                 useResultProvider: useComparisonResultProvider,
                 openSettingsTab: openSettingsTab
             )
@@ -9454,6 +9485,7 @@ private struct CompareInspectorSurface: View {
     var selectedResultID: UUID?
     var isRunningComparison: Bool
     var copyResult: (ModelComparisonResult) -> Void
+    var useResultInChat: (ModelComparisonResult) -> Void
     var useResultProvider: (ModelComparisonResult) -> Void
     var openSettingsTab: (SettingsTab) -> Void
 
@@ -9563,11 +9595,19 @@ private struct CompareInspectorSurface: View {
                             .disabled(selectedResult.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                             Button {
+                                useResultInChat(selectedResult)
+                            } label: {
+                                Label("Use in Chat", systemImage: "text.bubble")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(selectedResult.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                            Button {
                                 useResultProvider(selectedResult)
                             } label: {
                                 Label("Use Model", systemImage: "checkmark.circle")
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.bordered)
                             .disabled(!store.providerConfigurations.contains(where: { $0.id == selectedResult.providerID }))
                         }
                     }

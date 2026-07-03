@@ -4571,6 +4571,114 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Completed model comparison result can be promoted into the current chat")
+    func completedModelComparisonResultPromotesIntoCurrentChat() throws {
+        let container = try ModelContainer(
+            for: Item.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let store = WorkspaceStore()
+        try store.loadOrCreate(in: context)
+        store.assistantThreads.removeAll()
+        store.selectedAssistantThreadID = nil
+        store.modelComparisonRuns.removeAll()
+        store.providerConfigurations.removeAll()
+
+        let promotedProvider = ProviderConfiguration(
+            id: UUID(uuidString: "c96347da-13f2-4b7c-93a8-09b5510277a4")!,
+            kind: .lmStudio,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "Promoted LM Studio",
+            endpoint: "http://localhost:1234/v1",
+            modelIdentifier: "local/promoted",
+            isEnabled: true,
+            connectionStatus: .ready,
+            supportsStreaming: true
+        )
+        let comparisonPeer = ProviderConfiguration(
+            id: UUID(uuidString: "8c7b0ecf-1185-4e07-9894-b693edc752e7")!,
+            kind: .ollama,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "Comparison Ollama",
+            endpoint: "http://localhost:11434",
+            modelIdentifier: "llama3.1",
+            isEnabled: true,
+            connectionStatus: .ready,
+            supportsStreaming: true
+        )
+        store.providerConfigurations = [promotedProvider, comparisonPeer]
+
+        let citation = AIChatCitation(
+            title: "Private comparison source",
+            snippet: "Comparison answers should preserve source context when promoted.",
+            sourceIdentifier: "comparison-source"
+        )
+        let runID = try #require(
+            store.createModelComparisonRun(
+                prompt: "Which route should answer this private workspace task?",
+                providerIDs: [promotedProvider.id, comparisonPeer.id],
+                citations: [citation],
+                now: Date(timeIntervalSince1970: 1_820_000_000)
+            )
+        )
+        let startedAt = Date(timeIntervalSince1970: 1_820_000_002)
+        let completedAt = Date(timeIntervalSince1970: 1_820_000_006)
+        store.updateModelComparisonResult(
+            runID: runID,
+            providerID: promotedProvider.id,
+            status: .completed,
+            text: "Use the local route because it keeps the workspace private.",
+            startedAt: startedAt,
+            completedAt: completedAt,
+            inputTokenCount: 32,
+            outputTokenCount: 48,
+            latencyMilliseconds: 1_250,
+            firstTokenLatencyMilliseconds: 220,
+            tokenCountsAreEstimated: false
+        )
+        let resultID = try #require(
+            store.modelComparisonRuns
+                .first(where: { $0.id == runID })?
+                .results
+                .first(where: { $0.providerID == promotedProvider.id })?
+                .id
+        )
+
+        let promotedMessageID = try #require(
+            store.appendComparisonResultToCurrentChat(
+                runID: runID,
+                resultID: resultID,
+                now: Date(timeIntervalSince1970: 1_820_000_010)
+            )
+        )
+
+        let thread = try #require(store.currentAssistantThread)
+        #expect(store.selectedAssistantThreadID == thread.id)
+        #expect(thread.messages.count == 2)
+        #expect(thread.messages.first?.role == .user)
+        #expect(thread.messages.first?.text == "Which route should answer this private workspace task?")
+        let promotedMessage = try #require(thread.messages.first(where: { $0.id == promotedMessageID }))
+        #expect(promotedMessage.role == .assistant)
+        #expect(promotedMessage.text == "Use the local route because it keeps the workspace private.")
+        #expect(promotedMessage.providerDisplayName == "Promoted LM Studio")
+        #expect(promotedMessage.modelIdentifier == "local/promoted")
+        #expect(promotedMessage.inputTokenCount == 32)
+        #expect(promotedMessage.outputTokenCount == 48)
+        #expect(promotedMessage.latencyMilliseconds == 1_250)
+        #expect(promotedMessage.firstTokenLatencyMilliseconds == 220)
+        #expect(promotedMessage.providerAccessMode == .localServer)
+        #expect(promotedMessage.providerPrivacyScope == .localOnly)
+        #expect(promotedMessage.runStatus == .completed)
+        #expect(promotedMessage.startedAt == startedAt)
+        #expect(promotedMessage.completedAt == completedAt)
+        #expect(promotedMessage.tokenCountsAreEstimated == false)
+        #expect(promotedMessage.citations == [citation])
+    }
+
+    @MainActor
     @Test("runnableComparisonProviders filters non-runnable providers from comparison candidate ids")
     func runnableComparisonProvidersFilterUnavailableProviders() throws {
         let (_, store) = try makeLoadedStore()
