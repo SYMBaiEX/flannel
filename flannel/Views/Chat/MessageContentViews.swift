@@ -10,6 +10,8 @@ import SwiftUI
 
 struct MarkdownMessageBody: View {
     var text: String
+    var searchQuery: String = ""
+    var isActiveSearchMatch = false
 
     private var blocks: [MessageContentBlock] {
         MessageContentBlock.parse(text)
@@ -20,9 +22,18 @@ struct MarkdownMessageBody: View {
             ForEach(blocks) { block in
                 switch block.kind {
                 case .markdown(let value):
-                    MarkdownText(value)
+                    MarkdownText(
+                        value,
+                        searchQuery: searchQuery,
+                        isActiveSearchMatch: isActiveSearchMatch
+                    )
                 case .code(let language, let code):
-                    CodeBlockView(language: language, code: code)
+                    CodeBlockView(
+                        language: language,
+                        code: code,
+                        searchQuery: searchQuery,
+                        isActiveSearchMatch: isActiveSearchMatch
+                    )
                 }
             }
         }
@@ -32,19 +43,31 @@ struct MarkdownMessageBody: View {
 
 private struct MarkdownText: View {
     var text: String
+    var searchQuery: String
+    var isActiveSearchMatch: Bool
 
-    init(_ text: String) {
+    init(_ text: String, searchQuery: String = "", isActiveSearchMatch: Bool = false) {
         self.text = text
+        self.searchQuery = searchQuery
+        self.isActiveSearchMatch = isActiveSearchMatch
     }
 
     var body: some View {
         if let attributed = try? AttributedString(markdown: text) {
-            Text(attributed)
+            Text(ChatSearchHighlighter.highlighted(
+                attributed,
+                query: searchQuery,
+                isActive: isActiveSearchMatch
+            ))
                 .font(.body)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
-            Text(text)
+            Text(ChatSearchHighlighter.highlighted(
+                AttributedString(text),
+                query: searchQuery,
+                isActive: isActiveSearchMatch
+            ))
                 .font(.body)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
@@ -55,6 +78,8 @@ private struct MarkdownText: View {
 private struct CodeBlockView: View {
     var language: String?
     var code: String
+    var searchQuery: String
+    var isActiveSearchMatch: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -70,7 +95,12 @@ private struct CodeBlockView: View {
             .background(.quaternary.opacity(0.35))
 
             ScrollView(.horizontal, showsIndicators: true) {
-                HighlightedCodeText(language: language, code: code)
+                HighlightedCodeText(
+                    language: language,
+                    code: code,
+                    searchQuery: searchQuery,
+                    isActiveSearchMatch: isActiveSearchMatch
+                )
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -111,6 +141,8 @@ private struct MessageCodeCopyButton: View {
 private struct HighlightedCodeText: View {
     var language: String?
     var code: String
+    var searchQuery: String
+    var isActiveSearchMatch: Bool
 
     private var highlightedCode: AttributedString {
         var attributed = AttributedString()
@@ -119,7 +151,11 @@ private struct HighlightedCodeText: View {
             run.foregroundColor = color(for: segment.kind)
             attributed.append(run)
         }
-        return attributed
+        return ChatSearchHighlighter.highlighted(
+            attributed,
+            query: searchQuery,
+            isActive: isActiveSearchMatch
+        )
     }
 
     var body: some View {

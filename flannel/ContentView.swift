@@ -4024,6 +4024,7 @@ private struct ChatSurface: View {
                             pinnedMessageIDs: Set(store.pinnedMessages
                                 .filter { $0.threadID == store.currentAssistantThread?.id }
                                 .map(\.messageID)),
+                            searchQuery: transcriptSearchText,
                             searchMatchedMessageIDs: transcriptSearchMatchedMessageIDs,
                             activeSearchMessageID: activeTranscriptSearchMatch?.messageID,
                             activeSearchMatchLabel: activeTranscriptSearchMatchLabel,
@@ -4622,6 +4623,7 @@ private struct ChatTranscript: View {
     var messages: [AssistantMessage]
     var toolResultsByID: [UUID: LocalToolExecutionResult]
     var pinnedMessageIDs: Set<UUID>
+    var searchQuery: String
     var searchMatchedMessageIDs: Set<UUID>
     var activeSearchMessageID: UUID?
     var activeSearchMatchLabel: String?
@@ -4680,6 +4682,7 @@ private struct ChatTranscript: View {
                         isPinned: pinnedMessageIDs.contains(message.id),
                         isSearchMatch: searchMatchedMessageIDs.contains(message.id),
                         isActiveSearchMatch: activeSearchMessageID == message.id,
+                        searchQuery: searchMatchedMessageIDs.contains(message.id) ? searchQuery : "",
                         searchMatchLabel: activeSearchMessageID == message.id ? activeSearchMatchLabel : nil,
                         citationPreviews: citationPreviews(message),
                         togglePin: { toggleMessagePin(message) },
@@ -4840,6 +4843,7 @@ private struct MessageBubble: View {
     var isPinned: Bool
     var isSearchMatch: Bool
     var isActiveSearchMatch: Bool
+    var searchQuery: String
     var searchMatchLabel: String?
     var citationPreviews: [KnowledgeCitationPreview]
     var togglePin: () -> Void
@@ -4975,7 +4979,11 @@ private struct MessageBubble: View {
                     if trimmedText.isEmpty, message.role == .assistant {
                         StreamingMessagePlaceholder()
                     } else {
-                        MarkdownMessageBody(text: message.text)
+                        MarkdownMessageBody(
+                            text: message.text,
+                            searchQuery: searchQuery,
+                            isActiveSearchMatch: isActiveSearchMatch
+                        )
                     }
 
                     ForEach(toolResults) { result in
