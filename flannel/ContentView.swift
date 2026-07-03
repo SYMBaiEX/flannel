@@ -125,6 +125,9 @@ struct ContentView: View {
         } detail: {
             detailColumn
         }
+        // Switching between chat history and settings needs a fresh split
+        // measurement, otherwise macOS can keep the narrower chat sidebar.
+        .id(sidebarSurface)
     }
 
     private var sidebarColumn: some View {
@@ -2888,10 +2891,10 @@ private struct SettingsRouteRow: View {
                     .minimumScaleFactor(0.9)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text(tab.sidebarDetail)
+                Text(tab.detail)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .multilineTextAlignment(.leading)
                     .minimumScaleFactor(0.9)
                     .fixedSize(horizontal: false, vertical: true)

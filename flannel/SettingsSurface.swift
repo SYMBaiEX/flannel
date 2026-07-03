@@ -2489,10 +2489,10 @@ private struct SettingsSidebarRow: View {
                     .minimumScaleFactor(0.9)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text(tab.sidebarDetail)
+                Text(tab.detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .minimumScaleFactor(0.9)
                     .fixedSize(horizontal: false, vertical: true)
             }
