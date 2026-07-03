@@ -283,6 +283,29 @@ struct ProviderSetupServiceTests {
         #expect(requests.map(\.openAIOrganizationHeader) == ["org_live_readiness"])
     }
 
+    @Test("Provider setup blocks noncanonical Keychain references")
+    func providerSetupBlocksNoncanonicalKeychainReferences() throws {
+        let provider = ProviderConfiguration(
+            kind: .openAI,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "OpenAI",
+            endpoint: "https://api.openai.com/v1",
+            modelIdentifier: "gpt-5.2",
+            secretReference: "flannel.tests.other:borrowed-openai-key"
+        )
+
+        let report = ProviderSetupService.shared.report(
+            for: provider,
+            preferences: WorkspacePreferences(allowCloudProviders: true, localOnlyMode: false)
+        )
+        let diagnostic = try #require(report.diagnostics.first { $0.code == .keychainReferenceShouldBeCanonical })
+
+        #expect(report.hasBlockingIssues)
+        #expect(diagnostic.severity == .error)
+        #expect(diagnostic.message.contains("Re-save"))
+    }
+
     @MainActor
     @Test("Gemini OpenAI-compatible readiness preserves the v1beta openai models path")
     func geminiReadinessUsesOpenAICompatibleModelsPath() async throws {

@@ -653,7 +653,7 @@ struct ChatStreamingService: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
 
-        guard let secretReference = keychainReference(from: provider.secretReference) else {
+        guard let secretReference = trustedKeychainReference(for: provider) else {
             throw ChatStreamingError.missingKeychainReference(provider.displayName)
         }
         let apiKey = try keychain.read(secretReference)
@@ -687,7 +687,7 @@ struct ChatStreamingService: Sendable {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        guard let secretReference = keychainReference(from: provider.secretReference) else {
+        guard let secretReference = trustedKeychainReference(for: provider) else {
             throw ChatStreamingError.missingKeychainReference(provider.displayName)
         }
         let apiKey = try keychain.read(secretReference)
@@ -727,12 +727,12 @@ struct ChatStreamingService: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         if requiresOpenAICompatibleAuthorization(provider) {
-            guard let secretReference = keychainReference(from: provider.secretReference) else {
+            guard let secretReference = trustedKeychainReference(for: provider) else {
                 throw ChatStreamingError.missingKeychainReference(provider.displayName)
             }
             let apiKey = try keychain.read(secretReference)
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        } else if let secretReference = keychainReference(from: provider.secretReference) {
+        } else if let secretReference = trustedKeychainReference(for: provider) {
             let apiKey = try keychain.read(secretReference)
             if !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -898,8 +898,8 @@ struct ChatStreamingService: Sendable {
         return url
     }
 
-    private func keychainReference(from rawValue: String?) -> KeychainSecretReference? {
-        ProviderSetupService.shared.parseSecretReference(rawValue)
+    private func trustedKeychainReference(for provider: ProviderConfiguration) -> KeychainSecretReference? {
+        ProviderSetupService.shared.trustedSecretReference(for: provider)
     }
 
     private static func errorBodyPreview(

@@ -787,7 +787,10 @@ struct ChatStreamingServiceTests {
 
     @Test("Gemini API uses its OpenAI-compatible chat completions path")
     func geminiRequestUsesOpenAICompatiblePath() throws {
-        let (keychain, reference, cleanup) = try makeTemporaryAPIKey()
+        let (keychain, reference, cleanup) = try makeTemporaryAPIKey(
+            kind: .gemini,
+            endpoint: "https://generativelanguage.googleapis.com/v1beta/openai"
+        )
         defer { cleanup() }
         let provider = ProviderConfiguration(
             kind: .gemini,
@@ -812,7 +815,10 @@ struct ChatStreamingServiceTests {
 
     @Test("xAI API uses OpenAI-compatible v1 chat completions")
     func xAIRequestUsesOpenAICompatiblePath() throws {
-        let (keychain, reference, cleanup) = try makeTemporaryAPIKey()
+        let (keychain, reference, cleanup) = try makeTemporaryAPIKey(
+            kind: .xAI,
+            endpoint: "https://api.x.ai/v1"
+        )
         defer { cleanup() }
         let provider = ProviderConfiguration(
             kind: .xAI,
@@ -836,7 +842,10 @@ struct ChatStreamingServiceTests {
 
     @Test("Mistral API uses OpenAI-compatible v1 chat completions")
     func mistralRequestUsesOpenAICompatiblePath() throws {
-        let (keychain, reference, cleanup) = try makeTemporaryAPIKey()
+        let (keychain, reference, cleanup) = try makeTemporaryAPIKey(
+            kind: .mistral,
+            endpoint: "https://api.mistral.ai/v1"
+        )
         defer { cleanup() }
         let provider = ProviderConfiguration(
             kind: .mistral,
@@ -860,7 +869,10 @@ struct ChatStreamingServiceTests {
 
     @Test("Perplexity API uses OpenAI-compatible chat completions without forcing v1")
     func perplexityRequestUsesOpenAICompatiblePath() throws {
-        let (keychain, reference, cleanup) = try makeTemporaryAPIKey()
+        let (keychain, reference, cleanup) = try makeTemporaryAPIKey(
+            kind: .perplexity,
+            endpoint: "https://api.perplexity.ai"
+        )
         defer { cleanup() }
         let provider = ProviderConfiguration(
             kind: .perplexity,
@@ -884,7 +896,10 @@ struct ChatStreamingServiceTests {
 
     @Test("OpenRouter request includes optional app attribution headers")
     func openRouterRequestIncludesAttributionHeaders() throws {
-        let (keychain, reference, cleanup) = try makeTemporaryAPIKey()
+        let (keychain, reference, cleanup) = try makeTemporaryAPIKey(
+            kind: .openRouter,
+            endpoint: "https://openrouter.ai/api/v1"
+        )
         defer { cleanup() }
         let provider = ProviderConfiguration(
             kind: .openRouter,
@@ -933,7 +948,11 @@ struct ChatStreamingServiceTests {
 
     @Test("Custom OpenAI-compatible endpoint sends optional saved API key")
     func customOpenAICompatibleRequestUsesOptionalAPIKey() throws {
-        let (keychain, reference, cleanup) = try makeTemporaryAPIKey()
+        let (keychain, reference, cleanup) = try makeTemporaryAPIKey(
+            kind: .customOpenAICompatible,
+            accessMode: .openAICompatible,
+            endpoint: "https://router.example.com/v1"
+        )
         defer { cleanup() }
         let provider = ProviderConfiguration(
             kind: .customOpenAICompatible,
@@ -975,6 +994,36 @@ struct ChatStreamingServiceTests {
                 )
             )
         }
+    }
+
+    @Test("Provider requests reject noncanonical Keychain references")
+    func providerRequestsRejectNoncanonicalKeychainReferences() throws {
+        let keychain = KeychainSecretStore()
+        let reference = try keychain.save(
+            "borrowed-test-key",
+            account: "provider/openai/borrowed-\(UUID().uuidString)",
+            service: "flannel.tests.other"
+        )
+        defer { try? keychain.delete(reference) }
+        let provider = ProviderConfiguration(
+            kind: .openAI,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "OpenAI",
+            endpoint: "https://api.openai.com/v1",
+            modelIdentifier: "gpt-5.2",
+            secretReference: reference.rawValue
+        )
+
+        #expect(throws: ChatStreamingError.missingKeychainReference("OpenAI")) {
+            _ = try ChatStreamingService(keychain: keychain).makeURLRequest(
+                for: ChatStreamingRequest(
+                    provider: provider,
+                    messages: [AssistantMessage(role: .user, text: "Hello")]
+                )
+            )
+        }
+        #expect(try keychain.read(reference) == "borrowed-test-key")
     }
 
     @Test("Ollama request targets native chat endpoint")
@@ -1285,10 +1334,11 @@ struct ChatStreamingServiceTests {
     func anthropicVisionProviderReceivesImageBlocks() throws {
         let (attachment, imageData, cleanupImage) = try makeImageAttachment()
         defer { cleanupImage() }
-        let keychain = KeychainSecretStore()
-        let account = "flannel-tests-\(UUID().uuidString)"
-        let reference = try keychain.save("test-key", account: account)
-        defer { try? keychain.delete(reference) }
+        let (keychain, reference, cleanup) = try makeTemporaryAPIKey(
+            kind: .anthropic,
+            endpoint: "https://api.anthropic.com"
+        )
+        defer { cleanup() }
         let provider = ProviderConfiguration(
             kind: .anthropic,
             displayName: "Anthropic",
@@ -1326,7 +1376,10 @@ struct ChatStreamingServiceTests {
 
     @Test("Anthropic request includes advanced generation controls")
     func anthropicRequestIncludesAdvancedGenerationControls() throws {
-        let (keychain, reference, cleanup) = try makeTemporaryAPIKey()
+        let (keychain, reference, cleanup) = try makeTemporaryAPIKey(
+            kind: .anthropic,
+            endpoint: "https://api.anthropic.com"
+        )
         defer { cleanup() }
         let provider = ProviderConfiguration(
             kind: .anthropic,
@@ -1360,7 +1413,10 @@ struct ChatStreamingServiceTests {
 
     @Test("Anthropic request includes tool definitions and resolved tool result blocks")
     func anthropicRequestIncludesToolDefinitionsAndResolvedToolResultBlocks() throws {
-        let (keychain, reference, cleanup) = try makeTemporaryAPIKey()
+        let (keychain, reference, cleanup) = try makeTemporaryAPIKey(
+            kind: .anthropic,
+            endpoint: "https://api.anthropic.com"
+        )
         defer { cleanup() }
         let provider = ProviderConfiguration(
             kind: .anthropic,
@@ -1462,7 +1518,10 @@ struct ChatStreamingServiceTests {
 
     @Test("Anthropic request groups parallel tool results into one following user message")
     func anthropicRequestGroupsParallelToolResults() throws {
-        let (keychain, reference, cleanup) = try makeTemporaryAPIKey()
+        let (keychain, reference, cleanup) = try makeTemporaryAPIKey(
+            kind: .anthropic,
+            endpoint: "https://api.anthropic.com"
+        )
         defer { cleanup() }
         let provider = ProviderConfiguration(
             kind: .anthropic,
@@ -1590,18 +1649,41 @@ struct ChatStreamingServiceTests {
         })
     }
 
-    private func makeTemporaryAPIKey() throws -> (
+    private func makeTemporaryAPIKey(
+        kind: LLMProviderKind = .openAI,
+        accessMode: ProviderAccessMode = .apiKey,
+        privacyScope: ProviderPrivacyScope = .externalAPI,
+        endpoint: String = "https://api.openai.com/v1"
+    ) throws -> (
         keychain: KeychainSecretStore,
         reference: KeychainSecretReference,
         cleanup: () -> Void
     ) {
         let keychain = KeychainSecretStore()
-        let account = "flannel-tests-\(UUID().uuidString)"
-        let reference = try keychain.save("test-key", account: account)
+        let provider = ProviderConfiguration(
+            kind: kind,
+            accessMode: accessMode,
+            privacyScope: privacyScope,
+            displayName: "Test Provider",
+            endpoint: endpoint,
+            modelIdentifier: "test-model"
+        )
+        guard let canonicalReference = ProviderSetupService.shared.canonicalSecretReference(for: provider) else {
+            throw ChatStreamingServiceTestError.missingCanonicalSecretReference
+        }
+        let reference = try keychain.save(
+            "test-key",
+            account: canonicalReference.account,
+            service: canonicalReference.service
+        )
         return (keychain, reference, {
             try? keychain.delete(reference)
         })
     }
+}
+
+private enum ChatStreamingServiceTestError: Error {
+    case missingCanonicalSecretReference
 }
 
 private final class ChatStreamingURLProtocolStub: URLProtocol, @unchecked Sendable {

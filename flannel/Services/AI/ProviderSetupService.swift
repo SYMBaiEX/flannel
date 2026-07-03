@@ -175,9 +175,9 @@ nonisolated struct ProviderSetupService: Sendable {
                     diagnostics.append(
                         ProviderSetupDiagnostic(
                             code: .keychainReferenceShouldBeCanonical,
-                            severity: .info,
+                            severity: .error,
                             field: "secretReference",
-                            message: "Use the canonical Keychain reference \(canonicalSecretReference.rawValue) for consistent secret lookup."
+                            message: "Re-save this provider's API key so Flannel can bind it to \(canonicalSecretReference.rawValue)."
                         )
                     )
                 }
@@ -524,6 +524,17 @@ nonisolated struct ProviderSetupService: Sendable {
         return KeychainSecretReference(service: parts[0], account: parts[1])
     }
 
+    func trustedSecretReference(for provider: ProviderConfiguration) -> KeychainSecretReference? {
+        guard let storedReference = parseSecretReference(provider.secretReference),
+              let canonicalReference = canonicalSecretReference(for: provider),
+              storedReference == canonicalReference,
+              storedReference.service == KeychainSecretStore.defaultService else {
+            return nil
+        }
+
+        return storedReference
+    }
+
     private func modelAvailability(
         for provider: ProviderConfiguration,
         endpoint: String,
@@ -839,7 +850,7 @@ nonisolated struct ProviderSetupService: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         if requiresKeychainSecret(for: provider) {
-            guard let secretReference = parseSecretReference(provider.secretReference) else {
+            guard let secretReference = trustedSecretReference(for: provider) else {
                 throw ProviderReadinessError.missingKeychainReference(provider.displayName)
             }
             let apiKey = try secretReader(secretReference).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -847,7 +858,7 @@ nonisolated struct ProviderSetupService: Sendable {
                 throw ProviderReadinessError.emptyKeychainSecret(provider.displayName)
             }
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        } else if let secretReference = parseSecretReference(provider.secretReference) {
+        } else if let secretReference = trustedSecretReference(for: provider) {
             let apiKey = try secretReader(secretReference).trimmingCharacters(in: .whitespacesAndNewlines)
             if !apiKey.isEmpty {
                 request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -871,7 +882,7 @@ nonisolated struct ProviderSetupService: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
 
-        guard let secretReference = parseSecretReference(provider.secretReference) else {
+        guard let secretReference = trustedSecretReference(for: provider) else {
             throw ProviderReadinessError.missingKeychainReference(provider.displayName)
         }
         let apiKey = try secretReader(secretReference).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -947,7 +958,7 @@ nonisolated struct ProviderSetupService: Sendable {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        if let secretReference = parseSecretReference(provider.secretReference) {
+        if let secretReference = trustedSecretReference(for: provider) {
             let apiKey = try secretReader(secretReference).trimmingCharacters(in: .whitespacesAndNewlines)
             if !apiKey.isEmpty {
                 request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")

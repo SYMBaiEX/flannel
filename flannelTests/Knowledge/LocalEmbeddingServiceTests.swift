@@ -51,6 +51,33 @@ struct LocalEmbeddingServiceTests {
         #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
     }
 
+    @Test("Remote embeddings reject noncanonical Keychain references")
+    func remoteEmbeddingsRejectNoncanonicalKeychainReferences() throws {
+        let keychain = KeychainSecretStore()
+        let reference = try keychain.save(
+            "borrowed-embedding-key",
+            account: "provider/openai/embedding-borrowed-\(UUID().uuidString)",
+            service: "flannel.tests.other"
+        )
+        defer { try? keychain.delete(reference) }
+        let provider = ProviderConfiguration(
+            kind: .openAI,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "OpenAI Embeddings",
+            endpoint: "https://api.openai.com/v1",
+            modelIdentifier: "text-embedding-3-large",
+            secretReference: reference.rawValue
+        )
+
+        #expect(throws: LocalEmbeddingError.missingKeychainReference("OpenAI Embeddings")) {
+            _ = try LocalEmbeddingService(keychain: keychain).makeURLRequest(
+                for: LocalEmbeddingRequest(provider: provider, inputs: ["private rag"])
+            )
+        }
+        #expect(try keychain.read(reference) == "borrowed-embedding-key")
+    }
+
     @Test("Embedding parsers decode Ollama and OpenAI-compatible vectors")
     func embeddingParsersDecodeProviderVectors() throws {
         let service = LocalEmbeddingService()

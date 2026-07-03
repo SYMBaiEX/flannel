@@ -155,7 +155,7 @@ nonisolated struct LocalEmbeddingService: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         if provider.privacyScope == .externalAPI || provider.accessMode == .apiKey {
-            guard let secretReference = ProviderSetupService.shared.parseSecretReference(provider.secretReference) else {
+            guard let secretReference = ProviderSetupService.shared.trustedSecretReference(for: provider) else {
                 throw LocalEmbeddingError.missingKeychainReference(provider.displayName)
             }
             let apiKey = try keychain.read(secretReference)
