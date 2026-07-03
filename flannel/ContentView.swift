@@ -7093,6 +7093,14 @@ private struct ProviderCard: View {
                             }
                             .buttonStyle(.bordered)
                             .disabled(apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                            Button(role: .destructive) {
+                                deleteAPIKey()
+                            } label: {
+                                Label("Remove key", systemImage: "key.slash")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(provider.secretReference == nil)
                         }
                     }
                 }
@@ -7384,6 +7392,17 @@ private struct ProviderCard: View {
             persist()
         } catch {
             setupNotice = "Keychain save failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func deleteAPIKey() {
+        do {
+            let result = try store.deleteProviderAPIKey(providerID)
+            apiKeyDraft = ""
+            setupNotice = result?.message ?? "No provider key was removed."
+            persist()
+        } catch {
+            setupNotice = "Keychain delete failed: \(error.localizedDescription)"
         }
     }
 

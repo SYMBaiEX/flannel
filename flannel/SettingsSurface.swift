@@ -402,6 +402,9 @@ struct SettingsSurface: View {
                                 saveSecret: {
                                     saveAPIKey(for: providerID)
                                 },
+                                deleteSecret: {
+                                    deleteAPIKey(for: providerID)
+                                },
                                 invalidateReadiness: {
                                     invalidateProviderReadiness(providerID)
                                 },
@@ -1910,6 +1913,19 @@ struct SettingsSurface: View {
         }
     }
 
+    private func deleteAPIKey(for providerID: UUID) {
+        do {
+            guard let result = try store.deleteProviderAPIKey(providerID) else { return }
+            providerSetupReports[providerID] = result.report
+            providerReadinessValidations[providerID] = nil
+            providerSecretDrafts[providerID] = ""
+            providerSetupMessages[providerID] = result.message
+            persist()
+        } catch {
+            providerSetupMessages[providerID] = "Keychain delete failed: \(error.localizedDescription)"
+        }
+    }
+
     private func saveToolAPIKey(for toolID: UUID) {
         do {
             let secret = toolSecretDrafts[toolID] ?? ""
@@ -3347,6 +3363,7 @@ private struct ProviderSettingsRow: View {
     var delete: () -> Void
     var canDelete: Bool
     var saveSecret: () -> Void
+    var deleteSecret: () -> Void
     var invalidateReadiness: () -> Void
     var persist: () -> Void
 
@@ -3507,8 +3524,14 @@ private struct ProviderSettingsRow: View {
                             HStack {
                                 SecureField(provider.settingsAPIKeyPlaceholder, text: $secretDraft)
                                     .textFieldStyle(.roundedBorder)
-                                Button("Save Key", action: saveSecret)
+                                Button(action: saveSecret) {
+                                    Label("Save Key", systemImage: "key.fill")
+                                }
                                     .disabled(secretDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                Button(role: .destructive, action: deleteSecret) {
+                                    Label("Remove Key", systemImage: "key.slash")
+                                }
+                                    .disabled(provider.secretReference == nil)
                             }
 
                             Label(secretStatusText, systemImage: secretStatusIcon)

@@ -820,6 +820,98 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Deleting provider API key removes Keychain secret and invalidates setup")
+    func deletingProviderAPIKeyRemovesKeychainSecretAndInvalidatesSetup() throws {
+        let (_, store) = try makeLoadedStore()
+        store.preferences.localOnlyMode = false
+        store.preferences.allowCloudProviders = true
+
+        let providerIndex = try #require(store.providerConfigurations.firstIndex { $0.kind == .openAI && $0.accessMode == .apiKey })
+        let providerID = store.providerConfigurations[providerIndex].id
+        var savedReference: KeychainSecretReference?
+        defer {
+            if let savedReference {
+                try? KeychainSecretStore().delete(savedReference)
+            }
+        }
+
+        let savedReport = try #require(try store.saveProviderAPIKey(providerID, secret: "sk-flannel-delete-test"))
+        let reference = try #require(ProviderSetupService.shared.parseSecretReference(store.providerConfigurations[providerIndex].secretReference))
+        savedReference = reference
+
+        #expect(savedReport.hasBlockingIssues == false)
+        #expect(try KeychainSecretStore().read(reference) == "sk-flannel-delete-test")
+
+        let deleteResult = try #require(try store.deleteProviderAPIKey(providerID))
+        let updatedProvider = try #require(store.providerConfigurations.first { $0.id == providerID })
+
+        #expect(deleteResult.keychainSecretDeleted)
+        #expect(deleteResult.retentionReason == nil)
+        #expect(updatedProvider.secretReference == nil)
+        #expect(updatedProvider.connectionStatus == .needsAttention)
+        #expect(deleteResult.report.hasBlockingIssues)
+        #expect(deleteResult.report.diagnostics.contains { $0.code == .missingKeychainReference })
+        #expect(throws: KeychainSecretError.self) {
+            _ = try KeychainSecretStore().read(reference)
+        }
+    }
+
+    @MainActor
+    @Test("Deleting provider API key keeps shared Keychain secret")
+    func deletingProviderAPIKeyKeepsSharedKeychainSecret() throws {
+        let (_, store) = try makeLoadedStore()
+        store.preferences.localOnlyMode = false
+        store.preferences.allowCloudProviders = true
+
+        let providerIndex = try #require(store.providerConfigurations.firstIndex { $0.kind == .openAI && $0.accessMode == .apiKey })
+        let providerID = store.providerConfigurations[providerIndex].id
+        var savedReference: KeychainSecretReference?
+        defer {
+            if let savedReference {
+                try? KeychainSecretStore().delete(savedReference)
+            }
+        }
+
+        _ = try #require(try store.saveProviderAPIKey(providerID, secret: "sk-flannel-shared-delete-test"))
+        let reference = try #require(ProviderSetupService.shared.parseSecretReference(store.providerConfigurations[providerIndex].secretReference))
+        savedReference = reference
+        let duplicate = try #require(store.duplicateProviderRoute(providerID))
+
+        let deleteResult = try #require(try store.deleteProviderAPIKey(providerID))
+        let updatedProvider = try #require(store.providerConfigurations.first { $0.id == providerID })
+        let duplicatedProvider = try #require(store.providerConfigurations.first { $0.id == duplicate.id })
+
+        #expect(deleteResult.keychainSecretDeleted == false)
+        #expect(deleteResult.retentionReason == .sharedReference(routeCount: 1))
+        #expect(updatedProvider.secretReference == nil)
+        #expect(duplicatedProvider.secretReference == reference.rawValue)
+        #expect(try KeychainSecretStore().read(reference) == "sk-flannel-shared-delete-test")
+    }
+
+    @MainActor
+    @Test("Deleting provider API key clears noncanonical reference without deleting item")
+    func deletingProviderAPIKeyClearsNoncanonicalReferenceWithoutDeletingItem() throws {
+        let (_, store) = try makeLoadedStore()
+        let providerIndex = try #require(store.providerConfigurations.firstIndex { $0.kind == .openAI && $0.accessMode == .apiKey })
+        let providerID = store.providerConfigurations[providerIndex].id
+        let reference = try KeychainSecretStore().save(
+            "sk-flannel-noncanonical-delete-test",
+            account: "provider/openai/manual-\(UUID().uuidString)",
+            service: "flannel.tests.other"
+        )
+        defer { try? KeychainSecretStore().delete(reference) }
+        store.providerConfigurations[providerIndex].secretReference = reference.rawValue
+
+        let deleteResult = try #require(try store.deleteProviderAPIKey(providerID))
+        let updatedProvider = try #require(store.providerConfigurations.first { $0.id == providerID })
+
+        #expect(deleteResult.keychainSecretDeleted == false)
+        #expect(deleteResult.retentionReason == .noncanonicalReference)
+        #expect(updatedProvider.secretReference == nil)
+        #expect(try KeychainSecretStore().read(reference) == "sk-flannel-noncanonical-delete-test")
+    }
+
+    @MainActor
     @Test("Workspace retrieval packet uses local workspace knowledge as chat context")
     func workspaceRetrievalPacketUsesLocalWorkspaceKnowledge() throws {
         let (_, store) = try makeLoadedStore()

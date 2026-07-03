@@ -64,6 +64,39 @@ nonisolated struct ProviderReadinessBatchSummary: Hashable, Sendable {
     }
 }
 
+nonisolated enum ProviderAPIKeyRetentionReason: Hashable, Sendable {
+    case missingReference
+    case noncanonicalReference
+    case sharedReference(routeCount: Int)
+}
+
+nonisolated struct ProviderAPIKeyDeletionResult: Hashable, Sendable {
+    var report: ProviderSetupReport
+    var keychainSecretDeleted: Bool
+    var clearedReference: KeychainSecretReference?
+    var retentionReason: ProviderAPIKeyRetentionReason?
+
+    var message: String {
+        if keychainSecretDeleted {
+            return "API key removed from Keychain."
+        }
+
+        switch retentionReason {
+        case .missingReference:
+            return "No Keychain key was saved for this route."
+        case .noncanonicalReference:
+            return "Key reference cleared from this route. The Keychain item was kept because the reference is not canonical for this provider."
+        case .sharedReference(let routeCount):
+            let routeLabel = routeCount == 1 ? "route" : "routes"
+            return "Key reference cleared from this route. The Keychain item was kept because \(routeCount) other \(routeLabel) still use it."
+        case nil:
+            return report.hasBlockingIssues
+                ? report.diagnostics.first(where: \.isBlocking)?.message ?? "API key removed from this route."
+                : "API key removed from this route."
+        }
+    }
+}
+
 struct SafeLocalAction: Identifiable, Sendable {
     let id: String
     let title: String
@@ -3142,6 +3175,47 @@ final class WorkspaceStore {
         providerConfigurations[index].secretReference = savedReference.rawValue
         providerConfigurations[index].lastErrorMessage = nil
         return validateProviderSetup(providerID)
+    }
+
+    @discardableResult
+    func deleteProviderAPIKey(_ providerID: UUID) throws -> ProviderAPIKeyDeletionResult? {
+        guard let index = providerConfigurations.firstIndex(where: { $0.id == providerID }) else { return nil }
+
+        let setupService = ProviderSetupService.shared
+        let reference = setupService.parseSecretReference(providerConfigurations[index].secretReference)
+        let canonicalReference = setupService.canonicalSecretReference(for: providerConfigurations[index])
+        let sharedRouteCount = reference.map { reference in
+            providerConfigurations.enumerated().filter { offset, provider in
+                offset != index && setupService.parseSecretReference(provider.secretReference) == reference
+            }.count
+        } ?? 0
+        var keychainSecretDeleted = false
+        var retentionReason: ProviderAPIKeyRetentionReason?
+
+        if let reference,
+           reference.service == KeychainSecretStore.defaultService,
+           reference == canonicalReference,
+           sharedRouteCount == 0 {
+            try KeychainSecretStore().delete(reference)
+            keychainSecretDeleted = true
+        } else if reference == nil {
+            retentionReason = .missingReference
+        } else if reference != canonicalReference || reference?.service != KeychainSecretStore.defaultService {
+            retentionReason = .noncanonicalReference
+        } else if sharedRouteCount > 0 {
+            retentionReason = .sharedReference(routeCount: sharedRouteCount)
+        }
+
+        providerConfigurations[index].secretReference = nil
+        providerConfigurations[index].connectionStatus = .disconnected
+        providerConfigurations[index].lastErrorMessage = nil
+        guard let report = validateProviderSetup(providerID) else { return nil }
+        return ProviderAPIKeyDeletionResult(
+            report: report,
+            keychainSecretDeleted: keychainSecretDeleted,
+            clearedReference: reference,
+            retentionReason: retentionReason
+        )
     }
 
     @discardableResult
