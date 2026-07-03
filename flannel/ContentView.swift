@@ -2640,22 +2640,11 @@ private struct SettingsSidebar: View {
     var exitSettings: () -> Void
     @FocusState private var isExitSettingsFocused: Bool
 
-    private var selection: Binding<SettingsTab?> {
-        Binding(
-            get: { selectedTab },
-            set: { newValue in
-                if let newValue {
-                    selectedTab = newValue
-                }
-            }
-        )
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 10) {
                 Button(action: exitSettings) {
-                    Label("Back to Chats", systemImage: "chevron.left")
+                    Label("Exit Settings", systemImage: "chevron.left")
                         .font(.callout.weight(.medium))
                         .labelStyle(.titleAndIcon)
                         .symbolRenderingMode(.hierarchical)
@@ -2669,7 +2658,7 @@ private struct SettingsSidebar: View {
                 .focused($isExitSettingsFocused)
                 .keyboardShortcut(.escape, modifiers: [])
                 .help("Return to chat")
-                .accessibilityLabel("Back to Chats")
+                .accessibilityLabel("Exit Settings")
                 .accessibilityHint("Returns the sidebar to chat history and restores the chat surface.")
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -2685,15 +2674,16 @@ private struct SettingsSidebar: View {
             .padding(.bottom, 12)
             .flannelSeparator(edge: .bottom, inset: 14, opacity: 0.4)
 
-            List(selection: selection) {
-                ForEach(SettingsNavigationSection.allCases) { section in
-                    Section(section.title) {
-                        settingsRows(section.tabs)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    ForEach(SettingsNavigationSection.allCases) { section in
+                        settingsSection(section)
                     }
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
+            .scrollIndicators(.automatic)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear(perform: focusExitSettingsIfRequested)
@@ -2710,17 +2700,56 @@ private struct SettingsSidebar: View {
     }
 
     @ViewBuilder
-    private func settingsRows(_ tabs: [SettingsTab]) -> some View {
-        ForEach(tabs) { tab in
-            SettingsRouteRow(tab: tab, isSelected: selectedTab == tab)
-                .tag(tab)
+    private func settingsSection(_ section: SettingsNavigationSection) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(section.title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .padding(.horizontal, 8)
+
+            VStack(spacing: 2) {
+                ForEach(section.tabs) { tab in
+                    Button {
+                        selectedTab = tab
+                    } label: {
+                        SettingsRouteRow(tab: tab, isSelected: selectedTab == tab)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(tab.title)
+                    .accessibilityValue(isSelectedValue(for: tab))
+                    .accessibilityHint(tab.detail)
+                    .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
+                }
+            }
         }
+    }
+
+    private func isSelectedValue(for tab: SettingsTab) -> String {
+        selectedTab == tab ? "Selected" : ""
     }
 }
 
 private struct SettingsRouteRow: View {
     var tab: SettingsTab
     var isSelected: Bool
+    @State private var isHovering = false
+
+    private var rowShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+    }
+
+    private var rowBackgroundStyle: AnyShapeStyle {
+        if isSelected {
+            return AnyShapeStyle(FlannelSystemColor.sidebarSelectionTint)
+        }
+
+        if isHovering {
+            return AnyShapeStyle(Color.primary.opacity(0.045))
+        }
+
+        return AnyShapeStyle(Color.clear)
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -2739,16 +2768,24 @@ private struct SettingsRouteRow: View {
                 Text(tab.sidebarDetail)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .layoutPriority(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 6)
-        .accessibilityLabel(tab.title)
-        .accessibilityValue(isSelected ? "Selected" : "")
-        .accessibilityHint(tab.detail)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .background(rowBackgroundStyle, in: rowShape)
+        .overlay {
+            rowShape.strokeBorder(
+                isSelected ? FlannelSystemColor.chromeStrokeStrong : Color.clear,
+                lineWidth: FlannelSpacing.hairline
+            )
+        }
+        .contentShape(rowShape)
+        .onHover { isHovering = $0 }
     }
 }
 
