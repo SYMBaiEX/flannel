@@ -1416,6 +1416,64 @@ struct AIChatProviderRegistryTests {
     }
 
     @MainActor
+    @Test("Chat picker route creation keeps OpenAI API and ChatGPT CLI auth separate")
+    func chatPickerRouteCreationKeepsOpenAIAPIAndChatGPTCLISeparate() throws {
+        let (_, store) = try makeLoadedStore()
+        store.providerConfigurations.removeAll {
+            $0.kind == .openAI || $0.kind == .chatGPTCLI
+        }
+
+        let openAIAPI = store.ensureProviderRouteForChat(kind: .openAI, accessMode: .apiKey)
+        let openAIAPIAgain = store.ensureProviderRouteForChat(kind: .openAI, accessMode: .apiKey)
+        let chatGPTCLI = store.ensureProviderRouteForChat(kind: .chatGPTCLI, accessMode: .subscriptionCLI)
+
+        #expect(openAIAPI.id == openAIAPIAgain.id)
+        #expect(openAIAPI.kind == .openAI)
+        #expect(openAIAPI.accessMode == .apiKey)
+        #expect(openAIAPI.privacyScope == .externalAPI)
+        #expect(openAIAPI.secretReference == nil)
+        #expect(openAIAPI.modeFamily == .openAIChatGPT)
+        #expect(chatGPTCLI.kind == .chatGPTCLI)
+        #expect(chatGPTCLI.accessMode == .subscriptionCLI)
+        #expect(chatGPTCLI.privacyScope == .localCLI)
+        #expect(chatGPTCLI.secretReference == nil)
+        #expect(chatGPTCLI.modeFamily == .openAIChatGPT)
+        #expect(store.preferences.preferredProviderID == chatGPTCLI.id)
+        #expect(store.preferences.providerRoutingPolicy == .selectedProvider)
+        #expect(store.providerConfigurations.filter { $0.kind == .openAI && $0.accessMode == .apiKey }.count == 1)
+        #expect(store.providerConfigurations.filter { $0.kind == .chatGPTCLI && $0.accessMode == .subscriptionCLI }.count == 1)
+    }
+
+    @MainActor
+    @Test("Chat picker route creation keeps Anthropic API and Claude Code CLI auth separate")
+    func chatPickerRouteCreationKeepsAnthropicAPIAndClaudeCodeCLISeparate() throws {
+        let (_, store) = try makeLoadedStore()
+        store.providerConfigurations.removeAll {
+            $0.kind == .anthropic || $0.kind == .claudeCodeCLI
+        }
+
+        let anthropicAPI = store.ensureProviderRouteForChat(kind: .anthropic, accessMode: .apiKey)
+        let claudeCLI = store.ensureProviderRouteForChat(kind: .claudeCodeCLI, accessMode: .subscriptionCLI)
+        let claudeCLIAgain = store.ensureProviderRouteForChat(kind: .claudeCodeCLI, accessMode: .subscriptionCLI)
+
+        #expect(claudeCLI.id == claudeCLIAgain.id)
+        #expect(anthropicAPI.kind == .anthropic)
+        #expect(anthropicAPI.accessMode == .apiKey)
+        #expect(anthropicAPI.privacyScope == .externalAPI)
+        #expect(anthropicAPI.secretReference == nil)
+        #expect(anthropicAPI.modeFamily == .anthropicClaude)
+        #expect(claudeCLI.kind == .claudeCodeCLI)
+        #expect(claudeCLI.accessMode == .subscriptionCLI)
+        #expect(claudeCLI.privacyScope == .localCLI)
+        #expect(claudeCLI.secretReference == nil)
+        #expect(claudeCLI.modeFamily == .anthropicClaude)
+        #expect(store.preferences.preferredProviderID == claudeCLI.id)
+        #expect(store.preferences.providerRoutingPolicy == .selectedProvider)
+        #expect(store.providerConfigurations.filter { $0.kind == .anthropic && $0.accessMode == .apiKey }.count == 1)
+        #expect(store.providerConfigurations.filter { $0.kind == .claudeCodeCLI && $0.accessMode == .subscriptionCLI }.count == 1)
+    }
+
+    @MainActor
     @Test("Cheapest routing prefers zero marginal cost local providers")
     func cheapestRoutingPrefersLocalProviderCost() throws {
         let (_, store) = try makeLoadedStore()

@@ -9897,6 +9897,122 @@ private struct ProviderRouteReadiness {
     var tint: Color
 }
 
+private struct ProviderRouteMenuTemplate: Identifiable, Hashable {
+    var kind: LLMProviderKind
+    var accessMode: ProviderAccessMode
+    var privacyScope: ProviderPrivacyScope?
+    var title: String
+    var systemImage: String
+    var helpText: String
+
+    var id: String {
+        "\(kind.rawValue)-\(accessMode.rawValue)-\(privacyScope?.rawValue ?? "default")"
+    }
+
+    var menuTitle: String {
+        "Add \(title)"
+    }
+
+    static func templates(for family: ProviderModeFamily) -> [ProviderRouteMenuTemplate] {
+        switch family {
+        case .localModels:
+            [
+                ProviderRouteMenuTemplate(
+                    kind: .ollama,
+                    accessMode: .localServer,
+                    privacyScope: .localOnly,
+                    title: "Ollama Local Server",
+                    systemImage: "server.rack",
+                    helpText: "Create and select an Ollama local server route, then run discovery or pick an installed model."
+                ),
+                ProviderRouteMenuTemplate(
+                    kind: .lmStudio,
+                    accessMode: .localServer,
+                    privacyScope: .localOnly,
+                    title: "LM Studio Local Server",
+                    systemImage: "desktopcomputer",
+                    helpText: "Create and select an LM Studio local server route using its OpenAI-compatible local endpoint."
+                )
+            ]
+        case .openAIChatGPT:
+            [
+                ProviderRouteMenuTemplate(
+                    kind: .openAI,
+                    accessMode: .apiKey,
+                    privacyScope: .externalAPI,
+                    title: "OpenAI API Key Route",
+                    systemImage: "key",
+                    helpText: "Create and select an official OpenAI API route. It will need a Keychain API key before it can become active."
+                ),
+                ProviderRouteMenuTemplate(
+                    kind: .chatGPTCLI,
+                    accessMode: .subscriptionCLI,
+                    privacyScope: .localCLI,
+                    title: "ChatGPT/Codex CLI Route",
+                    systemImage: "terminal",
+                    helpText: "Create and select a local ChatGPT/Codex CLI route. Account sign-in stays inside the CLI."
+                )
+            ]
+        case .anthropicClaude:
+            [
+                ProviderRouteMenuTemplate(
+                    kind: .anthropic,
+                    accessMode: .apiKey,
+                    privacyScope: .externalAPI,
+                    title: "Anthropic API Key Route",
+                    systemImage: "key",
+                    helpText: "Create and select an official Anthropic API route. It will need a Keychain API key before it can become active."
+                ),
+                ProviderRouteMenuTemplate(
+                    kind: .claudeCodeCLI,
+                    accessMode: .subscriptionCLI,
+                    privacyScope: .localCLI,
+                    title: "Claude Code CLI Route",
+                    systemImage: "terminal",
+                    helpText: "Create and select a local Claude Code CLI route using print mode."
+                )
+            ]
+        case .hostedAPIs:
+            [
+                (.gemini, "Google Gemini API Route"),
+                (.xAI, "xAI API Route"),
+                (.mistral, "Mistral API Route"),
+                (.groq, "Groq API Route"),
+                (.openRouter, "OpenRouter API Route"),
+                (.perplexity, "Perplexity API Route")
+            ].map { kind, title in
+                ProviderRouteMenuTemplate(
+                    kind: kind,
+                    accessMode: .apiKey,
+                    privacyScope: .externalAPI,
+                    title: title,
+                    systemImage: "key",
+                    helpText: "Create and select a BYOK \(kind.title) route. It will need a Keychain API key before it can become active."
+                )
+            }
+        case .customEndpoints:
+            [
+                ProviderRouteMenuTemplate(
+                    kind: .customOpenAICompatible,
+                    accessMode: .openAICompatible,
+                    privacyScope: nil,
+                    title: "OpenAI-Compatible Endpoint",
+                    systemImage: "arrow.left.arrow.right",
+                    helpText: "Create and select a custom OpenAI-compatible endpoint route. Configure endpoint, model, and optional key in settings."
+                ),
+                ProviderRouteMenuTemplate(
+                    kind: .vercelAISDKBridge,
+                    accessMode: .aiSDKBridge,
+                    privacyScope: .bridgeService,
+                    title: "Local AI SDK Bridge",
+                    systemImage: "point.3.connected.trianglepath.dotted",
+                    helpText: "Create and select a local Vercel AI SDK bridge route."
+                )
+            ]
+        }
+    }
+}
+
 private struct ProviderRoutingPicker: View {
     @Bindable var store: WorkspaceStore
     var isDiscoveringModels: Bool
@@ -10019,6 +10135,18 @@ private struct ProviderRoutingPicker: View {
                             .disabled(true)
                         }
 
+                        let missingRoutes = missingRouteTemplates(in: family)
+                        if !missingRoutes.isEmpty {
+                            ForEach(missingRoutes) { template in
+                                Button {
+                                    select(template)
+                                } label: {
+                                    Label(template.menuTitle, systemImage: template.systemImage)
+                                }
+                                .help(template.helpText)
+                            }
+                        }
+
                         ForEach(familyProviders) { provider in
                             let modelNames = selectableModelNames(for: provider)
                             Button {
@@ -10083,7 +10211,15 @@ private struct ProviderRoutingPicker: View {
                     return lhsRank < rhsRank
                 }
                 return lhs.providerModeChoiceTitle.localizedCaseInsensitiveCompare(rhs.providerModeChoiceTitle) == .orderedAscending
+        }
+    }
+
+    private func missingRouteTemplates(in family: ProviderModeFamily) -> [ProviderRouteMenuTemplate] {
+        ProviderRouteMenuTemplate.templates(for: family).filter { template in
+            !store.providerConfigurations.contains {
+                $0.kind == template.kind && $0.accessMode == template.accessMode
             }
+        }
     }
 
     private func providerSortRank(_ provider: ProviderConfiguration) -> Int {
@@ -10097,6 +10233,15 @@ private struct ProviderRoutingPicker: View {
         case .aiSDKBridge:
             return 3
         }
+    }
+
+    private func select(_ template: ProviderRouteMenuTemplate) {
+        _ = store.ensureProviderRouteForChat(
+            kind: template.kind,
+            accessMode: template.accessMode,
+            privacyScope: template.privacyScope
+        )
+        persist()
     }
 
     private func select(_ provider: ProviderConfiguration) {

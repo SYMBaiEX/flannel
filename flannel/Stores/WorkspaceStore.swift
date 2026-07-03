@@ -572,6 +572,30 @@ final class WorkspaceStore {
     }
 
     @discardableResult
+    func ensureProviderRouteForChat(
+        kind: LLMProviderKind,
+        accessMode: ProviderAccessMode? = nil,
+        privacyScope: ProviderPrivacyScope? = nil
+    ) -> ProviderConfiguration {
+        let resolvedAccessMode = accessMode ?? kind.defaultAccessMode
+        if let existingIndex = providerConfigurations.firstIndex(where: {
+            $0.kind == kind && $0.accessMode == resolvedAccessMode
+        }) {
+            let providerID = providerConfigurations[existingIndex].id
+            _ = selectPreferredProviderForChat(providerID)
+            return providerConfigurations[existingIndex]
+        }
+
+        let provider = createProviderRoute(
+            kind: kind,
+            accessMode: resolvedAccessMode,
+            privacyScope: privacyScope
+        )
+        _ = selectPreferredProviderForChat(provider.id)
+        return providerConfigurations.first(where: { $0.id == provider.id }) ?? provider
+    }
+
+    @discardableResult
     func duplicateProviderRoute(_ providerID: UUID) -> ProviderConfiguration? {
         guard let provider = providerConfigurations.first(where: { $0.id == providerID }) else {
             return nil
