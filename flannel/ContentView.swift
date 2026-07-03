@@ -2898,28 +2898,20 @@ private struct SettingsRouteRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             Image(systemName: tab.systemImage)
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.secondary)
                 .font(.callout)
                 .frame(width: 20, alignment: .center)
-                .padding(.top, 2)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(tab.title)
-                    .font(.callout.weight(.medium))
-                    .lineLimit(1)
-
-                Text(tab.sidebarDetail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .layoutPriority(1)
+            Text(tab.title)
+                .font(.callout.weight(.medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.9)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 8)

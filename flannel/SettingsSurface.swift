@@ -2503,21 +2503,13 @@ private struct SettingsSidebarRow: View {
 
     var body: some View {
         Label {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(tab.title)
-                    .font(.callout.weight(.medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.92)
-
-                Text(tab.sidebarDetail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.88)
-            }
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .layoutPriority(1)
+            Text(tab.title)
+                .font(.callout.weight(.medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.92)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
         } icon: {
             Image(systemName: tab.systemImage)
                 .symbolRenderingMode(.hierarchical)
@@ -2525,7 +2517,7 @@ private struct SettingsSidebarRow: View {
                 .frame(width: 18)
         }
         .labelStyle(.titleAndIcon)
-        .padding(.vertical, 3)
+        .padding(.vertical, 5)
         .accessibilityElement(children: .combine)
         .help(tab.detail)
         .accessibilityHint(tab.detail)
