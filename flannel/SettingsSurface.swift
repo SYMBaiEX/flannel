@@ -2154,23 +2154,23 @@ enum SettingsTab: String, CaseIterable, Hashable, Identifiable {
         case .general:
             "Startup, history, folders"
         case .models:
-            "Routing, keys, local servers"
+            "Routes, keys, local models"
         case .knowledge:
-            "Sources, indexing, retrieval"
+            "Sources and indexing"
         case .memory:
-            "Saved memory and recall"
+            "Saved memory, recall"
         case .tools:
-            "Permissions and tool runs"
+            "Permissions, tool runs"
         case .agents:
-            "Workflows, safety, traces"
+            "Workflows and traces"
         case .prompts:
-            "Prompt profiles"
+            "Profiles and templates"
         case .privacy:
-            "Network, local-only, secrets"
+            "Network and secrets"
         case .storage:
-            "Exports and local storage"
+            "Exports and storage"
         case .advanced:
-            "Automations and developer bridge"
+            "Automation, bridge"
         }
     }
 

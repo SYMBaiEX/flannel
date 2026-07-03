@@ -143,6 +143,13 @@ struct ContentView: View {
             exitSettings: { exitSettingsMode() },
             persist: persistQuietly
         )
+        .frame(
+            minWidth: width.min,
+            idealWidth: width.ideal,
+            maxWidth: width.max,
+            maxHeight: .infinity,
+            alignment: .topLeading
+        )
         .navigationSplitViewColumnWidth(min: width.min, ideal: width.ideal, max: width.max)
     }
 
@@ -2775,6 +2782,7 @@ private struct SettingsSidebar: View {
                         SettingsRouteRow(tab: tab, isSelected: selectedTab == tab)
                     }
                     .buttonStyle(.plain)
+                    .help(tab.detail)
                     .accessibilityLabel(tab.title)
                     .accessibilityValue(isSelectedValue(for: tab))
                     .accessibilityHint(tab.detail)
@@ -2827,7 +2835,7 @@ private struct SettingsRouteRow: View {
                 Text(tab.sidebarDetail)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(3)
+                    .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
