@@ -166,7 +166,7 @@ struct SettingsSurface: View {
                         ForEach(section.tabs) { tab in
                             SettingsSidebarRow(tab: tab)
                                 .tag(Optional(tab))
-                                .listRowInsets(EdgeInsets(top: 3, leading: 14, bottom: 3, trailing: 10))
+                                .listRowInsets(EdgeInsets(top: 4, leading: 14, bottom: 4, trailing: 10))
                         }
                     }
                 }
@@ -2482,20 +2482,29 @@ private struct SettingsSidebarRow: View {
 
     var body: some View {
         Label {
-            Text(tab.title)
-                .font(.callout.weight(.medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.9)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tab.title)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.9)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(tab.sidebarDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.9)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         } icon: {
             Image(systemName: tab.systemImage)
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.secondary)
-                .frame(width: 20, height: 20)
+                .frame(width: 18)
         }
         .labelStyle(.titleAndIcon)
-        .padding(.vertical, 4)
+        .padding(.vertical, 3)
         .accessibilityElement(children: .combine)
         .help(tab.detail)
         .accessibilityHint(tab.detail)

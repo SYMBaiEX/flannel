@@ -2787,12 +2787,12 @@ private struct SettingsSidebar: View {
             .flannelSeparator(edge: .bottom, inset: 14, opacity: 0.4)
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
+                LazyVStack(alignment: .leading, spacing: 16) {
                     ForEach(SettingsNavigationSection.allCases) { section in
                         settingsSection(section)
                     }
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 14)
                 .padding(.vertical, 12)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -2825,7 +2825,7 @@ private struct SettingsSidebar: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
-                .padding(.horizontal, 9)
+                .padding(.horizontal, 8)
 
             VStack(spacing: 2) {
                 ForEach(section.tabs) { tab in
@@ -2873,23 +2873,35 @@ private struct SettingsRouteRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 9) {
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: tab.systemImage)
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.secondary)
-                .font(.body)
-                .frame(width: 20, height: 20)
+                .font(.callout)
+                .frame(width: 18)
+                .padding(.top, 2)
 
-            Text(tab.title)
-                .font(.callout.weight(.medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.9)
-                .truncationMode(.tail)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tab.title)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.9)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(tab.sidebarDetail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .minimumScaleFactor(0.9)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
         .background(rowBackgroundStyle, in: rowShape)
         .overlay {
             rowShape.strokeBorder(
