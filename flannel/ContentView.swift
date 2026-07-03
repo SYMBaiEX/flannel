@@ -23,13 +23,23 @@ private enum ShellFocusDestination {
     case inspector
 }
 
+private enum LocalProviderDiscoveryTrigger {
+    case startup
+    case manual
+    case automaticRefresh
+}
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Bindable var store: WorkspaceStore
+    private static let localProviderAutoDiscoverySchedule = LocalProviderAutoDiscoverySchedule()
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var composerText = ""
     @State private var composerAttachments: [AIChatAttachment] = []
     @State private var isDiscoveringModels = false
+    @State private var lastLocalDiscoveryStartedAt: Date?
+    @State private var localProviderAutoDiscoveryTask: Task<Void, Never>?
     @State private var isStreamingResponse = false
     @State private var streamingTask: Task<Void, Never>?
     @State private var activeStreamingMessageID: UUID?
@@ -83,9 +93,17 @@ struct ContentView: View {
                     ? .doubleColumn
                     : (store.preferences.showsRightSidebar ? .all : .doubleColumn)
                 if store.localDiscoveryResults.isEmpty {
-                    discoverLocalModels()
+                    discoverLocalModels(trigger: .startup)
                 }
+                startLocalProviderAutoDiscovery()
                 synchronizeKnowledgeSourceWatchers()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    startLocalProviderAutoDiscovery()
+                } else {
+                    stopLocalProviderAutoDiscovery()
+                }
             }
             .onChange(of: store.knowledgeSources) {
                 synchronizeKnowledgeSourceWatchers()
@@ -93,6 +111,7 @@ struct ContentView: View {
             .onDisappear {
                 streamingTask?.cancel()
                 comparisonTask?.cancel()
+                stopLocalProviderAutoDiscovery()
                 knowledgeSourceWatchService.stop()
                 persistQuietly()
             }
@@ -156,7 +175,7 @@ struct ContentView: View {
             retryFromMessage: retryFromMessage,
             editMessage: editMessage,
             forkThreadFromMessage: forkThreadFromMessage,
-            discoverModels: discoverLocalModels,
+            discoverModels: { discoverLocalModels() },
             continueAfterToolResult: { result, toolCall in
                 continueAfterToolResult(result, sourceToolCall: toolCall)
             },
@@ -197,7 +216,7 @@ struct ContentView: View {
             isDiscoveringModels: isDiscoveringModels,
             isRunningComparison: isRunningComparison,
             focusRequest: inspectorFocusRequest,
-            discoverModels: discoverLocalModels,
+            discoverModels: { discoverLocalModels() },
             collapseArtifacts: { setInspectorVisibility(false) },
             copyComparisonResult: copyComparisonResult,
             useComparisonResultProvider: useComparisonResultProvider,
@@ -215,7 +234,7 @@ struct ContentView: View {
                 ProviderRoutingPicker(
                     store: store,
                     isDiscoveringModels: isDiscoveringModels,
-                    discoverModels: discoverLocalModels,
+                    discoverModels: { discoverLocalModels() },
                     openProviderSetup: {
                         enterSettingsMode(.models, returnFocus: .composer)
                     },
@@ -1776,13 +1795,24 @@ struct ContentView: View {
         }
     }
 
-    private func discoverLocalModels() {
+    private func discoverLocalModels(trigger: LocalProviderDiscoveryTrigger = .manual) {
+        let targets = store.localProviderDiscoveryTargets()
+        if trigger == .automaticRefresh {
+            guard Self.localProviderAutoDiscoverySchedule.shouldRefresh(
+                now: .now,
+                lastRefreshStartedAt: lastLocalDiscoveryStartedAt,
+                isDiscovering: isDiscoveringModels,
+                targetCount: targets.count
+            ) else { return }
+        }
+
         guard !isDiscoveringModels else { return }
+        lastLocalDiscoveryStartedAt = .now
         isDiscoveringModels = true
 
         Task {
             let results = await LocalProviderDiscoveryService().discover(
-                targets: store.localProviderDiscoveryTargets()
+                targets: targets
             )
             await MainActor.run {
                 store.apply(results)
@@ -1790,6 +1820,35 @@ struct ContentView: View {
                 persistQuietly()
             }
         }
+    }
+
+    private func startLocalProviderAutoDiscovery() {
+        guard localProviderAutoDiscoveryTask == nil else { return }
+
+        localProviderAutoDiscoveryTask = Task {
+            await MainActor.run {
+                discoverLocalModels(trigger: .automaticRefresh)
+            }
+
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(
+                        nanoseconds: LocalProviderAutoDiscoverySchedule.defaultRefreshIntervalNanoseconds
+                    )
+                } catch {
+                    break
+                }
+
+                await MainActor.run {
+                    discoverLocalModels(trigger: .automaticRefresh)
+                }
+            }
+        }
+    }
+
+    private func stopLocalProviderAutoDiscovery() {
+        localProviderAutoDiscoveryTask?.cancel()
+        localProviderAutoDiscoveryTask = nil
     }
 
     private var contextChips: [AssistantContextChip] {
