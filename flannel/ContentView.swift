@@ -2885,19 +2885,29 @@ private struct SettingsRouteRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: tab.systemImage)
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.secondary)
                 .font(.callout)
                 .frame(width: 18)
+                .padding(.top, 2)
 
-            Text(tab.title)
-                .font(.callout.weight(.medium))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .layoutPriority(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tab.title)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(tab.sidebarDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 8)

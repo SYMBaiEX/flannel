@@ -35,9 +35,9 @@ struct FlannelShellModelsTests {
         #expect(settingsWidth.ideal > conversationWidth.ideal)
         #expect(settingsWidth.min > conversationWidth.min)
         #expect(settingsWidth.max > conversationWidth.max)
-        #expect(settingsWidth.min >= 420)
-        #expect(settingsWidth.ideal >= 456)
-        #expect(settingsWidth.max >= 560)
+        #expect(settingsWidth.min >= 448)
+        #expect(settingsWidth.ideal >= 480)
+        #expect(settingsWidth.max >= 620)
     }
 
     @Test("Settings sidebar labels stay concise")
