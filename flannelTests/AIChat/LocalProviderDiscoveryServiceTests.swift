@@ -75,6 +75,24 @@ struct LocalProviderDiscoveryServiceTests {
                       ]
                     }
                     """
+                ),
+                "http://localhost:11434/api/show": .init(
+                    statusCode: 200,
+                    body: """
+                    {
+                      "modified_at": "2026-06-29T12:01:00Z",
+                      "capabilities": ["completion", "vision", "tools", "thinking"],
+                      "details": {
+                        "format": "gguf",
+                        "family": "llama",
+                        "parameter_size": "8B",
+                        "quantization_level": "Q4_K_M"
+                      },
+                      "model_info": {
+                        "llama.context_length": 131072
+                      }
+                    }
+                    """
                 )
             ]
         )
@@ -102,11 +120,19 @@ struct LocalProviderDiscoveryServiceTests {
         #expect(model.loadedInstanceCount == 1)
         #expect(model.sizeVRAMBytes == 2_147_483_648)
         #expect(model.capabilities.contains(.chat))
+        #expect(model.capabilities.contains(.toolCalling))
+        #expect(model.capabilities.contains(.vision))
+        #expect(model.capabilities.contains(.reasoning))
         #expect(model.capabilities.contains(.embeddings) == false)
         #expect(requests.map(\.url) == [
             "http://localhost:11434/api/tags",
-            "http://localhost:11434/api/ps"
+            "http://localhost:11434/api/ps",
+            "http://localhost:11434/api/show"
         ])
+        #expect(requests.last?.method == "POST")
+        #expect(requests.last?.contentType == "application/json")
+        #expect(requests.last?.body?.contains(#""model":"llama3.1:latest""#) == true)
+        #expect(requests.last?.body?.contains(#""verbose":false"#) == true)
         #expect(requests.allSatisfy { $0.timeout == 9 })
         #expect(requests.allSatisfy { $0.acceptHeader == "application/json" })
     }
@@ -156,6 +182,65 @@ struct LocalProviderDiscoveryServiceTests {
     }
 
     @MainActor
+    @Test("Ollama discovery enriches unloaded models from show metadata")
+    func ollamaDiscoveryEnrichesUnloadedModelsFromShowMetadata() throws {
+        let tags = Data(
+            """
+            {
+              "models": [
+                {
+                  "name": "llava",
+                  "model": "llava:latest",
+                  "details": {
+                    "family": "llama",
+                    "parameter_size": "7B",
+                    "quantization_level": "Q4_0"
+                  }
+                }
+              ]
+            }
+            """.utf8
+        )
+        let show = Data(
+            """
+            {
+              "modified_at": "2026-06-29T12:01:00Z",
+              "capabilities": ["completion", "vision"],
+              "details": {
+                "format": "gguf",
+                "family": "llava",
+                "parameter_size": "7B",
+                "quantization_level": "Q4_K_M"
+              },
+              "model_info": {
+                "llava.context_length": 32768
+              }
+            }
+            """.utf8
+        )
+
+        let models = try LocalProviderDiscoveryService.makeOllamaDescriptors(
+            from: tags,
+            modelDetailsData: ["llava:latest": show],
+            endpoint: "http://localhost:11434"
+        )
+        let model = try #require(models.first)
+
+        #expect(model.name == "llava:latest")
+        #expect(model.family == "llava")
+        #expect(model.format == "gguf")
+        #expect(model.quantization == "Q4_K_M")
+        #expect(model.contextWindowTokens == 32768)
+        #expect(model.loadedInstanceCount == 0)
+        #expect(model.modifiedAt != nil)
+        #expect(model.capabilities.contains(.chat))
+        #expect(model.capabilities.contains(.streaming))
+        #expect(model.capabilities.contains(.vision))
+        #expect(model.capabilities.contains(.toolCalling) == false)
+        #expect(model.capabilities.contains(.embeddings) == false)
+    }
+
+    @MainActor
     @Test("Ollama discovery keeps model list when running metadata is unavailable")
     func ollamaDiscoveryKeepsModelListWhenRunningMetadataIsUnavailable() async throws {
         let transport = LocalDiscoveryTransportRecorder(
@@ -179,6 +264,10 @@ struct LocalProviderDiscoveryServiceTests {
                 "http://localhost:11434/api/ps": .init(
                     statusCode: 500,
                     body: #"{"error":"ps unavailable"}"#
+                ),
+                "http://localhost:11434/api/show": .init(
+                    statusCode: 200,
+                    body: #"{"capabilities":["completion"]}"#
                 )
             ]
         )
@@ -404,8 +493,11 @@ private actor LocalDiscoveryTransportRecorder {
 
     struct RecordedRequest: Equatable, Sendable {
         var url: String
+        var method: String?
         var timeout: TimeInterval
         var acceptHeader: String?
+        var contentType: String?
+        var body: String?
     }
 
     private let responses: [String: Response]
@@ -424,8 +516,11 @@ private actor LocalDiscoveryTransportRecorder {
         recordedRequests.append(
             RecordedRequest(
                 url: urlString,
+                method: request.httpMethod,
                 timeout: request.timeoutInterval,
-                acceptHeader: request.value(forHTTPHeaderField: "Accept")
+                acceptHeader: request.value(forHTTPHeaderField: "Accept"),
+                contentType: request.value(forHTTPHeaderField: "Content-Type"),
+                body: request.httpBody.flatMap { String(data: $0, encoding: .utf8) }
             )
         )
 

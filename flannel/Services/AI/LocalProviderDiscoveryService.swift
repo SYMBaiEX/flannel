@@ -71,9 +71,14 @@ struct LocalProviderDiscoveryService: Sendable {
             } else {
                 runningDiscovery = .init(models: [:], errorMessage: nil)
             }
+            let detailsDiscovery = await discoverOllamaModelDetails(
+                endpoint: endpoint,
+                models: response.models
+            )
             let models = Self.makeOllamaDescriptors(
                 response: response,
                 runningModels: runningDiscovery.models,
+                modelDetails: detailsDiscovery.models,
                 endpoint: endpoint
             )
             return .init(
@@ -81,7 +86,10 @@ struct LocalProviderDiscoveryService: Sendable {
                 endpoint: endpoint,
                 status: .ready,
                 models: models,
-                errorMessage: runningDiscovery.errorMessage
+                errorMessage: Self.combinedOllamaDiscoveryWarning(
+                    runningWarning: runningDiscovery.errorMessage,
+                    detailsWarning: detailsDiscovery.errorMessage
+                )
             )
         } catch {
             return .init(
@@ -163,9 +171,40 @@ struct LocalProviderDiscoveryService: Sendable {
         }
     }
 
+    private func discoverOllamaModelDetails(
+        endpoint: String,
+        models: [OllamaTagsDiscoveryResponse.OllamaModel]
+    ) async -> OllamaModelDetailsDiscovery {
+        var lookup: [String: OllamaShowModelDiscoveryResponse] = [:]
+        var failedModelNames: [String] = []
+
+        for model in models {
+            let modelName = (model.model ?? model.name).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !modelName.isEmpty else { continue }
+
+            do {
+                let request = try makeOllamaShowRequest(endpoint: endpoint, model: modelName)
+                let response: OllamaShowModelDiscoveryResponse = try await decode(request)
+                lookup[Self.normalizedModelKey(modelName)] = response
+                lookup[Self.normalizedModelKey(model.name)] = response
+                if let modelIdentifier = model.model {
+                    lookup[Self.normalizedModelKey(modelIdentifier)] = response
+                }
+            } catch {
+                failedModelNames.append(modelName)
+            }
+        }
+
+        return .init(
+            models: lookup,
+            errorMessage: Self.ollamaModelDetailsWarning(failedModelNames)
+        )
+    }
+
     static func makeOllamaDescriptors(
         from tagsData: Data,
         runningData: Data? = nil,
+        modelDetailsData: [String: Data] = [:],
         endpoint: String
     ) throws -> [LocalModelDescriptor] {
         let tagsResponse = try JSONDecoder.discovery.decode(OllamaTagsDiscoveryResponse.self, from: tagsData)
@@ -174,7 +213,18 @@ struct LocalProviderDiscoveryService: Sendable {
                 try JSONDecoder.discovery.decode(OllamaRunningModelsDiscoveryResponse.self, from: $0).models
             )
         } ?? [:]
-        return makeOllamaDescriptors(response: tagsResponse, runningModels: runningModels, endpoint: endpoint)
+        let modelDetails = try modelDetailsData.reduce(into: [String: OllamaShowModelDiscoveryResponse]()) { result, entry in
+            result[normalizedModelKey(entry.key)] = try JSONDecoder.discovery.decode(
+                OllamaShowModelDiscoveryResponse.self,
+                from: entry.value
+            )
+        }
+        return makeOllamaDescriptors(
+            response: tagsResponse,
+            runningModels: runningModels,
+            modelDetails: modelDetails,
+            endpoint: endpoint
+        )
     }
 
     static func makeLMStudioDescriptors(from data: Data, endpoint: String) throws -> [LocalModelDescriptor] {
@@ -198,26 +248,28 @@ struct LocalProviderDiscoveryService: Sendable {
     private static func makeOllamaDescriptors(
         response: OllamaTagsDiscoveryResponse,
         runningModels: [String: OllamaRunningModelDiscovery],
+        modelDetails: [String: OllamaShowModelDiscoveryResponse] = [:],
         endpoint: String
     ) -> [LocalModelDescriptor] {
         sortedDescriptors(response.models.map { model in
             let runningModel = runningModel(for: model, in: runningModels)
+            let showDetails = modelDetailsFor(model, in: modelDetails)
             return LocalModelDescriptor(
                 name: model.model ?? model.name,
                 displayName: model.name,
                 providerKind: .ollama,
                 endpoint: endpoint,
-                family: model.details?.family,
-                parameterSize: model.details?.parameterSize,
-                quantization: model.details?.quantizationLevel,
-                format: model.details?.format,
-                contextWindowTokens: runningModel?.contextLength,
+                family: showDetails?.details?.family ?? model.details?.family,
+                parameterSize: showDetails?.details?.parameterSize ?? model.details?.parameterSize,
+                quantization: showDetails?.details?.quantizationLevel ?? model.details?.quantizationLevel,
+                format: showDetails?.details?.format ?? model.details?.format,
+                contextWindowTokens: runningModel?.contextLength ?? showDetails?.contextLength,
                 loadedInstanceCount: runningModel == nil ? 0 : 1,
                 sizeBytes: model.size,
                 sizeVRAMBytes: runningModel?.sizeVRAM,
-                modifiedAt: model.modifiedAt,
+                modifiedAt: showDetails?.modifiedAt ?? model.modifiedAt,
                 expiresAt: runningModel?.expiresAt,
-                capabilities: ollamaCapabilities(for: model)
+                capabilities: ollamaCapabilities(for: model, details: showDetails)
             )
         })
     }
@@ -323,13 +375,30 @@ struct LocalProviderDiscoveryService: Sendable {
             ?? runningModels[normalizedModelKey(model.name)]
     }
 
+    private static func modelDetailsFor(
+        _ model: OllamaTagsDiscoveryResponse.OllamaModel,
+        in details: [String: OllamaShowModelDiscoveryResponse]
+    ) -> OllamaShowModelDiscoveryResponse? {
+        details[normalizedModelKey(model.model ?? model.name)]
+            ?? details[normalizedModelKey(model.name)]
+    }
+
     private static func normalizedModelKey(_ rawValue: String?) -> String {
         (rawValue ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
     }
 
-    private static func ollamaCapabilities(for model: OllamaTagsDiscoveryResponse.OllamaModel) -> [ModelCapability] {
+    private static func ollamaCapabilities(
+        for model: OllamaTagsDiscoveryResponse.OllamaModel,
+        details: OllamaShowModelDiscoveryResponse? = nil
+    ) -> [ModelCapability] {
+        if let details,
+           let officialCapabilities = details.capabilities,
+           !officialCapabilities.isEmpty {
+            return ollamaCapabilities(from: officialCapabilities)
+        }
+
         if isEmbeddingModel(
             modelType: nil,
             identifiers: [model.name, model.model, model.details?.family] + (model.details?.families ?? [])
@@ -337,6 +406,38 @@ struct LocalProviderDiscoveryService: Sendable {
             return [.embeddings]
         }
         return [.chat, .streaming, .toolCalling]
+    }
+
+    private static func ollamaCapabilities(from rawCapabilities: [String]) -> [ModelCapability] {
+        let normalizedCapabilities = Set(
+            rawCapabilities.map {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            }
+        )
+
+        if !normalizedCapabilities.isDisjoint(with: ["embedding", "embeddings", "embed"]) {
+            return [.embeddings]
+        }
+
+        var capabilities: Set<ModelCapability> = []
+        if !normalizedCapabilities.isDisjoint(with: ["completion", "chat", "generate", "vision"]) {
+            capabilities.insert(.chat)
+            capabilities.insert(.streaming)
+        }
+        if normalizedCapabilities.contains("vision") {
+            capabilities.insert(.vision)
+        }
+        if !normalizedCapabilities.isDisjoint(with: ["tools", "tool", "tool_calling", "function_calling"]) {
+            capabilities.insert(.toolCalling)
+        }
+        if !normalizedCapabilities.isDisjoint(with: ["thinking", "reasoning"]) {
+            capabilities.insert(.reasoning)
+        }
+
+        if capabilities.isEmpty {
+            capabilities.formUnion([.chat, .streaming])
+        }
+        return sortedCapabilities(capabilities)
     }
 
     private static func lmStudioCapabilities(for model: LMStudioNativeModelsDiscoveryResponse.Model) -> [ModelCapability] {
@@ -504,6 +605,21 @@ struct LocalProviderDiscoveryService: Sendable {
         return try makeRequest(endpoint: endpoint, appending: appendedPath)
     }
 
+    private func makeOllamaShowRequest(endpoint: String, model: String) throws -> URLRequest {
+        let model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !model.isEmpty else {
+            throw DiscoveryError.invalidModelName
+        }
+
+        var request = try makeRequest(endpoint: endpoint, appending: ["api", "show"])
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(
+            OllamaShowModelDiscoveryRequest(model: model, verbose: false)
+        )
+        return request
+    }
+
     private func decode<T: Decodable>(_ request: URLRequest) async throws -> T {
         let (data, response) = try await transport(request)
         guard let httpResponse = response else {
@@ -529,6 +645,29 @@ struct LocalProviderDiscoveryService: Sendable {
             "LM Studio native discovery failed: \(discoveryErrorDescription(nativeError))",
             "OpenAI-compatible fallback failed: \(discoveryErrorDescription(fallbackError))"
         ].joined(separator: " ")
+    }
+
+    private static func combinedOllamaDiscoveryWarning(
+        runningWarning: String?,
+        detailsWarning: String?
+    ) -> String? {
+        [runningWarning, detailsWarning]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .nilIfEmpty
+    }
+
+    private static func ollamaModelDetailsWarning(_ failedModelNames: [String]) -> String? {
+        guard !failedModelNames.isEmpty else { return nil }
+
+        let preview = failedModelNames
+            .prefix(3)
+            .joined(separator: ", ")
+        let remainingCount = max(0, failedModelNames.count - 3)
+        let suffix = remainingCount > 0 ? " and \(remainingCount) more" : ""
+        let modelText = failedModelNames.count == 1 ? "model" : "models"
+        return "Ollama model detail metadata unavailable for \(failedModelNames.count) \(modelText): \(preview)\(suffix)."
     }
 
     private static func discoveryErrorDescription(_ error: Error) -> String {
@@ -661,6 +800,7 @@ struct LocalProviderDiscoveryService: Sendable {
 
 private enum DiscoveryError: LocalizedError {
     case invalidEndpoint
+    case invalidModelName
     case badResponse
     case badStatus(Int, String?)
     case decodingFailed(String)
@@ -669,6 +809,8 @@ private enum DiscoveryError: LocalizedError {
         switch self {
         case .invalidEndpoint:
             "The endpoint URL is invalid."
+        case .invalidModelName:
+            "The model name is empty."
         case .badResponse:
             "The provider did not return an HTTP response."
         case .badStatus(let statusCode, let message):
@@ -691,12 +833,16 @@ private extension String {
         }
         return value
     }
+
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
+    }
 }
 
-private struct OllamaTagsDiscoveryResponse: Decodable {
+private struct OllamaTagsDiscoveryResponse: Decodable, Sendable {
     var models: [OllamaModel]
 
-    struct OllamaModel: Decodable {
+    struct OllamaModel: Decodable, Sendable {
         var name: String
         var model: String?
         var modifiedAt: Date?
@@ -712,7 +858,7 @@ private struct OllamaTagsDiscoveryResponse: Decodable {
         }
     }
 
-    struct Details: Decodable {
+    struct Details: Decodable, Sendable {
         var format: String?
         var family: String?
         var families: [String]?
@@ -734,11 +880,16 @@ private struct OllamaRunningModelsDiscovery: Sendable {
     var errorMessage: String?
 }
 
-private struct OllamaRunningModelsDiscoveryResponse: Decodable {
+private struct OllamaModelDetailsDiscovery: Sendable {
+    var models: [String: OllamaShowModelDiscoveryResponse]
+    var errorMessage: String?
+}
+
+private struct OllamaRunningModelsDiscoveryResponse: Decodable, Sendable {
     var models: [OllamaRunningModelDiscovery]
 }
 
-private struct OllamaRunningModelDiscovery: Decodable {
+private struct OllamaRunningModelDiscovery: Decodable, Sendable {
     var name: String
     var model: String?
     var size: Int64?
@@ -760,10 +911,72 @@ private struct OllamaRunningModelDiscovery: Decodable {
     }
 }
 
-private struct LMStudioNativeModelsDiscoveryResponse: Decodable {
+private struct OllamaShowModelDiscoveryRequest: Encodable {
+    var model: String
+    var verbose: Bool
+}
+
+private struct OllamaShowModelDiscoveryResponse: Decodable, Sendable {
+    var modifiedAt: Date?
+    var details: OllamaTagsDiscoveryResponse.Details?
+    var capabilities: [String]?
+    var modelInfo: [String: OllamaModelInfoValue]?
+
+    var contextLength: Int? {
+        modelInfo?
+            .first { key, _ in key.lowercased().hasSuffix(".context_length") || key.lowercased() == "context_length" }?
+            .value
+            .intValue
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case modifiedAt = "modified_at"
+        case details
+        case capabilities
+        case modelInfo = "model_info"
+    }
+}
+
+private enum OllamaModelInfoValue: Decodable, Sendable {
+    case int(Int)
+    case double(Double)
+    case string(String)
+    case bool(Bool)
+    case ignored
+
+    var intValue: Int? {
+        switch self {
+        case .int(let value):
+            value
+        case .double(let value) where value.isFinite:
+            Int(value)
+        case .string(let value):
+            Int(value)
+        case .double, .bool, .ignored:
+            nil
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let value = try? container.decode(Int.self) {
+            self = .int(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .double(value)
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else {
+            self = .ignored
+        }
+    }
+}
+
+private struct LMStudioNativeModelsDiscoveryResponse: Decodable, Sendable {
     var models: [Model]
 
-    struct Model: Decodable {
+    struct Model: Decodable, Sendable {
         var modelType: String
         var publisher: String?
         var key: String
@@ -795,16 +1008,16 @@ private struct LMStudioNativeModelsDiscoveryResponse: Decodable {
         }
     }
 
-    struct Quantization: Decodable {
+    struct Quantization: Decodable, Sendable {
         var name: String?
     }
 
-    struct LoadedInstance: Decodable {
+    struct LoadedInstance: Decodable, Sendable {
         var id: String?
         var config: LoadedInstanceConfig?
     }
 
-    struct LoadedInstanceConfig: Decodable {
+    struct LoadedInstanceConfig: Decodable, Sendable {
         var contextLength: Int?
 
         enum CodingKeys: String, CodingKey {
@@ -812,7 +1025,7 @@ private struct LMStudioNativeModelsDiscoveryResponse: Decodable {
         }
     }
 
-    struct Capabilities: Decodable {
+    struct Capabilities: Decodable, Sendable {
         var vision: Bool?
         var trainedForToolUse: Bool?
         var reasoning: Reasoning?
@@ -824,7 +1037,7 @@ private struct LMStudioNativeModelsDiscoveryResponse: Decodable {
         }
     }
 
-    struct Reasoning: Decodable {
+    struct Reasoning: Decodable, Sendable {
         var allowedOptions: [String]?
         var defaultOption: String?
 
@@ -835,10 +1048,10 @@ private struct LMStudioNativeModelsDiscoveryResponse: Decodable {
     }
 }
 
-private struct OpenAICompatibleModelsDiscoveryResponse: Decodable {
+private struct OpenAICompatibleModelsDiscoveryResponse: Decodable, Sendable {
     var data: [Model]
 
-    struct Model: Decodable {
+    struct Model: Decodable, Sendable {
         var id: String
         var ownedBy: String?
         var publisher: String?
