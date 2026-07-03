@@ -59,6 +59,7 @@ struct ContentView: View {
     @State private var sidebarSearchFocusRequest = 0
     @State private var settingsSidebarFocusRequest = 0
     @State private var composerFocusRequest = 0
+    @State private var chatFindFocusRequest = 0
     @State private var inspectorFocusRequest = 0
     @State private var settingsReturnFocus: ShellFocusDestination = .composer
 
@@ -173,6 +174,7 @@ struct ContentView: View {
             selectedComparisonRunID: $selectedComparisonRunID,
             selectedComparisonResultID: $selectedComparisonResultID,
             composerFocusRequest: composerFocusRequest,
+            chatFindFocusRequest: chatFindFocusRequest,
             isArtifactsVisible: columnVisibility == .all,
             isDiscoveringModels: isDiscoveringModels,
             isStreamingResponse: isStreamingResponse,
@@ -412,6 +414,9 @@ struct ContentView: View {
             importChat()
         case .openCommandPalette:
             break
+        case .findInChat:
+            openConversationShell()
+            chatFindFocusRequest += 1
         case .sendMessage:
             sendMessage()
         case .stopStreaming:
@@ -3748,6 +3753,7 @@ private struct MainSurface: View {
     @Binding var selectedComparisonRunID: UUID?
     @Binding var selectedComparisonResultID: UUID?
     var composerFocusRequest: Int
+    var chatFindFocusRequest: Int
     var isArtifactsVisible: Bool
     var isDiscoveringModels: Bool
     var isStreamingResponse: Bool
@@ -3784,6 +3790,7 @@ private struct MainSurface: View {
                         composerText: $composerText,
                         composerAttachments: $composerAttachments,
                         composerFocusRequest: composerFocusRequest,
+                        findInChatRequest: chatFindFocusRequest,
                         isStreamingResponse: isStreamingResponse,
                         sendMessage: sendMessage,
                         cancelStreaming: cancelStreaming,
@@ -3974,6 +3981,7 @@ private struct ChatSurface: View {
     @Binding var composerText: String
     @Binding var composerAttachments: [AIChatAttachment]
     var composerFocusRequest: Int
+    var findInChatRequest: Int
     var isStreamingResponse: Bool
     var sendMessage: () -> Void
     var cancelStreaming: () -> Void
@@ -3990,6 +3998,7 @@ private struct ChatSurface: View {
     @State private var selectedTranscriptSearchIndex = 0
     @State private var isTranscriptSearchVisible = false
     @State private var transcriptSearchFocusRequest = 0
+    @State private var handledFindInChatRequest = 0
     @State private var composerFocusNonce = UUID()
     @State private var transcriptViewportHeight: CGFloat = 0
     @State private var isTranscriptPinnedToBottom = true
@@ -4126,6 +4135,9 @@ private struct ChatSurface: View {
                 .onChange(of: composerFocusRequest) { _, _ in
                     composerFocusNonce = UUID()
                 }
+                .onChange(of: findInChatRequest) { _, _ in
+                    handleFindInChatRequest()
+                }
                 .onChange(of: transcriptSearchText) { _, _ in
                     selectedTranscriptSearchIndex = 0
                 }
@@ -4138,6 +4150,7 @@ private struct ChatSurface: View {
                     announceActiveTranscriptSearchMatch()
                 }
                 .onAppear {
+                    handleFindInChatRequest()
                     isTranscriptPinnedToBottom = true
                     scrollToLatest(using: proxy)
                 }
@@ -4371,6 +4384,12 @@ private struct ChatSurface: View {
         transcriptSearchFocusRequest += 1
     }
 
+    private func handleFindInChatRequest() {
+        guard findInChatRequest > handledFindInChatRequest else { return }
+        handledFindInChatRequest = findInChatRequest
+        revealTranscriptSearch()
+    }
+
     private func closeTranscriptSearch() {
         clearTranscriptSearch()
         withAnimation(.easeOut(duration: 0.12)) {
@@ -4514,7 +4533,6 @@ private struct ChatThreadHeader: View {
                 .frame(width: 30, height: 28)
                 .contentShape(Circle())
                 .flannelGlassCapsule(.clear, interactive: true)
-                .keyboardShortcut("f", modifiers: [.command])
                 .help("Find in chat")
                 .accessibilityLabel("Find in chat")
             }

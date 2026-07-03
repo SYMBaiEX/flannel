@@ -82,6 +82,7 @@ struct CommandPaletteTests {
         #expect(commands.filter { $0.matches("export pdf") }.map(\.id) == [.exportPDF])
         #expect(commands.filter { $0.matches("rag") }.contains { $0.id == .openKnowledge })
         #expect(commands.filter { $0.matches("side provider") }.contains { $0.id == .comparePrompt })
+        #expect(commands.filter { $0.matches("find transcript") }.contains { $0.id == .findInChat })
     }
 
     @Test("Command enablement reflects live chat and model state")
@@ -100,6 +101,7 @@ struct CommandPaletteTests {
 
         #expect(commands.first { $0.id == .sendMessage }?.isEnabled == false)
         #expect(commands.first { $0.id == .stopStreaming }?.isEnabled == true)
+        #expect(commands.first { $0.id == .findInChat }?.isEnabled == false)
         #expect(commands.first { $0.id == .comparePrompt }?.isEnabled == false)
         #expect(commands.first { $0.id == .discoverModels }?.isEnabled == false)
         #expect(commands.first { $0.id == .exportMarkdown }?.isEnabled == false)
@@ -358,6 +360,7 @@ struct CommandPaletteTests {
 
         let importCommand = try #require(FlannelCommand.defaultCommand(.importChat, context: visibleInspectorContext))
         let paletteCommand = try #require(FlannelCommand.defaultCommand(.openCommandPalette, context: visibleInspectorContext))
+        let findCommand = try #require(FlannelCommand.defaultCommand(.findInChat, context: visibleInspectorContext))
         let settingsCommand = try #require(FlannelCommand.defaultCommand(.openSettings, context: visibleInspectorContext))
         let localOnlyCommand = try #require(FlannelCommand.defaultCommand(.toggleLocalOnly, context: visibleInspectorContext))
         let cloudProviderCommand = try #require(FlannelCommand.defaultCommand(.toggleCloudProviders, context: visibleInspectorContext))
@@ -369,6 +372,8 @@ struct CommandPaletteTests {
         #expect(importCommand.matches("restore backup"))
         #expect(paletteCommand.keyEquivalent == "⌘K")
         #expect(paletteCommand.matches("keyboard actions"))
+        #expect(findCommand.keyEquivalent == "⌘F")
+        #expect(findCommand.matches("search transcript"))
         #expect(settingsCommand.keyEquivalent == "⌘,")
         #expect(settingsCommand.title == "Open General Settings")
         #expect(settingsCommand.matches("preferences workspace"))

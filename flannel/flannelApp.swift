@@ -79,6 +79,8 @@ private struct FlannelAppCommands: Commands {
 
             commandButton(.openCommandPalette)
                 .keyboardShortcut("k", modifiers: [.command])
+            commandButton(.findInChat)
+                .keyboardShortcut("f", modifiers: [.command])
 
             Divider()
 

@@ -12,6 +12,7 @@ enum FlannelCommandID: String, CaseIterable, Identifiable, Sendable {
     case newChat
     case importChat
     case openCommandPalette
+    case findInChat
     case sendMessage
     case stopStreaming
     case comparePrompt
@@ -58,7 +59,7 @@ enum FlannelCommandID: String, CaseIterable, Identifiable, Sendable {
             .cheapest
         case .setRoutingFastest:
             .fastest
-        case .newChat, .importChat, .openCommandPalette, .sendMessage, .stopStreaming,
+        case .newChat, .importChat, .openCommandPalette, .findInChat, .sendMessage, .stopStreaming,
              .comparePrompt, .runComparison, .discoverModels, .toggleLocalOnly,
              .toggleCloudProviders,
              .openChat, .openHistory, .openCompare, .openModels, .openKnowledge,
@@ -226,6 +227,16 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
                 systemImage: "command",
                 keywords: ["shortcuts", "actions", "keyboard", "menu"],
                 keyEquivalent: "⌘K"
+            ),
+            FlannelCommand(
+                id: .findInChat,
+                title: "Find in Chat",
+                subtitle: context.hasCurrentThread ? "Search inside the current transcript." : "Open a chat before searching its transcript.",
+                category: "Chat",
+                systemImage: "magnifyingglass",
+                keywords: ["search", "transcript", "messages", "current chat"],
+                keyEquivalent: "⌘F",
+                isEnabled: context.hasCurrentThread
             ),
             FlannelCommand(
                 id: .sendMessage,
