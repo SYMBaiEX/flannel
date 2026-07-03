@@ -4884,6 +4884,14 @@ private struct MessageBubble: View {
         }
     }
 
+    private var visibleRunSummaryChips: [MessageMetadataChip] {
+        Array(message.metadataChips.prefix(6))
+    }
+
+    private var hiddenRunSummaryChipCount: Int {
+        max(0, message.metadataChips.count - visibleRunSummaryChips.count)
+    }
+
     private var rendersToolResultAsPrimaryContent: Bool {
         message.role == .assistant
             && !toolResults.isEmpty
@@ -4996,6 +5004,12 @@ private struct MessageBubble: View {
                 }
 
                 if !message.metadataChips.isEmpty {
+                    MessageMetadataSummaryStrip(
+                        chips: visibleRunSummaryChips,
+                        overflowCount: hiddenRunSummaryChipCount
+                    )
+                    .padding(.top, 2)
+
                     DisclosureGroup(isExpanded: $showsDetails) {
                         FlowLayout(spacing: 6) {
                             ForEach(message.metadataChips, id: \.self) { chip in
@@ -5004,7 +5018,7 @@ private struct MessageBubble: View {
                         }
                         .padding(.top, 6)
                     } label: {
-                        Label("Details", systemImage: "info.circle")
+                        Label("All details", systemImage: "info.circle")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
@@ -5074,6 +5088,31 @@ private struct MessageBubble: View {
             .frame(width: 18)
             .symbolRenderingMode(.hierarchical)
             .foregroundStyle(.secondary)
+    }
+}
+
+private struct MessageMetadataSummaryStrip: View {
+    var chips: [MessageMetadataChip]
+    var overflowCount: Int
+
+    var body: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(chips, id: \.self) { chip in
+                CapsuleLabel(chip.title, icon: chip.icon)
+            }
+
+            if overflowCount > 0 {
+                CapsuleLabel("+\(overflowCount) more", icon: "ellipsis")
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        let visible = chips.map(\.title).joined(separator: ", ")
+        guard overflowCount > 0 else { return "Message run details: \(visible)" }
+        return "Message run details: \(visible), \(overflowCount) more"
     }
 }
 
