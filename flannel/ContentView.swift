@@ -6353,6 +6353,10 @@ private struct ComparisonRunSurface: View {
         run.results.filter { $0.status == .streaming }.count
     }
 
+    private var recommendedResult: ModelComparisonResult? {
+        run.recommendedResult
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
@@ -6376,6 +6380,13 @@ private struct ComparisonRunSurface: View {
                 CapsuleLabel("\(run.results.count) providers", icon: "cpu")
             }
 
+            if let recommendedResult {
+                ComparisonRecommendationBanner(
+                    result: recommendedResult,
+                    reasons: run.recommendationReasons(for: recommendedResult)
+                )
+            }
+
             if failedCount == run.results.count && !run.results.isEmpty {
                 Label("All providers failed. Check provider setup, model identifiers, local servers, or API keys.", systemImage: "exclamationmark.triangle")
                     .font(.caption)
@@ -6390,6 +6401,7 @@ private struct ComparisonRunSurface: View {
                     ForEach(run.results) { result in
                         ComparisonResultCard(
                             result: result,
+                            isRecommended: recommendedResult?.id == result.id,
                             isSelected: selectedResultID == result.id,
                             select: { selectResult(result) },
                             copy: { copyResult(result) },
@@ -6419,13 +6431,66 @@ private struct ComparisonRunSurface: View {
     }
 }
 
+private struct ComparisonRecommendationBanner: View {
+    var result: ModelComparisonResult
+    var reasons: [String]
+
+    private var reasonText: String {
+        reasons.isEmpty ? "best observable telemetry" : reasons.joined(separator: ", ")
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "sparkles")
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.green)
+                .frame(width: 18)
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Recommended route: \(result.providerDisplayName)")
+                    .font(.caption.weight(.semibold))
+                Text(reasonText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.green.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(.green.opacity(0.24), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+    }
+}
+
 private struct ComparisonResultCard: View {
     var result: ModelComparisonResult
+    var isRecommended: Bool
     var isSelected: Bool
     var select: () -> Void
     var copy: () -> Void
     var useInChat: () -> Void
     var useModel: () -> Void
+
+    private var borderStyle: AnyShapeStyle {
+        if isSelected {
+            return AnyShapeStyle(.indigo.opacity(0.55))
+        }
+        if isRecommended {
+            return AnyShapeStyle(.green.opacity(0.38))
+        }
+        return AnyShapeStyle(.secondary.opacity(0.10))
+    }
+
+    private var borderWidth: CGFloat {
+        isSelected || isRecommended ? 1.5 : 1
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -6445,6 +6510,9 @@ private struct ComparisonResultCard: View {
                     }
 
                     FlowLayout(spacing: 6) {
+                        if isRecommended {
+                            CapsuleLabel("Recommended", icon: "sparkles", tint: .green)
+                        }
                         CapsuleLabel(result.accessMode.title, icon: result.accessMode.icon)
                         CapsuleLabel(result.privacyScope.title, icon: result.privacyScope.icon)
                         if let inputTokenCount = result.inputTokenCount,
@@ -6520,7 +6588,7 @@ private struct ComparisonResultCard: View {
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(isSelected ? .indigo.opacity(0.55) : .secondary.opacity(0.10), lineWidth: isSelected ? 1.5 : 1)
+                .stroke(borderStyle, lineWidth: borderWidth)
         )
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
@@ -9545,6 +9613,13 @@ private struct CompareInspectorSurface: View {
                     CapsuleLabel(selectedRun.createdAt.formatted(date: .abbreviated, time: .shortened), icon: "clock")
                 }
 
+                if let recommendedResult = selectedRun.recommendedResult {
+                    ComparisonRecommendationBanner(
+                        result: recommendedResult,
+                        reasons: selectedRun.recommendationReasons(for: recommendedResult)
+                    )
+                }
+
                 if let selectedResult {
                     Divider()
 
@@ -9563,6 +9638,9 @@ private struct CompareInspectorSurface: View {
                         }
 
                         FlowLayout(spacing: 8) {
+                            if selectedRun.recommendedResult?.id == selectedResult.id {
+                                CapsuleLabel("Recommended", icon: "sparkles", tint: .green)
+                            }
                             CapsuleLabel(selectedResult.accessMode.title, icon: selectedResult.accessMode.icon)
                             CapsuleLabel(selectedResult.privacyScope.title, icon: selectedResult.privacyScope.icon)
                             if let inputTokenCount = selectedResult.inputTokenCount,

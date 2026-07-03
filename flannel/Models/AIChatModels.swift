@@ -1026,6 +1026,112 @@ struct ModelComparisonRun: Identifiable, Codable, Hashable, Sendable {
         }
         return .failed
     }
+
+    var recommendedResult: ModelComparisonResult? {
+        results
+            .filter(\.isRecommendationCandidate)
+            .max { lhs, rhs in
+                let lhsScore = recommendationScore(for: lhs)
+                let rhsScore = recommendationScore(for: rhs)
+                if lhsScore == rhsScore {
+                    return lhs.providerDisplayName.localizedCaseInsensitiveCompare(rhs.providerDisplayName) == .orderedDescending
+                }
+                return lhsScore < rhsScore
+            }
+    }
+
+    func recommendationScore(for result: ModelComparisonResult) -> Int {
+        guard result.isRecommendationCandidate else { return Int.min }
+
+        var score = 1_000
+
+        switch result.privacyScope {
+        case .localOnly:
+            score += 240
+        case .localCLI:
+            score += 180
+        case .bridgeService:
+            score += 120
+        case .externalAPI:
+            score += 60
+        }
+
+        if result.tokenCountsAreEstimated {
+            score += 20
+        } else {
+            score += 90
+        }
+
+        if let firstTokenLatencyMilliseconds = result.firstTokenLatencyMilliseconds {
+            score += max(0, 180 - min(180, firstTokenLatencyMilliseconds / 20))
+        }
+
+        if let latencyMilliseconds = result.latencyMilliseconds {
+            score += max(0, 220 - min(220, latencyMilliseconds / 35))
+        }
+
+        if let estimatedCostMicros = result.estimatedCostMicros {
+            score += max(0, 180 - min(180, estimatedCostMicros / 120))
+        } else if result.privacyScope == .localOnly || result.privacyScope == .localCLI {
+            score += 120
+        }
+
+        let answerLength = result.text.trimmingCharacters(in: .whitespacesAndNewlines).count
+        score += min(80, max(0, answerLength / 20))
+
+        return score
+    }
+
+    func recommendationReasons(for result: ModelComparisonResult) -> [String] {
+        guard result.isRecommendationCandidate else { return [] }
+
+        var reasons: [String] = []
+
+        switch result.privacyScope {
+        case .localOnly:
+            reasons.append("local-only route")
+        case .localCLI:
+            reasons.append("local account CLI")
+        case .bridgeService:
+            reasons.append("local bridge")
+        case .externalAPI:
+            break
+        }
+
+        if let firstTokenLatencyMilliseconds = result.firstTokenLatencyMilliseconds,
+           firstTokenLatencyMilliseconds <= 1_000 {
+            reasons.append("fast first token")
+        } else if let latencyMilliseconds = result.latencyMilliseconds,
+                  latencyMilliseconds <= 4_000 {
+            reasons.append("low latency")
+        }
+
+        if !result.tokenCountsAreEstimated {
+            reasons.append("measured tokens")
+        }
+
+        if let estimatedCostMicros = result.estimatedCostMicros {
+            if estimatedCostMicros == 0 {
+                reasons.append("no estimated API cost")
+            } else if estimatedCostMicros <= 1_000 {
+                reasons.append("low estimated cost")
+            }
+        } else if result.privacyScope == .localOnly || result.privacyScope == .localCLI {
+            reasons.append("no API cost estimate")
+        }
+
+        if reasons.isEmpty {
+            reasons.append("best observable telemetry")
+        }
+
+        return Array(reasons.prefix(3))
+    }
+}
+
+extension ModelComparisonResult {
+    var isRecommendationCandidate: Bool {
+        status == .completed && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 enum KnowledgeSourceKind: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
