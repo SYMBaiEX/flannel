@@ -949,7 +949,7 @@ struct AIChatProviderRegistryTests {
         #expect(claudeCLI.leavesDeviceDirectly == false)
         #expect(claudeCLI.primaryRuntimeInterface == .subscriptionCLI)
         #expect(claudeCLI.recommendedCLICommand == "claude -p --output-format stream-json --verbose")
-        #expect(claudeCLI.cliContract?.statusCommandArguments == ["auth", "status"])
+        #expect(claudeCLI.cliContract?.statusCommandArguments == ["auth", "status", "--text"])
         #expect(claudeCLI.cliContract?.supportsPromptViaStdin == false)
         #expect(claudeCLI.capabilities == [ModelCapability.chat, .streaming])
         #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("code.claude.com/docs/en/cli-reference") }))

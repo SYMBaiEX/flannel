@@ -777,7 +777,7 @@ enum AIKnownProviderCatalog {
             cliContract: AIProviderCLIContract(
                 preferredExecutable: "claude",
                 recommendedCommand: "claude -p --output-format stream-json --verbose",
-                statusCommandArguments: ["auth", "status"],
+                statusCommandArguments: ["auth", "status", "--text"],
                 defaultOutputDecoding: .claudeStreamJSON,
                 supportsPromptViaStdin: false,
                 supportsPromptPlaceholderArguments: true

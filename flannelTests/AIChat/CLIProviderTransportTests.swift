@@ -136,7 +136,7 @@ struct CLIProviderTransportTests {
         #expect(codexSpec.outputFormat == .plainText)
 
         #expect(claudeSpec.executable == "/Applications/Claude Code.app/Contents/MacOS/claude")
-        #expect(claudeSpec.arguments == ["auth", "status"])
+        #expect(claudeSpec.arguments == ["auth", "status", "--text"])
         #expect(claudeSpec.stdinText == nil)
         #expect(claudeSpec.outputFormat == .plainText)
     }
