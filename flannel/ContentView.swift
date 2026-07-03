@@ -156,7 +156,11 @@ struct ContentView: View {
         )
 
         if sidebarSurface == .settings {
-            column.navigationSplitViewColumnWidth(width.ideal)
+            column.navigationSplitViewColumnWidth(
+                min: width.min,
+                ideal: width.ideal,
+                max: width.max
+            )
         } else {
             column.navigationSplitViewColumnWidth(
                 min: width.min,
@@ -2795,10 +2799,14 @@ private struct SettingsSidebar: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Settings")
                         .font(.title3.weight(.semibold))
+                        .lineLimit(1)
                     Text("Choose a settings route in this sidebar.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 14)
             .padding(.top, 52)
@@ -2818,9 +2826,7 @@ private struct SettingsSidebar: View {
             .scrollIndicators(.automatic)
         }
         .frame(
-            minWidth: FlannelSidebarSurface.settings.columnWidth.min,
-            idealWidth: FlannelSidebarSurface.settings.columnWidth.ideal,
-            maxWidth: FlannelSidebarSurface.settings.columnWidth.max,
+            maxWidth: .infinity,
             maxHeight: .infinity,
             alignment: .topLeading
         )
@@ -2897,20 +2903,19 @@ private struct SettingsRouteRow: View {
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.secondary)
                 .font(.callout)
-                .frame(width: 18)
+                .frame(width: 20, alignment: .center)
                 .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(tab.title)
                     .font(.callout.weight(.medium))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.92)
 
                 Text(tab.sidebarDetail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.88)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -7418,10 +7423,8 @@ private struct ModelPresetCard: View {
     var preset: ModelPreset
     var persist: () -> Void
 
-    private var matchingProviderIndex: Int? {
-        store.providerConfigurations.firstIndex {
-            $0.kind == preset.providerKind && $0.accessMode == preset.accessMode
-        }
+    private var matchingProvider: ProviderConfiguration? {
+        store.providerRoutesCompatibleWithModelPreset(preset.id).first
     }
 
     var body: some View {
@@ -7435,7 +7438,7 @@ private struct ModelPresetCard: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                if preset.isDefault || store.preferences.defaultModelPresetID == preset.id {
+                if store.defaultModelPreset?.id == preset.id {
                     StatusBadge(text: "Default", icon: "checkmark.circle", tint: .green)
                 }
             }
@@ -7468,10 +7471,7 @@ private struct ModelPresetCard: View {
 
             HStack {
                 Button("Make Default") {
-                    for index in store.modelPresets.indices {
-                        store.modelPresets[index].isDefault = store.modelPresets[index].id == preset.id
-                    }
-                    store.preferences.defaultModelPresetID = preset.id
+                    _ = store.setDefaultModelPreset(preset.id)
                     persist()
                 }
                 .buttonStyle(.bordered)
@@ -7480,7 +7480,7 @@ private struct ModelPresetCard: View {
                     applyPreset()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(matchingProviderIndex == nil)
+                .disabled(matchingProvider == nil)
 
                 Spacer()
             }
@@ -7489,19 +7489,8 @@ private struct ModelPresetCard: View {
     }
 
     private func applyPreset() {
-        guard let index = matchingProviderIndex else { return }
-        store.providerConfigurations[index].modelIdentifier = preset.modelIdentifier
-        store.providerConfigurations[index].temperature = preset.temperature
-        store.providerConfigurations[index].privacyScope = preset.privacyScope
-        store.providerConfigurations[index].supportsEmbeddings = preset.capabilities.contains(.embeddings)
-        store.providerConfigurations[index].supportsToolCalling = preset.capabilities.contains(.toolCalling)
-        store.providerConfigurations[index].supportsStreaming = preset.capabilities.contains(.streaming)
-        store.providerConfigurations[index].supportsStructuredOutput = preset.capabilities.contains(.structuredOutput)
-        store.providerConfigurations[index].supportsVision = preset.capabilities.contains(.vision)
-        store.providerConfigurations[index].contextWindowTokens = preset.contextWindowTokens
-        store.providerConfigurations[index].capabilities = preset.capabilities
-        store.preferences.defaultModelPresetID = preset.id
-        store.preferences.preferredProviderID = store.providerConfigurations[index].id
+        guard let providerID = matchingProvider?.id else { return }
+        _ = store.applyModelPreset(preset.id, providerID: providerID)
         persist()
     }
 }
@@ -8580,7 +8569,7 @@ private struct LegacySettingsSurface: View {
                 Picker("Default model preset", selection: Binding(
                     get: { store.preferences.defaultModelPresetID },
                     set: {
-                        store.preferences.defaultModelPresetID = $0
+                        _ = store.setDefaultModelPreset($0)
                         persist()
                     }
                 )) {

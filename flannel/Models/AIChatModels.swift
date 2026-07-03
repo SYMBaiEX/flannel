@@ -278,11 +278,12 @@ extension ProviderConfiguration {
     }
 
     nonisolated var runtimePolicy: ProviderRuntimePolicy {
-        ProviderRuntimePolicy(
+        let boundary = runtimeBoundary
+        return ProviderRuntimePolicy(
             readinessStrategy: runtimeReadinessStrategy,
             chatTransport: runtimeChatTransport,
             requiresEndpoint: runtimeRequiresEndpoint,
-            requiresHTTPSForRemoteEndpoint: privacyScope == .externalAPI || accessMode == .apiKey,
+            requiresHTTPSForRemoteEndpoint: boundary == .externalAPI || accessMode == .apiKey,
             requiresKeychainSecret: accessMode == .apiKey || accessMode == .anthropicCompatible,
             supportsOptionalKeychainSecret: accessMode == .openAICompatible
         )
@@ -339,11 +340,10 @@ extension ProviderConfiguration {
         let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let components = URLComponents(string: trimmed),
               let host = components.host?.lowercased() else {
-            return privacyScope == .localOnly
+            return false
         }
 
-        return privacyScope == .localOnly
-            || host == "localhost"
+        return host == "localhost"
             || host == "127.0.0.1"
             || host == "::1"
     }

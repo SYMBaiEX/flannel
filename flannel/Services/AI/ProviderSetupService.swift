@@ -668,17 +668,12 @@ nonisolated struct ProviderSetupService: Sendable {
     }
 
     private func isLocalExecutionBoundary(_ provider: ProviderConfiguration) -> Bool {
-        if provider.privacyScope == .localOnly {
+        switch provider.runtimeBoundary {
+        case .localServer, .localCLI:
             return true
-        }
-
-        guard provider.accessMode == .openAICompatible,
-              let endpoint = normalizedEndpoint(from: provider.endpoint),
-              let url = URL(string: endpoint) else {
+        case .externalAPI, .localBridge:
             return false
         }
-
-        return isLoopback(url)
     }
 
     private func diagnostic(for error: CLIProviderTransportError, provider: ProviderConfiguration) -> ProviderSetupDiagnostic {

@@ -35,7 +35,7 @@ struct WorkspaceDestinationMigrationTests {
     func loadingLegacySettingsDestinationMigratesToChat() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let legacyThread = AssistantThread(
@@ -64,7 +64,7 @@ struct WorkspaceDestinationMigrationTests {
     func loadingLegacySettingsDestinationWithoutThreadSeedsThread() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let legacyWorkspace = Item(
@@ -90,7 +90,7 @@ struct WorkspaceDestinationMigrationTests {
         for destination in WorkspaceDestination.allCases where destination != .home {
             let container = try ModelContainer(
                 for: Item.self,
-                configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+                configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
             )
             let context = ModelContext(container)
             let workspace = Item(

@@ -339,10 +339,7 @@ struct SettingsSurface: View {
                 Picker("Default model preset", selection: Binding(
                     get: { store.preferences.defaultModelPresetID },
                     set: { presetID in
-                        store.preferences.defaultModelPresetID = presetID
-                        for index in store.modelPresets.indices {
-                            store.modelPresets[index].isDefault = store.modelPresets[index].id == presetID
-                        }
+                        _ = store.setDefaultModelPreset(presetID)
                         persist()
                     }
                 )) {

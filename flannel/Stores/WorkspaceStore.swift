@@ -806,6 +806,55 @@ final class WorkspaceStore {
         .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
+    private static func sortedUniqueCapabilities(_ capabilities: [ModelCapability]) -> [ModelCapability] {
+        Array(Set(capabilities)).sorted { $0.rawValue < $1.rawValue }
+    }
+
+    private func canApplyPrivacyScope(
+        _ privacyScope: ProviderPrivacyScope,
+        to provider: ProviderConfiguration
+    ) -> Bool {
+        guard privacyScope == .localOnly else { return true }
+
+        switch provider.accessMode {
+        case .localServer:
+            return true
+        case .openAICompatible, .anthropicCompatible:
+            return Self.isLoopbackEndpoint(provider.endpoint)
+        case .apiKey, .aiSDKBridge, .subscriptionCLI:
+            return false
+        }
+    }
+
+    private static func isLoopbackEndpoint(_ rawEndpoint: String) -> Bool {
+        let endpoint = rawEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let components = URLComponents(string: endpoint),
+              let host = components.host?.lowercased() else {
+            return false
+        }
+
+        return host == "localhost" || host == "127.0.0.1" || host == "::1"
+    }
+
+    private func modelPresetApplicationNeedsReadinessCheck(
+        original: ProviderConfiguration,
+        updated: ProviderConfiguration
+    ) -> Bool {
+        guard updated.runtimePolicy.readinessStrategy != .staticConfiguration else {
+            return false
+        }
+
+        return original.modelIdentifier != updated.modelIdentifier
+            || original.privacyScope != updated.privacyScope
+            || original.endpoint != updated.endpoint
+            || original.capabilities != updated.capabilities
+            || original.supportsStreaming != updated.supportsStreaming
+            || original.supportsToolCalling != updated.supportsToolCalling
+            || original.supportsEmbeddings != updated.supportsEmbeddings
+            || original.supportsVision != updated.supportsVision
+            || original.supportsStructuredOutput != updated.supportsStructuredOutput
+    }
+
     private static func localDiscoveryFailureMessage(for result: LocalProviderDiscoveryResult) -> String {
         let detail = result.errorMessage?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let detail, !detail.isEmpty {
@@ -3052,7 +3101,28 @@ final class WorkspaceStore {
             return provider
         }
 
+        if let defaultPresetRoute = defaultModelPresetRoute(from: enabledProviders) {
+            return defaultPresetRoute
+        }
+
         return enabledProviders.first(where: \.isLocalPreferred) ?? enabledProviders.first
+    }
+
+    private func defaultModelPresetRoute(from enabledProviders: [ProviderConfiguration]) -> ProviderConfiguration? {
+        guard let preset = defaultModelPreset else { return nil }
+        let candidates = enabledProviders.filter {
+            $0.kind == preset.providerKind && $0.accessMode == preset.accessMode
+        }
+        guard !candidates.isEmpty else { return nil }
+
+        let modelIdentifier = preset.modelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !modelIdentifier.isEmpty else { return candidates.first }
+
+        return candidates.first {
+            $0.modelIdentifier == modelIdentifier
+                || $0.availableModels.contains(modelIdentifier)
+                || $0.discoveredModelNames.contains(modelIdentifier)
+        } ?? candidates.first
     }
 
     private func orderedChatProviders(
@@ -3082,6 +3152,139 @@ final class WorkspaceStore {
     var preferredProviderConfiguration: ProviderConfiguration? {
         guard let preferredID = preferences.preferredProviderID else { return nil }
         return providerConfigurations.first(where: { $0.id == preferredID })
+    }
+
+    var defaultModelPreset: ModelPreset? {
+        if let defaultPresetID = preferences.defaultModelPresetID,
+           let preset = modelPresets.first(where: { $0.id == defaultPresetID }) {
+            return preset
+        }
+
+        return modelPresets.first(where: \.isDefault)
+    }
+
+    func matchingProviders(for preset: ModelPreset) -> [ProviderConfiguration] {
+        providerConfigurations.filter {
+            $0.kind == preset.providerKind && $0.accessMode == preset.accessMode
+        }
+    }
+
+    func providerRoutesCompatibleWithModelPreset(_ presetID: UUID) -> [ProviderConfiguration] {
+        guard let preset = modelPresets.first(where: { $0.id == presetID }) else {
+            return []
+        }
+        return matchingProviders(for: preset)
+    }
+
+    @discardableResult
+    func setDefaultModelPreset(_ presetID: UUID?) -> Bool {
+        if let presetID,
+           !modelPresets.contains(where: { $0.id == presetID }) {
+            return false
+        }
+
+        preferences.defaultModelPresetID = presetID
+        for index in modelPresets.indices {
+            modelPresets[index].isDefault = modelPresets[index].id == presetID
+        }
+        return true
+    }
+
+    @discardableResult
+    func applyModelPreset(
+        _ presetID: UUID,
+        providerID: UUID? = nil,
+        makeDefault: Bool = true,
+        selectForChat: Bool = true
+    ) -> Bool {
+        guard let preset = modelPresets.first(where: { $0.id == presetID }) else {
+            return false
+        }
+
+        let providerIndex: Int?
+        if let providerID {
+            providerIndex = providerConfigurations.firstIndex {
+                $0.id == providerID
+                    && $0.kind == preset.providerKind
+                    && $0.accessMode == preset.accessMode
+            }
+        } else {
+            providerIndex = providerConfigurations.firstIndex {
+                $0.kind == preset.providerKind && $0.accessMode == preset.accessMode
+            }
+        }
+
+        guard let providerIndex,
+              canApplyPrivacyScope(preset.privacyScope, to: providerConfigurations[providerIndex]) else {
+            return false
+        }
+
+        let originalProvider = providerConfigurations[providerIndex]
+        var updatedProvider = originalProvider
+        let modelIdentifier = preset.modelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sortedCapabilities = Self.sortedUniqueCapabilities(preset.capabilities)
+
+        updatedProvider.modelIdentifier = modelIdentifier
+        updatedProvider.temperature = preset.temperature
+        updatedProvider.privacyScope = preset.privacyScope
+        updatedProvider.contextWindowTokens = preset.contextWindowTokens
+        updatedProvider.capabilities = sortedCapabilities
+        updatedProvider.supportsEmbeddings = sortedCapabilities.contains(.embeddings)
+        updatedProvider.supportsToolCalling = sortedCapabilities.contains(.toolCalling)
+        updatedProvider.supportsStreaming = sortedCapabilities.contains(.streaming)
+        updatedProvider.supportsStructuredOutput = sortedCapabilities.contains(.structuredOutput)
+        updatedProvider.supportsVision = sortedCapabilities.contains(.vision)
+        updatedProvider.isEnabled = true
+
+        if !modelIdentifier.isEmpty {
+            updatedProvider.availableModels = Self.sortedUniqueModelNames(
+                updatedProvider.availableModels + [modelIdentifier]
+            )
+        }
+
+        let setupReport = ProviderSetupService.shared.report(
+            for: updatedProvider,
+            preferences: preferences
+        )
+        if let normalizedEndpoint = setupReport.normalizedEndpoint {
+            updatedProvider.endpoint = normalizedEndpoint
+        }
+        updatedProvider.modelIdentifier = setupReport.normalizedModelIdentifier
+
+        let needsReadinessCheck = modelPresetApplicationNeedsReadinessCheck(
+            original: originalProvider,
+            updated: updatedProvider
+        )
+        if let blockingIssue = setupReport.diagnostics.first(where: \.isBlocking) {
+            updatedProvider.connectionStatus = .needsAttention
+            updatedProvider.lastValidatedAt = nil
+            updatedProvider.lastErrorMessage = blockingIssue.message
+        } else if setupReport.routingEligibility != .eligible,
+                  let routingIssue = setupReport.diagnostics.first {
+            updatedProvider.connectionStatus = .needsAttention
+            updatedProvider.lastValidatedAt = nil
+            updatedProvider.lastErrorMessage = routingIssue.message
+        } else if needsReadinessCheck {
+            updatedProvider.connectionStatus = .needsAttention
+            updatedProvider.lastValidatedAt = nil
+            updatedProvider.lastErrorMessage = "Run provider readiness after applying this model preset."
+        } else if updatedProvider.runtimePolicy.readinessStrategy == .staticConfiguration {
+            updatedProvider.connectionStatus = .ready
+            updatedProvider.lastValidatedAt = .now
+            updatedProvider.lastErrorMessage = nil
+        }
+
+        providerConfigurations[providerIndex] = updatedProvider
+
+        if makeDefault {
+            _ = setDefaultModelPreset(preset.id)
+        }
+        if selectForChat {
+            preferences.preferredProviderID = updatedProvider.id
+            preferences.providerRoutingPolicy = .selectedProvider
+        }
+
+        return isProviderRunnableForChat(updatedProvider)
     }
 
     @discardableResult
@@ -4425,6 +4628,7 @@ final class WorkspaceStore {
         rebuildProjectReferences()
         normalizePromptProfileState()
         normalizeChatTemplateState()
+        normalizeModelPresetState()
         tags = buildTagRegistry()
         pruneChatOrganizationState()
         normalizeLocalMemoryState()
@@ -4563,6 +4767,7 @@ final class WorkspaceStore {
             ]
             preferences.defaultModelPresetID = modelPresets.first(where: \.isDefault)?.id
         }
+        normalizeModelPresetState()
 
         if knowledgeSources.isEmpty {
             knowledgeSources = [
@@ -5544,6 +5749,41 @@ final class WorkspaceStore {
             chatTemplates[index].requiredToolKinds = stableUnique(chatTemplates[index].requiredToolKinds)
             chatTemplates[index].knowledgeSourceIDs = stableUnique(chatTemplates[index].knowledgeSourceIDs)
                 .filter { knowledgeSourceIDs.contains($0) }
+        }
+    }
+
+    private func normalizeModelPresetState() {
+        var seenPresetIDs = Set<UUID>()
+        modelPresets = modelPresets.filter { preset in
+            seenPresetIDs.insert(preset.id).inserted
+        }
+
+        for index in modelPresets.indices {
+            modelPresets[index].title = modelPresets[index].title
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if modelPresets[index].title.isEmpty {
+                modelPresets[index].title = "Model Preset"
+            }
+            modelPresets[index].modelIdentifier = modelPresets[index].modelIdentifier
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            modelPresets[index].capabilities = Self.sortedUniqueCapabilities(modelPresets[index].capabilities)
+        }
+
+        if let defaultPresetID = preferences.defaultModelPresetID,
+           !modelPresets.contains(where: { $0.id == defaultPresetID }) {
+            preferences.defaultModelPresetID = nil
+        }
+
+        if let defaultPresetID = preferences.defaultModelPresetID {
+            for index in modelPresets.indices {
+                modelPresets[index].isDefault = modelPresets[index].id == defaultPresetID
+            }
+        } else if let defaultIndex = modelPresets.firstIndex(where: \.isDefault) {
+            let defaultID = modelPresets[defaultIndex].id
+            preferences.defaultModelPresetID = defaultID
+            for index in modelPresets.indices {
+                modelPresets[index].isDefault = index == defaultIndex
+            }
         }
     }
 

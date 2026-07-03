@@ -623,7 +623,7 @@ struct AIChatProviderRegistryTests {
     func providerMatrixNormalizesMigratedCLIProviderToolFlags() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         context.insert(
@@ -693,7 +693,7 @@ struct AIChatProviderRegistryTests {
     func providerMatrixNormalizesMigratedBridgeEmbeddingFlags() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         context.insert(
@@ -743,7 +743,7 @@ struct AIChatProviderRegistryTests {
     func providerMatrixRestoresHostedAPICapabilityDefaults() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         context.insert(
@@ -824,7 +824,7 @@ struct AIChatProviderRegistryTests {
     func providerMatrixBackfillsOllamaAndOpenAI() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         context.insert(Item(providerConfigurations: []))
@@ -854,7 +854,7 @@ struct AIChatProviderRegistryTests {
     func providerMatrixSeedsRoutesFromKnownProviderCatalog() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         context.insert(Item(providerConfigurations: []))
@@ -1246,6 +1246,71 @@ struct AIChatProviderRegistryTests {
     }
 
     @MainActor
+    @Test("Remote OpenAI-compatible route cannot claim a local-only boundary")
+    func remoteOpenAICompatibleRouteCannotClaimLocalOnlyBoundary() {
+        let remoteProvider = ProviderConfiguration(
+            kind: .customOpenAICompatible,
+            accessMode: .openAICompatible,
+            privacyScope: .localOnly,
+            displayName: "Remote Compatible",
+            endpoint: "https://models.example.com/v1",
+            modelIdentifier: "remote-model",
+            secretReference: "flannel.test.remote-compatible",
+            isEnabled: true,
+            connectionStatus: .ready,
+            capabilities: [.chat, .streaming],
+            supportsStreaming: true
+        )
+
+        #expect(remoteProvider.runtimeBoundary == .externalAPI)
+        #expect(remoteProvider.runtimeBoundary.leavesDeviceDirectly)
+        #expect(remoteProvider.runtimePolicy.requiresHTTPSForRemoteEndpoint)
+    }
+
+    @MainActor
+    @Test("Local-only routing rejects remote compatible endpoints even when mislabeled")
+    func localOnlyRoutingRejectsMislabeledRemoteCompatibleEndpoint() throws {
+        let (_, store) = try makeLoadedStore()
+        let remoteProvider = ProviderConfiguration(
+            id: UUID(uuidString: "29a62dc5-e2d8-4de6-9d67-4169ae6c2d88")!,
+            kind: .customOpenAICompatible,
+            accessMode: .openAICompatible,
+            privacyScope: .localOnly,
+            displayName: "Remote Compatible",
+            endpoint: "https://models.example.com/v1",
+            modelIdentifier: "remote-model",
+            secretReference: "flannel.test.remote-compatible",
+            isEnabled: true,
+            connectionStatus: .ready,
+            capabilities: [.chat, .streaming],
+            supportsStreaming: true
+        )
+        let localProvider = ProviderConfiguration(
+            id: UUID(uuidString: "c03f470a-4e8a-49dd-9e63-efc678a10a1f")!,
+            kind: .ollama,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "Local Ollama",
+            endpoint: "http://localhost:11434",
+            modelIdentifier: "llama3.1",
+            isEnabled: true,
+            connectionStatus: .ready,
+            isLocalPreferred: true,
+            capabilities: [.chat, .streaming],
+            supportsStreaming: true
+        )
+        store.providerConfigurations = [remoteProvider, localProvider]
+        store.preferences.localOnlyMode = true
+        store.preferences.allowCloudProviders = false
+        store.preferences.preferredProviderID = remoteProvider.id
+        store.preferences.providerRoutingPolicy = .selectedProvider
+
+        #expect(store.isProviderAllowedByPreferences(remoteProvider) == false)
+        #expect(store.isProviderRunnableForChat(remoteProvider) == false)
+        #expect(store.activeProvider?.id == localProvider.id)
+    }
+
+    @MainActor
     @Test("Selecting a CLI subscription provider keeps it separate from API cloud policy")
     func selectingCLISubscriptionProviderDoesNotRequireCloudAPIAllowance() throws {
         let (_, store) = try makeLoadedStore()
@@ -1569,7 +1634,7 @@ struct AIChatProviderRegistryTests {
     private func makeLoadedStore() throws -> (ModelContainer, WorkspaceStore) {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let store = WorkspaceStore()
         try store.loadOrCreate(in: ModelContext(container))

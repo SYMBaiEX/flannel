@@ -271,7 +271,7 @@ struct WorkspaceStoreTests {
     func chatTemplatesPersistPromptVariablesAndProviderHints() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let store = WorkspaceStore()
@@ -312,7 +312,7 @@ struct WorkspaceStoreTests {
     func promptProfileUpsertNormalizesTagsSwitchesDefaultsAndPersists() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let store = WorkspaceStore()
@@ -530,7 +530,7 @@ struct WorkspaceStoreTests {
     func providerMatrixPreservesMultipleUserRoutesPerFamily() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let openAIPrimary = ProviderConfiguration(
@@ -679,6 +679,129 @@ struct WorkspaceStoreTests {
         #expect(duplicate.lastValidatedAt == nil)
         #expect(duplicate.lastErrorMessage?.contains("Review duplicated route") == true)
         #expect(store.providerConfigurations.contains { $0.id == duplicate.id })
+    }
+
+    @MainActor
+    @Test("Applying a model preset updates only the targeted route and records selection")
+    func applyingModelPresetUpdatesOnlyTargetedRoute() throws {
+        let (_, store) = try makeLoadedStore()
+        let firstRoute = ProviderConfiguration(
+            id: UUID(uuidString: "a89b60d1-0c3a-49c4-a3e8-e6f4e8f91f12")!,
+            kind: .customOpenAICompatible,
+            accessMode: .openAICompatible,
+            privacyScope: .localOnly,
+            displayName: "Local Gateway A",
+            endpoint: "http://localhost:7777/v1",
+            modelIdentifier: "old-a",
+            isEnabled: true,
+            lastValidatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            connectionStatus: .ready,
+            availableModels: ["old-a"],
+            capabilities: [.chat, .streaming],
+            supportsStreaming: true
+        )
+        let targetRoute = ProviderConfiguration(
+            id: UUID(uuidString: "3a0f3226-763b-4a7c-990f-a0f553c0e0e4")!,
+            kind: .customOpenAICompatible,
+            accessMode: .openAICompatible,
+            privacyScope: .localOnly,
+            displayName: "Local Gateway B",
+            endpoint: "http://localhost:8888/v1",
+            modelIdentifier: "old-b",
+            isEnabled: true,
+            lastValidatedAt: Date(timeIntervalSince1970: 1_700_000_010),
+            connectionStatus: .ready,
+            availableModels: ["old-b"],
+            capabilities: [.chat, .streaming],
+            supportsStreaming: true
+        )
+        let preset = ModelPreset(
+            id: UUID(uuidString: "34a2b828-11ff-4e93-a2ab-e435c48f1581")!,
+            title: "Qwen local gateway",
+            providerKind: .customOpenAICompatible,
+            accessMode: .openAICompatible,
+            modelIdentifier: "qwen3:14b",
+            temperature: 0.35,
+            contextWindowTokens: 65_536,
+            capabilities: [.chat, .streaming, .toolCalling, .vision, .streaming],
+            privacyScope: .localOnly
+        )
+        store.providerConfigurations = [firstRoute, targetRoute]
+        store.modelPresets = [preset]
+        store.preferences.defaultModelPresetID = nil
+        store.preferences.preferredProviderID = nil
+
+        let runnable = store.applyModelPreset(preset.id, providerID: targetRoute.id)
+
+        let untouchedRoute = try #require(store.providerConfigurations.first { $0.id == firstRoute.id })
+        let updatedRoute = try #require(store.providerConfigurations.first { $0.id == targetRoute.id })
+
+        #expect(runnable == false)
+        #expect(untouchedRoute.modelIdentifier == "old-a")
+        #expect(untouchedRoute.temperature == firstRoute.temperature)
+        #expect(untouchedRoute.connectionStatus == .ready)
+        #expect(untouchedRoute.lastValidatedAt == firstRoute.lastValidatedAt)
+        #expect(updatedRoute.modelIdentifier == "qwen3:14b")
+        #expect(updatedRoute.temperature == 0.35)
+        #expect(updatedRoute.privacyScope == .localOnly)
+        #expect(updatedRoute.contextWindowTokens == 65_536)
+        #expect(updatedRoute.availableModels == ["old-b", "qwen3:14b"])
+        #expect(updatedRoute.capabilities == [.chat, .streaming, .toolCalling, .vision])
+        #expect(updatedRoute.supportsToolCalling)
+        #expect(updatedRoute.supportsVision)
+        #expect(updatedRoute.connectionStatus == .needsAttention)
+        #expect(updatedRoute.lastValidatedAt == nil)
+        #expect(updatedRoute.lastErrorMessage?.contains("Run provider readiness") == true)
+        #expect(store.preferences.preferredProviderID == targetRoute.id)
+        #expect(store.preferences.providerRoutingPolicy == .selectedProvider)
+        #expect(store.preferences.defaultModelPresetID == preset.id)
+        #expect(store.modelPresets.filter(\.isDefault).map(\.id) == [preset.id])
+    }
+
+    @MainActor
+    @Test("Default model preset normalizes across persistence")
+    func defaultModelPresetNormalizesAcrossPersistence() throws {
+        let container = try ModelContainer(
+            for: Item.self,
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let store = WorkspaceStore()
+        try store.loadOrCreate(in: context)
+        let firstPreset = ModelPreset(
+            id: UUID(uuidString: "f65dc659-87fd-4f90-88ec-3f43a4236686")!,
+            title: "  Local Default  ",
+            providerKind: .ollama,
+            accessMode: .localServer,
+            modelIdentifier: " llama3.1 ",
+            capabilities: [.streaming, .chat, .streaming],
+            privacyScope: .localOnly,
+            isDefault: true
+        )
+        let selectedPreset = ModelPreset(
+            id: UUID(uuidString: "772e83db-0064-4c6c-af84-3eea5b0155c4")!,
+            title: "Cloud Review",
+            providerKind: .openAI,
+            accessMode: .apiKey,
+            modelIdentifier: "gpt-5.5",
+            capabilities: [.chat, .streaming, .reasoning],
+            privacyScope: .externalAPI,
+            isDefault: true
+        )
+        store.modelPresets = [firstPreset, selectedPreset]
+        store.preferences.defaultModelPresetID = selectedPreset.id
+
+        try store.persist(in: context)
+
+        let reloadedStore = WorkspaceStore()
+        try reloadedStore.loadOrCreate(in: context)
+
+        #expect(reloadedStore.preferences.defaultModelPresetID == selectedPreset.id)
+        #expect(reloadedStore.defaultModelPreset?.id == selectedPreset.id)
+        #expect(reloadedStore.modelPresets.filter(\.isDefault).map(\.id) == [selectedPreset.id])
+        #expect(reloadedStore.modelPresets.first { $0.id == firstPreset.id }?.title == "Local Default")
+        #expect(reloadedStore.modelPresets.first { $0.id == firstPreset.id }?.modelIdentifier == "llama3.1")
+        #expect(reloadedStore.modelPresets.first { $0.id == firstPreset.id }?.capabilities == [.chat, .streaming])
     }
 
     @MainActor
@@ -1057,7 +1180,7 @@ struct WorkspaceStoreTests {
         #expect(updatedAutomation.lastRunState == .failed)
         #expect(updatedAutomation.lastResultMessage?.contains("disabled") == true)
         #expect(store.toolExecutionResults.first?.toolKind == .workspaceSearch)
-        #expect(store.toolExecutionResults.first?.status == .unavailable)
+        #expect(store.toolExecutionResults.first?.status == .blocked)
         #expect(store.localActionHistory.first?.kind == .runAutomation)
         #expect(store.localActionHistory.first?.status == .failed)
     }
@@ -4401,7 +4524,7 @@ struct WorkspaceStoreTests {
     func chatOrganizationPersistsAcrossReload() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let store = WorkspaceStore()
@@ -4439,7 +4562,7 @@ struct WorkspaceStoreTests {
         let archivedThreadID = UUID()
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let item = Item(
@@ -4480,7 +4603,7 @@ struct WorkspaceStoreTests {
     func chatFoldersAssignPersistSearchAndDeleteWithoutDeletingChats() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let store = WorkspaceStore()
@@ -4512,7 +4635,7 @@ struct WorkspaceStoreTests {
     func modelComparisonRunProviderSnapshotPersists() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let store = WorkspaceStore()
@@ -4594,13 +4717,15 @@ struct WorkspaceStoreTests {
     func modelComparisonRunCapturesProviderIdentityMetadata() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let store = WorkspaceStore()
         try store.loadOrCreate(in: context)
         store.modelComparisonRuns.removeAll()
         store.providerConfigurations.removeAll()
+        store.preferences.localOnlyMode = false
+        store.preferences.allowCloudProviders = true
 
         let localProvider = ProviderConfiguration(
             id: UUID(uuidString: "4d8d4d58-9bf6-4f7e-9fd8-1f9e0f4a9d2b")!,
@@ -4622,11 +4747,14 @@ struct WorkspaceStoreTests {
             displayName: "Snapshot cloud",
             endpoint: "https://api.openai.com/v1",
             modelIdentifier: "gpt-4.1-mini",
+            secretReference: "flannel.tests:snapshot-openai-key",
             isEnabled: true,
             connectionStatus: .ready,
             supportsStreaming: true
         )
         store.providerConfigurations = [localProvider, cloudProvider]
+        #expect(store.isProviderRunnableForChat(localProvider))
+        #expect(store.isProviderRunnableForChat(cloudProvider))
 
         let runID = try #require(
             store.createModelComparisonRun(
@@ -4665,7 +4793,7 @@ struct WorkspaceStoreTests {
     func modelComparisonResultsPreserveExactStreamedUsage() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let store = WorkspaceStore()
@@ -4765,7 +4893,7 @@ struct WorkspaceStoreTests {
     func completedModelComparisonResultPromotesIntoCurrentChat() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let store = WorkspaceStore()
@@ -5011,7 +5139,7 @@ struct WorkspaceStoreTests {
     func localMemoriesPersistAcrossReload() throws {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let store = WorkspaceStore()
@@ -5048,7 +5176,7 @@ struct WorkspaceStoreTests {
     private func makeLoadedStore() throws -> (ModelContainer, WorkspaceStore) {
         let container = try ModelContainer(
             for: Item.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
         )
         let store = WorkspaceStore()
         try store.loadOrCreate(in: ModelContext(container))
