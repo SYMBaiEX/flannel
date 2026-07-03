@@ -290,9 +290,9 @@ struct ChatStreamingService: Sendable {
             return AsyncThrowingStream { continuation in
                 let task = Task {
                     do {
-                        for try await token in cliTransport.streamText(for: request) {
+                        for try await event in cliTransport.streamEvents(for: request) {
                             try Task.checkCancellation()
-                            continuation.yield(.text(token))
+                            continuation.yield(event)
                         }
 
                         continuation.finish()

@@ -28,9 +28,16 @@ nonisolated struct CLIProviderOutputDecoder: Sendable {
     }
 
     mutating func decode(_ chunk: String) throws -> [String] {
+        try decodeEvents(chunk).compactMap { event in
+            guard case .text(let text) = event else { return nil }
+            return text
+        }
+    }
+
+    mutating func decodeEvents(_ chunk: String) throws -> [ChatStreamingEvent] {
         switch format {
         case .plainText:
-            return chunk.isEmpty ? [] : [chunk]
+            return chunk.isEmpty ? [] : [.text(chunk)]
 
         case .codexJSONLines, .claudeStreamJSON:
             pendingText += chunk
@@ -43,6 +50,13 @@ nonisolated struct CLIProviderOutputDecoder: Sendable {
     }
 
     mutating func finish() throws -> [String] {
+        try finishEvents().compactMap { event in
+            guard case .text(let text) = event else { return nil }
+            return text
+        }
+    }
+
+    mutating func finishEvents() throws -> [ChatStreamingEvent] {
         switch format {
         case .plainText:
             return []
@@ -62,12 +76,12 @@ nonisolated struct CLIProviderOutputDecoder: Sendable {
             let object = try jsonObject(from: payload)
             let fragments = Self.claudeTextFragments(from: object)
             hasYieldedText = hasYieldedText || !fragments.isEmpty
-            return fragments
+            return Self.events(from: fragments, usage: Self.usage(from: object))
         }
     }
 
-    private mutating func drainCompleteLines() throws -> [String] {
-        var output: [String] = []
+    private mutating func drainCompleteLines() throws -> [ChatStreamingEvent] {
+        var output: [ChatStreamingEvent] = []
 
         while let newlineRange = pendingText.range(of: "\n") {
             let line = String(pendingText[..<newlineRange.lowerBound])
@@ -78,7 +92,7 @@ nonisolated struct CLIProviderOutputDecoder: Sendable {
         return output
     }
 
-    private mutating func decodeStructuredLine(_ line: String) throws -> [String] {
+    private mutating func decodeStructuredLine(_ line: String) throws -> [ChatStreamingEvent] {
         let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedLine.isEmpty else { return [] }
         let object = try jsonObject(from: trimmedLine)
@@ -94,7 +108,7 @@ nonisolated struct CLIProviderOutputDecoder: Sendable {
         }
 
         hasYieldedText = hasYieldedText || !fragments.isEmpty
-        return fragments
+        return Self.events(from: fragments, usage: Self.usage(from: object))
     }
 
     private func jsonObject(from text: String) throws -> Any {
@@ -173,6 +187,87 @@ nonisolated struct CLIProviderOutputDecoder: Sendable {
         return []
     }
 
+    private static func events(from fragments: [String], usage: ChatStreamUsage?) -> [ChatStreamingEvent] {
+        var events = fragments
+            .filter { !$0.isEmpty }
+            .map(ChatStreamingEvent.text)
+        if let usage {
+            events.append(.usage(usage))
+        }
+        return events
+    }
+
+    private static func usage(from object: Any) -> ChatStreamUsage? {
+        if let usageObject = object as? [String: Any],
+           let usage = usage(from: usageObject["usage"]) {
+            return usage
+        }
+
+        guard let event = object as? [String: Any] else {
+            return nil
+        }
+
+        if let usage = usage(from: event["msg"]) {
+            return usage
+        }
+        if let usage = usage(from: event["message"]) {
+            return usage
+        }
+        if let usage = usage(from: event["response"]) {
+            return usage
+        }
+        if let usage = usage(from: event["item"]) {
+            return usage
+        }
+        return usage(fromTokenFields: event)
+    }
+
+    private static func usage(from value: Any?) -> ChatStreamUsage? {
+        guard let value else { return nil }
+
+        if let object = value as? [String: Any] {
+            if let nested = object["usage"],
+               let usage = usage(from: nested) {
+                return usage
+            }
+            return usage(fromTokenFields: object)
+        }
+
+        return nil
+    }
+
+    private static func usage(fromTokenFields object: [String: Any]) -> ChatStreamUsage? {
+        let inputTokens = intValue(
+            object["input_tokens"] ?? object["inputTokens"] ?? object["prompt_tokens"] ?? object["promptTokens"]
+        )
+        let outputTokens = intValue(
+            object["output_tokens"] ?? object["outputTokens"] ?? object["completion_tokens"] ?? object["completionTokens"]
+        )
+        let explicitTotal = intValue(object["total_tokens"] ?? object["totalTokens"])
+        let totalTokens: Int?
+        if let explicitTotal {
+            totalTokens = explicitTotal
+        } else if let inputTokens, let outputTokens {
+            totalTokens = inputTokens + outputTokens
+        } else {
+            totalTokens = nil
+        }
+        let latencyMilliseconds = intValue(
+            object["latency_milliseconds"] ?? object["latencyMilliseconds"] ?? object["latency_ms"] ?? object["duration_ms"]
+        )
+
+        guard inputTokens != nil || outputTokens != nil || totalTokens != nil || latencyMilliseconds != nil else {
+            return nil
+        }
+
+        return ChatStreamUsage(
+            inputTokens: inputTokens,
+            outputTokens: outputTokens,
+            totalTokens: totalTokens,
+            latencyMilliseconds: latencyMilliseconds
+        )
+    }
+
     private static func textFragments(from value: Any?) -> [String] {
         guard let value else { return [] }
 
@@ -214,28 +309,60 @@ nonisolated struct CLIProviderOutputDecoder: Sendable {
     private static func stringValue(_ value: Any?) -> String? {
         value as? String
     }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        switch value {
+        case let int as Int:
+            return int
+        case let int64 as Int64:
+            return Int(int64)
+        case let double as Double:
+            return Int(double)
+        case let number as NSNumber:
+            return number.intValue
+        case let string as String:
+            return Int(string.trimmingCharacters(in: .whitespacesAndNewlines))
+        default:
+            return nil
+        }
+    }
 }
 
 nonisolated struct CLIProviderTransport: Sendable {
     typealias ExecutableResolver = @Sendable (String) -> URL?
     typealias CommandExecutor = @Sendable (CLIProviderPreparedCommand) -> AsyncThrowingStream<String, Error>
+    typealias EventCommandExecutor = @Sendable (CLIProviderPreparedCommand) -> AsyncThrowingStream<ChatStreamingEvent, Error>
 
     var commandBuilder: CLIProviderCommandBuilder
     var resolveExecutable: ExecutableResolver
     var executeCommand: CommandExecutor
+    var executeEvents: EventCommandExecutor
 
     nonisolated init(
         commandBuilder: CLIProviderCommandBuilder = CLIProviderCommandBuilder(),
         resolveExecutable: @escaping ExecutableResolver = { executable in
             Self.resolveExecutable(named: executable)
         },
-        executeCommand: @escaping CommandExecutor = { command in
+        executeCommand: CommandExecutor? = nil,
+        executeEvents: EventCommandExecutor? = nil
+    ) {
+        let resolvedTextExecutor: CommandExecutor = executeCommand ?? { command in
             Self.liveExecuteCommand(command)
         }
-    ) {
         self.commandBuilder = commandBuilder
         self.resolveExecutable = resolveExecutable
-        self.executeCommand = executeCommand
+        self.executeCommand = resolvedTextExecutor
+        if let executeEvents {
+            self.executeEvents = executeEvents
+        } else if let executeCommand {
+            self.executeEvents = { command in
+                Self.events(fromTextStream: executeCommand(command))
+            }
+        } else {
+            self.executeEvents = { command in
+                Self.liveExecuteCommandEvents(command)
+            }
+        }
     }
 
     nonisolated func streamText(for request: ChatStreamingRequest) -> AsyncThrowingStream<String, Error> {
@@ -249,10 +376,32 @@ nonisolated struct CLIProviderTransport: Sendable {
         }
     }
 
+    nonisolated func streamEvents(for request: ChatStreamingRequest) -> AsyncThrowingStream<ChatStreamingEvent, Error> {
+        do {
+            let preparedCommand = try makePreparedCommand(for: request)
+            return executeEvents(preparedCommand)
+        } catch {
+            return AsyncThrowingStream { continuation in
+                continuation.finish(throwing: error)
+            }
+        }
+    }
+
     nonisolated func streamText(for commandSpec: CLIProviderCommandSpec) -> AsyncThrowingStream<String, Error> {
         do {
             let preparedCommand = try makePreparedCommand(for: commandSpec)
             return executeCommand(preparedCommand)
+        } catch {
+            return AsyncThrowingStream { continuation in
+                continuation.finish(throwing: error)
+            }
+        }
+    }
+
+    nonisolated func streamEvents(for commandSpec: CLIProviderCommandSpec) -> AsyncThrowingStream<ChatStreamingEvent, Error> {
+        do {
+            let preparedCommand = try makePreparedCommand(for: commandSpec)
+            return executeEvents(preparedCommand)
         } catch {
             return AsyncThrowingStream { continuation in
                 continuation.finish(throwing: error)
@@ -304,6 +453,12 @@ nonisolated struct CLIProviderTransport: Sendable {
     }
 
     nonisolated static func liveExecuteCommand(_ command: CLIProviderPreparedCommand) -> AsyncThrowingStream<String, Error> {
+        events(fromEventStream: liveExecuteCommandEvents(command))
+    }
+
+    nonisolated static func liveExecuteCommandEvents(
+        _ command: CLIProviderPreparedCommand
+    ) -> AsyncThrowingStream<ChatStreamingEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -322,9 +477,53 @@ nonisolated struct CLIProviderTransport: Sendable {
         }
     }
 
+    nonisolated private static func events(
+        fromTextStream stream: AsyncThrowingStream<String, Error>
+    ) -> AsyncThrowingStream<ChatStreamingEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    for try await text in stream where !text.isEmpty {
+                        continuation.yield(.text(text))
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    nonisolated private static func events(
+        fromEventStream stream: AsyncThrowingStream<ChatStreamingEvent, Error>
+    ) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    for try await event in stream {
+                        guard case .text(let text) = event,
+                              !text.isEmpty else { continue }
+                        continuation.yield(text)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
     nonisolated private static func run(
         _ command: CLIProviderPreparedCommand,
-        continuation: AsyncThrowingStream<String, Error>.Continuation
+        continuation: AsyncThrowingStream<ChatStreamingEvent, Error>.Continuation
     ) async throws {
         let process = Process()
         let stdoutPipe = Pipe()
@@ -390,7 +589,7 @@ nonisolated struct CLIProviderTransport: Sendable {
         handle: FileHandle,
         provider: String,
         outputFormat: CLIProviderOutputFormat,
-        continuation: AsyncThrowingStream<String, Error>.Continuation
+        continuation: AsyncThrowingStream<ChatStreamingEvent, Error>.Continuation
     ) async throws {
         var buffer = Data()
         var decoder = CLIProviderOutputDecoder(providerDisplayName: provider, format: outputFormat)
@@ -405,8 +604,8 @@ nonisolated struct CLIProviderTransport: Sendable {
         }
 
         try flush(&buffer, provider: provider, decoder: &decoder, continuation: continuation)
-        for decodedChunk in try decoder.finish() where !decodedChunk.isEmpty {
-            continuation.yield(decodedChunk)
+        for decodedEvent in try decoder.finishEvents() {
+            continuation.yield(decodedEvent)
         }
     }
 
@@ -423,14 +622,14 @@ nonisolated struct CLIProviderTransport: Sendable {
         _ buffer: inout Data,
         provider: String,
         decoder: inout CLIProviderOutputDecoder,
-        continuation: AsyncThrowingStream<String, Error>.Continuation
+        continuation: AsyncThrowingStream<ChatStreamingEvent, Error>.Continuation
     ) throws {
         guard !buffer.isEmpty else { return }
         guard let chunk = String(data: buffer, encoding: .utf8) else {
             throw CLIProviderTransportError.invalidUTF8Output(provider)
         }
-        for decodedChunk in try decoder.decode(chunk) where !decodedChunk.isEmpty {
-            continuation.yield(decodedChunk)
+        for decodedEvent in try decoder.decodeEvents(chunk) {
+            continuation.yield(decodedEvent)
         }
         buffer.removeAll(keepingCapacity: true)
     }

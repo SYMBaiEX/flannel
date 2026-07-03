@@ -120,7 +120,7 @@ struct CLIProviderTransportTests {
             accessMode: .subscriptionCLI,
             privacyScope: .localCLI,
             displayName: "Claude Code CLI",
-            endpoint: "/Applications/Claude Code.app/Contents/MacOS/claude -p --output-format stream-json --verbose",
+            endpoint: "'/Applications/Claude Code.app/Contents/MacOS/claude' -p --output-format stream-json --verbose",
             modelIdentifier: "claude-subscription"
         )
         let builder = CLIProviderCommandBuilder()
@@ -454,6 +454,31 @@ struct CLIProviderTransportTests {
         #expect(chunks.joined() == "Hello world")
     }
 
+    @Test("Codex JSONL decoder extracts usage from structured events")
+    func codexJSONLDecoderExtractsUsageEvents() throws {
+        var decoder = CLIProviderOutputDecoder(
+            providerDisplayName: "ChatGPT/Codex CLI",
+            format: .codexJSONLines
+        )
+
+        let events = try decoder.decodeEvents(
+            """
+            {"msg":{"type":"item.completed","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done"}]},"usage":{"input_tokens":41,"output_tokens":9,"total_tokens":50,"latency_milliseconds":1200}}}
+            """
+        ) + decoder.finishEvents()
+
+        #expect(events.contains(.text("Done")))
+        let usageEvents = events.compactMap { event -> ChatStreamUsage? in
+            guard case .usage(let usage) = event else { return nil }
+            return usage
+        }
+        let usage = try #require(usageEvents.first)
+        #expect(usage.inputTokens == 41)
+        #expect(usage.outputTokens == 9)
+        #expect(usage.totalTokens == 50)
+        #expect(usage.latencyMilliseconds == 1200)
+    }
+
     @Test("Claude stream-json decoder extracts deltas and avoids duplicate final result")
     func claudeStreamJSONDecoderExtractsStreamingText() throws {
         var decoder = CLIProviderOutputDecoder(
@@ -470,6 +495,37 @@ struct CLIProviderTransportTests {
         ) + decoder.finish()
 
         #expect(chunks.joined() == "Hello world")
+    }
+
+    @Test("Claude stream-json decoder extracts final usage without duplicating final result text")
+    func claudeStreamJSONDecoderExtractsUsageEvents() throws {
+        var decoder = CLIProviderOutputDecoder(
+            providerDisplayName: "Claude Code CLI",
+            format: .claudeStreamJSON
+        )
+
+        let events = try decoder.decodeEvents(
+            """
+            {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello"}],"usage":{"input_tokens":7,"output_tokens":1}}}
+            {"type":"content_block_delta","delta":{"type":"text_delta","text":" world"}}
+            {"type":"result","subtype":"success","result":"Hello world","usage":{"input_tokens":7,"output_tokens":3}}
+            """
+        ) + decoder.finishEvents()
+
+        let text = events.compactMap { event -> String? in
+            guard case .text(let token) = event else { return nil }
+            return token
+        }.joined()
+        #expect(text == "Hello world")
+
+        let usageEvents = events.compactMap { event -> ChatStreamUsage? in
+            guard case .usage(let usage) = event else { return nil }
+            return usage
+        }
+        let finalUsage = try #require(usageEvents.last)
+        #expect(finalUsage.inputTokens == 7)
+        #expect(finalUsage.outputTokens == 3)
+        #expect(finalUsage.totalTokens == 10)
     }
 
     @Test("Claude json decoder extracts the final result field")
@@ -522,5 +578,54 @@ struct CLIProviderTransportTests {
         }
 
         #expect(collected == "Hello world")
+    }
+
+    @MainActor
+    @Test("ChatStreamingService preserves usage from account CLI providers")
+    func chatStreamingServicePreservesSubscriptionCLIUsageEvents() async throws {
+        let provider = ProviderConfiguration(
+            kind: .claudeCodeCLI,
+            accessMode: .subscriptionCLI,
+            privacyScope: .localCLI,
+            displayName: "Claude Code CLI",
+            endpoint: "claude -p --output-format stream-json --verbose",
+            modelIdentifier: "claude-subscription"
+        )
+        let transport = CLIProviderTransport(
+            resolveExecutable: { _ in URL(fileURLWithPath: "/usr/bin/true") },
+            executeEvents: { _ in
+                AsyncThrowingStream { continuation in
+                    continuation.yield(.text("Measured"))
+                    continuation.yield(.usage(ChatStreamUsage(inputTokens: 12, outputTokens: 4, totalTokens: 16, latencyMilliseconds: 640)))
+                    continuation.finish()
+                }
+            }
+        )
+        let service = ChatStreamingService(cliTransport: transport)
+
+        var collectedText = ""
+        var collectedUsage: ChatStreamUsage?
+        for try await event in service.streamEvents(
+            for: ChatStreamingRequest(
+                provider: provider,
+                messages: [AssistantMessage(role: .user, text: "Hi")]
+            )
+        ) {
+            switch event {
+            case .text(let token):
+                collectedText += token
+            case .usage(let usage):
+                collectedUsage = collectedUsage?.merged(with: usage) ?? usage
+            case .toolCallDelta, .toolCallDeltas:
+                Issue.record("Unexpected tool call event")
+            }
+        }
+
+        #expect(collectedText == "Measured")
+        let usage = try #require(collectedUsage)
+        #expect(usage.inputTokens == 12)
+        #expect(usage.outputTokens == 4)
+        #expect(usage.totalTokens == 16)
+        #expect(usage.latencyMilliseconds == 640)
     }
 }
