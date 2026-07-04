@@ -266,6 +266,19 @@ struct SettingsSurface: View {
                     }
                 }
 
+                Toggle("Allow Apple speech fallback", isOn: Binding(
+                    get: { store.preferences.allowAppleSpeechRecognitionFallback ?? false },
+                    set: {
+                        store.preferences.allowAppleSpeechRecognitionFallback = $0
+                        persist()
+                    }
+                ))
+                .disabled(store.preferences.localOnlyMode ?? true)
+
+                Text(appleSpeechFallbackDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Toggle("Show artifact rail by default", isOn: Binding(
                     get: { store.preferences.showsRightSidebar },
                     set: {
@@ -2012,6 +2025,14 @@ struct SettingsSurface: View {
             SettingsTranscriptLanguage(code: "de", label: "German"),
             SettingsTranscriptLanguage(code: "ja", label: "Japanese")
         ]
+    }
+
+    private var appleSpeechFallbackDetail: String {
+        if store.preferences.localOnlyMode ?? true {
+            return "Voice input uses on-device recognition only while Local-Only Mode is enabled."
+        }
+
+        return "When enabled, Flannel may use Apple's speech service if on-device recognition is unavailable for the selected language."
     }
 
     private func settingsForm<Content: View>(@ViewBuilder content: () -> Content) -> some View {

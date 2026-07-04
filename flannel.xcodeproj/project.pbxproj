@@ -399,12 +399,15 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3VZKJ253J2;
 				ENABLE_APP_SANDBOX = YES;
+				ENABLE_AUDIO_INPUT = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Flannel uses the microphone only when you start voice input in the composer.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Flannel uses speech recognition to turn your voice into composer text. On-device recognition is preferred, and Apple speech fallback must be enabled explicitly.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -432,12 +435,15 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3VZKJ253J2;
 				ENABLE_APP_SANDBOX = YES;
+				ENABLE_AUDIO_INPUT = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Flannel uses the microphone only when you start voice input in the composer.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Flannel uses speech recognition to turn your voice into composer text. On-device recognition is preferred, and Apple speech fallback must be enabled explicitly.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

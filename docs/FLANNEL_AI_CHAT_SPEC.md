@@ -307,6 +307,7 @@ These references keep Flannel's provider and macOS architecture vocabulary align
   - Current-chat detail in the Artifacts inspector with editable title and per-thread knowledge-source scope controls.
   - Native chat import via user-selected files. JSON imports are full-fidelity local copies with fresh thread/message IDs, active-thread selection, retained provider telemetry, attachments, citations, and tags, plus old workspace/project/folder references cleared to avoid dangling links. Markdown and HTML imports create local transcript copies with roles, timestamps, plain message text, and imported tags.
   - Attachment-aware composer with native file picker and drag/drop import for local files.
+  - Composer voice input through macOS Speech and microphone capture. The mic control requests protected-resource access only when used, requires on-device recognition while Local-Only Mode is enabled, streams partial dictation into the fixed composer, and labels opt-in Apple speech fallback separately when local-only mode is disabled.
   - Persisted message attachment metadata, size/MIME/path details, safe text excerpts, and security-scoped bookmark data where macOS provides it.
   - Attachment context injection into provider prompts plus native image payloads for vision-capable Ollama, LM Studio/OpenAI-compatible, and Anthropic providers.
   - Markdown message rendering with selectable text, fenced code blocks, horizontal code scrolling, and copy-code controls.

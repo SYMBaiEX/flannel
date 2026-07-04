@@ -24,6 +24,7 @@ Before public pushes, use [OPEN_SOURCE_RELEASE_CHECKLIST.md](docs/OPEN_SOURCE_RE
 - Tool/policy modeling with visible execution results and approval/blocking state.
 - Reusable tool sets for quickly switching workspace permissions between private knowledge, coding, and web-research postures.
 - Message-level chat actions for pin/unpin, copy, branch-aware retry/regenerate, edit-and-rewrite, and fork, plus store-backed archive/search organization.
+- Composer voice input through macOS Speech with microphone permission, on-device recognition by default, and opt-in Apple speech fallback when Local-Only Mode is disabled.
 - Current Vercel AI SDK support remains an optional local bridge flow (`aiSDKBridge`) and is intentionally not a native Swift SDK dependency.
 
 ## Current interaction direction
@@ -181,6 +182,7 @@ Before public pushes, use [OPEN_SOURCE_RELEASE_CHECKLIST.md](docs/OPEN_SOURCE_RE
 - Sidebar thread rows expose pin/favorite and archive/restore as visible hover/selection actions while keeping the same context menu for folder and tag management.
 - Chat templates can seed an explicit knowledge-source scope, and the Artifacts inspector exposes the current chat's knowledge scope so RAG, workspace search, and model-comparison grounding can stay limited to selected local sources.
 - Chat export supports Markdown, JSON, HTML, and PDF; JSON exports can be imported back into Flannel as a fresh local chat copy with telemetry, attachments, citations, and tags preserved, while Markdown/HTML exports import as local transcript copies with roles, timestamps, and plain message text.
+- Voice input can dictate into the fixed composer. It requests Speech Recognition and microphone access only after the mic button is pressed, requires on-device recognition while Local-Only Mode is enabled, and labels Apple speech fallback separately when the user opts into that mode.
 - Prompt profiles support local template variables for chat/system prompts, including `{{date}}`, `{{datetime}}`, `{{provider}}`, `{{model}}`, `{{provider_mode}}`, `{{privacy}}`, `{{routing_policy}}`, `{{local_only}}`, `{{thread_title}}`, `{{thread_tags}}`, `{{project}}`, `{{knowledge_source_count}}`, and `{{knowledge_sources}}`.
 - Pin/archive state persists through SwiftData and reloads with the workspace.
 

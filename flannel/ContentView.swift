@@ -4149,6 +4149,8 @@ private struct ChatSurface: View {
     @State private var transcriptViewportHeight: CGFloat = 0
     @State private var isTranscriptPinnedToBottom = true
     @State private var announcedOffscreenMessageID: UUID?
+    @State private var voiceInput = VoiceInputSession()
+    @State private var voiceInputComposerPrefix = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -4244,6 +4246,10 @@ private struct ChatSurface: View {
                                 text: $composerText,
                                 attachments: $composerAttachments,
                                 isStreamingResponse: isStreamingResponse,
+                                voiceInput: voiceInput,
+                                voiceLanguageCode: store.preferences.defaultTranscriptLanguageCode ?? "en",
+                                allowsAppleSpeechFallback: composerAllowsAppleSpeechFallback,
+                                toggleVoiceInput: toggleVoiceInput,
                                 focusNonce: composerFocusNonce,
                                 send: {
                                     isTranscriptPinnedToBottom = true
@@ -4279,6 +4285,14 @@ private struct ChatSurface: View {
                 }
                 .onChange(of: store.currentAssistantThread?.id) { _, _ in
                     announcedOffscreenMessageID = nil
+                    stopVoiceInput()
+                }
+                .onChange(of: voiceInput.transcript) { _, newValue in
+                    guard voiceInput.isActive else { return }
+                    composerText = VoiceInputComposerFormatter.composedText(
+                        existingText: voiceInputComposerPrefix,
+                        transcript: newValue
+                    )
                 }
                 .onChange(of: composerFocusRequest) { _, _ in
                     composerFocusNonce = UUID()
@@ -4302,6 +4316,9 @@ private struct ChatSurface: View {
                     isTranscriptPinnedToBottom = true
                     scrollToLatest(using: proxy)
                 }
+                .onDisappear {
+                    stopVoiceInput()
+                }
                 .onPreferenceChange(ChatTranscriptViewportHeightPreferenceKey.self) { height in
                     transcriptViewportHeight = height
                 }
@@ -4311,6 +4328,11 @@ private struct ChatSurface: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var composerAllowsAppleSpeechFallback: Bool {
+        !(store.preferences.localOnlyMode ?? true)
+            && (store.preferences.allowAppleSpeechRecognitionFallback ?? false)
     }
 
     private var transcriptBottomSentinel: some View {
@@ -4388,6 +4410,28 @@ private struct ChatSurface: View {
 
     private func chooseSuggestedPrompt(_ prompt: String) {
         composerText = prompt
+        composerFocusNonce = UUID()
+    }
+
+    private func toggleVoiceInput() {
+        if voiceInput.isActive {
+            stopVoiceInput()
+            return
+        }
+
+        voiceInputComposerPrefix = composerText
+        voiceInput.toggle(
+            localeIdentifier: store.preferences.defaultTranscriptLanguageCode ?? "en",
+            allowsAppleSpeechFallback: composerAllowsAppleSpeechFallback
+        )
+        composerFocusNonce = UUID()
+    }
+
+    private func stopVoiceInput() {
+        guard voiceInput.isActive else { return }
+
+        voiceInput.stop()
+        voiceInputComposerPrefix = composerText
         composerFocusNonce = UUID()
     }
 
@@ -5708,6 +5752,10 @@ private struct Composer: View {
     @Binding var text: String
     @Binding var attachments: [AIChatAttachment]
     var isStreamingResponse: Bool
+    var voiceInput: VoiceInputSession
+    var voiceLanguageCode: String
+    var allowsAppleSpeechFallback: Bool
+    var toggleVoiceInput: () -> Void
     var focusNonce: UUID
     var send: () -> Void
     var cancel: () -> Void
@@ -5723,11 +5771,12 @@ private struct Composer: View {
     }
 
     private var canComparePrompt: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !voiceInput.isActive && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var canContinuePromptChain: Bool {
         !isStreamingResponse
+            && !voiceInput.isActive
             && promptChainState?.activeStep != nil
             && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -5804,6 +5853,14 @@ private struct Composer: View {
                 }
             }
 
+            if voiceInput.state != .idle {
+                VoiceInputStatusBanner(
+                    state: voiceInput.state,
+                    transcript: voiceInput.transcript,
+                    clear: voiceInput.clearStatus
+                )
+            }
+
             HStack(alignment: .center, spacing: 8) {
                 ComposerStatusStrip(
                     contextBudget: contextBudget,
@@ -5825,10 +5882,28 @@ private struct Composer: View {
                 .buttonStyle(.borderless)
                 .controlSize(.regular)
                 .flannelGlassCapsule(.clear, interactive: true)
-                .disabled(isStreamingResponse)
+                .disabled(isStreamingResponse || voiceInput.isActive)
                 .help(attachHelpText)
                 .accessibilityLabel("Attach files")
                 .accessibilityHint(attachHelpText)
+
+                Button {
+                    toggleVoiceInput()
+                } label: {
+                    Image(systemName: voiceInput.isActive ? "stop.circle.fill" : "mic")
+                        .font(.body)
+                        .symbolRenderingMode(.hierarchical)
+                        .frame(width: 30, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.regular)
+                .foregroundStyle(voiceInput.isActive ? .red : .primary)
+                .flannelGlassCapsule(voiceInput.isActive ? .regular : .clear, interactive: true)
+                .disabled(isStreamingResponse && !voiceInput.isActive)
+                .help(voiceInputHelpText)
+                .accessibilityLabel(voiceInput.isActive ? "Stop voice input" : "Start voice input")
+                .accessibilityHint(voiceInputHelpText)
 
                 if canContinuePromptChain {
                     Button {
@@ -5881,7 +5956,7 @@ private struct Composer: View {
                 .controlSize(.regular)
                 .tint(isStreamingResponse ? .red : .accentColor)
                 .keyboardShortcut(.return, modifiers: [.command])
-                .disabled(!isStreamingResponse && !canSubmit)
+                .disabled(!isStreamingResponse && (!canSubmit || voiceInput.isActive))
                 .help(primaryActionHelpText)
                 .accessibilityLabel(primaryActionLabel)
                 .accessibilityHint(primaryActionHelpText)
@@ -5929,14 +6004,33 @@ private struct Composer: View {
     }
 
     private var attachHelpText: String {
-        isStreamingResponse ? "Wait for the current response to finish before attaching files." : "Attach files to include in the next message."
+        if voiceInput.isActive {
+            return "Stop voice input before attaching files."
+        }
+        return isStreamingResponse ? "Wait for the current response to finish before attaching files." : "Attach files to include in the next message."
     }
 
     private var compareHelpText: String {
+        if voiceInput.isActive {
+            return "Stop voice input before comparing models."
+        }
         if isStreamingResponse {
             return "Wait for the current response to finish before comparing models."
         }
         return canComparePrompt ? "Compare the current prompt across multiple runnable models." : "Type a prompt before comparing models."
+    }
+
+    private var voiceInputHelpText: String {
+        if isStreamingResponse {
+            return "Wait for the current response to finish before starting voice input."
+        }
+        if voiceInput.isActive {
+            return "Stop dictation and keep the transcript in the composer."
+        }
+        if allowsAppleSpeechFallback {
+            return "Dictate into the composer. Apple speech fallback is enabled when on-device recognition is unavailable."
+        }
+        return "Dictate into the composer using on-device speech recognition for \(voiceLanguageCode)."
     }
 
     private var promptChainHelpText: String {
@@ -5959,6 +6053,9 @@ private struct Composer: View {
     private var primaryActionHelpText: String {
         if isStreamingResponse {
             return "Stop the current response. Keyboard shortcut Command Return."
+        }
+        if voiceInput.isActive {
+            return "Stop voice input before sending the message."
         }
         if canSubmit {
             return "Send the composer text and attachments. Keyboard shortcut Command Return."
@@ -5990,6 +6087,94 @@ private struct Composer: View {
         attachments.removeAll { $0.id == attachment.id }
         if attachments.isEmpty {
             attachmentImportError = nil
+        }
+    }
+}
+
+private struct VoiceInputStatusBanner: View {
+    var state: VoiceInputState
+    var transcript: String
+    var clear: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 9) {
+            statusIcon
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(state.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(statusDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            if canClear {
+                Button(action: clear) {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.borderless)
+                .help("Dismiss voice input status")
+                .accessibilityLabel("Dismiss voice input status")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            FlannelSystemColor.chromeFill.opacity(0.7),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(FlannelSystemColor.quietStroke.opacity(0.55), lineWidth: FlannelSpacing.hairline)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(state.title)
+        .accessibilityValue(statusDetail)
+    }
+
+    @ViewBuilder
+    private var statusIcon: some View {
+        if state.isActive {
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 18, height: 18)
+        } else {
+            Image(systemName: state.systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(statusTint)
+                .frame(width: 18, height: 18)
+        }
+    }
+
+    private var statusDetail: String {
+        let cleanTranscript = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        if state.isListening && !cleanTranscript.isEmpty {
+            return cleanTranscript
+        }
+
+        return state.detail
+    }
+
+    private var statusTint: Color {
+        switch state {
+        case .failed, .unavailable:
+            .orange
+        case .idle, .requestingPermission, .listening, .stopping:
+            .secondary
+        }
+    }
+
+    private var canClear: Bool {
+        switch state {
+        case .failed, .unavailable:
+            true
+        case .idle, .requestingPermission, .listening, .stopping:
+            false
         }
     }
 }

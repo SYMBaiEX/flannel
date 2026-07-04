@@ -1767,6 +1767,7 @@ nonisolated struct WorkspacePreferences: Codable, Hashable, Sendable {
     var confirmBeforeExternalActions: Bool?
     var allowCloudProviders: Bool?
     var defaultTranscriptLanguageCode: String?
+    var allowAppleSpeechRecognitionFallback: Bool?
     var draftExportDirectory: String?
     var localStorageLabel: String?
     var safeMode: Bool?
@@ -1787,6 +1788,7 @@ nonisolated struct WorkspacePreferences: Codable, Hashable, Sendable {
         confirmBeforeExternalActions: Bool = true,
         allowCloudProviders: Bool = false,
         defaultTranscriptLanguageCode: String = "en",
+        allowAppleSpeechRecognitionFallback: Bool = false,
         draftExportDirectory: String = "~/Documents/Flannel/Exports",
         localStorageLabel: String = "~/Library/Application Support/Flannel",
         safeMode: Bool = true,
@@ -1808,6 +1810,7 @@ nonisolated struct WorkspacePreferences: Codable, Hashable, Sendable {
         self.confirmBeforeExternalActions = confirmBeforeExternalActions
         self.allowCloudProviders = allowCloudProviders
         self.defaultTranscriptLanguageCode = defaultTranscriptLanguageCode
+        self.allowAppleSpeechRecognitionFallback = allowAppleSpeechRecognitionFallback
         self.draftExportDirectory = draftExportDirectory
         self.localStorageLabel = localStorageLabel
         self.safeMode = safeMode
@@ -1850,6 +1853,11 @@ nonisolated struct WorkspacePreferences: Codable, Hashable, Sendable {
             String.self,
             forKey: .defaultTranscriptLanguageCode,
             default: "en"
+        )
+        allowAppleSpeechRecognitionFallback = try container.decode(
+            Bool.self,
+            forKey: .allowAppleSpeechRecognitionFallback,
+            default: false
         )
         draftExportDirectory = try container.decode(
             String.self,
