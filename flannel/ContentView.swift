@@ -99,6 +99,7 @@ struct ContentView: View {
                 startLocalProviderAutoDiscovery()
                 synchronizeKnowledgeSourceWatchers()
                 await rebuildQueuedKnowledgeOnStartupIfNeeded()
+                await refreshWatchedWebPagesOnStartupIfNeeded()
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
@@ -403,6 +404,13 @@ struct ContentView: View {
         guard store.hasKnowledgeSourcesNeedingIndexRebuild else { return }
 
         await store.rebuildKnowledgeIndexManifestsUsingConfiguredEmbeddings(onlyQueued: true)
+        persistQuietly()
+    }
+
+    private func refreshWatchedWebPagesOnStartupIfNeeded() async {
+        let summary = await store.runScheduledWatchedWebPageRefresh()
+        guard summary.queuedSourceIDs.isEmpty == false || summary.failedSourceIDs.isEmpty == false else { return }
+
         persistQuietly()
     }
 

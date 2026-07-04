@@ -1506,7 +1506,75 @@ struct LocalActionRecord: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+nonisolated struct WatchedWebPageRefreshSchedule: Codable, Hashable, Sendable {
+    static let defaultRefreshInterval: TimeInterval = 86_400
+    static let defaultMaximumBatchSize = 8
+    static let minimumRefreshInterval: TimeInterval = 3_600
+    static let maximumRefreshInterval: TimeInterval = 30 * 86_400
+    static let maximumBatchSizeLimit = 24
+
+    var isEnabled: Bool
+    var refreshInterval: TimeInterval
+    var maximumBatchSize: Int
+    var lastRefreshStartedAt: Date?
+    var lastRefreshCompletedAt: Date?
+    var lastQueuedSourceIDs: [UUID]
+    var lastSkippedReason: String?
+
+    init(
+        isEnabled: Bool = false,
+        refreshInterval: TimeInterval = Self.defaultRefreshInterval,
+        maximumBatchSize: Int = Self.defaultMaximumBatchSize,
+        lastRefreshStartedAt: Date? = nil,
+        lastRefreshCompletedAt: Date? = nil,
+        lastQueuedSourceIDs: [UUID] = [],
+        lastSkippedReason: String? = nil
+    ) {
+        self.isEnabled = isEnabled
+        self.refreshInterval = refreshInterval
+        self.maximumBatchSize = maximumBatchSize
+        self.lastRefreshStartedAt = lastRefreshStartedAt
+        self.lastRefreshCompletedAt = lastRefreshCompletedAt
+        self.lastQueuedSourceIDs = lastQueuedSourceIDs
+        self.lastSkippedReason = lastSkippedReason
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        isEnabled = try container.decode(Bool.self, forKey: .isEnabled, default: false)
+        refreshInterval = try container.decode(
+            TimeInterval.self,
+            forKey: .refreshInterval,
+            default: Self.defaultRefreshInterval
+        )
+        maximumBatchSize = try container.decode(
+            Int.self,
+            forKey: .maximumBatchSize,
+            default: Self.defaultMaximumBatchSize
+        )
+        lastRefreshStartedAt = try container.decodeIfPresent(Date.self, forKey: .lastRefreshStartedAt)
+        lastRefreshCompletedAt = try container.decodeIfPresent(Date.self, forKey: .lastRefreshCompletedAt)
+        lastQueuedSourceIDs = try container.decode([UUID].self, forKey: .lastQueuedSourceIDs, default: [])
+        lastSkippedReason = try container.decodeIfPresent(String.self, forKey: .lastSkippedReason)
+    }
+
+    var boundedRefreshInterval: TimeInterval {
+        min(max(refreshInterval, Self.minimumRefreshInterval), Self.maximumRefreshInterval)
+    }
+
+    var boundedMaximumBatchSize: Int {
+        min(max(maximumBatchSize, 1), Self.maximumBatchSizeLimit)
+    }
+
+    func isDue(now: Date = .now) -> Bool {
+        guard isEnabled else { return false }
+        guard let lastRefreshStartedAt else { return true }
+        return now.timeIntervalSince(lastRefreshStartedAt) >= boundedRefreshInterval
+    }
+}
+
 nonisolated struct WorkspacePreferences: Codable, Hashable, Sendable {
+    var watchedWebPageRefreshSchedule: WatchedWebPageRefreshSchedule?
     var preferredProviderID: UUID?
     var providerRoutingPolicy: ProviderRoutingPolicy
     var lastOpenedAt: Date
@@ -1544,8 +1612,10 @@ nonisolated struct WorkspacePreferences: Codable, Hashable, Sendable {
         localOnlyMode: Bool = true,
         defaultSystemPromptProfileID: UUID? = nil,
         defaultModelPresetID: UUID? = nil,
-        localMemory: LocalMemorySettings = LocalMemorySettings()
+        localMemory: LocalMemorySettings = LocalMemorySettings(),
+        watchedWebPageRefreshSchedule: WatchedWebPageRefreshSchedule = WatchedWebPageRefreshSchedule()
     ) {
+        self.watchedWebPageRefreshSchedule = watchedWebPageRefreshSchedule
         self.preferredProviderID = preferredProviderID
         self.providerRoutingPolicy = providerRoutingPolicy
         self.lastOpenedAt = lastOpenedAt
@@ -1568,6 +1638,11 @@ nonisolated struct WorkspacePreferences: Codable, Hashable, Sendable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        watchedWebPageRefreshSchedule = try container.decode(
+            WatchedWebPageRefreshSchedule.self,
+            forKey: .watchedWebPageRefreshSchedule,
+            default: WatchedWebPageRefreshSchedule()
+        )
         preferredProviderID = try container.decodeIfPresent(UUID.self, forKey: .preferredProviderID)
         providerRoutingPolicy = try container.decode(
             ProviderRoutingPolicy.self,

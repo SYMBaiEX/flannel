@@ -807,6 +807,48 @@ struct SettingsSurface: View {
                 }
             }
 
+            Section("Web Refresh Schedule") {
+                Toggle("Auto-refresh watched web pages", isOn: watchedWebPageRefreshEnabledBinding)
+                    .disabled(watchedWebPageCount == 0)
+
+                Stepper(value: watchedWebPageRefreshDaysBinding, in: 1...30) {
+                    LabeledContent("Refresh interval", value: "Every \(watchedWebPageRefreshDaysBinding.wrappedValue) day\(watchedWebPageRefreshDaysBinding.wrappedValue == 1 ? "" : "s")")
+                }
+                .disabled(watchedWebPageCount == 0)
+
+                Stepper(value: watchedWebPageRefreshBatchBinding, in: 1...WatchedWebPageRefreshSchedule.maximumBatchSizeLimit) {
+                    LabeledContent("Batch size", value: "\(watchedWebPageRefreshBatchBinding.wrappedValue) page\(watchedWebPageRefreshBatchBinding.wrappedValue == 1 ? "" : "s")")
+                }
+                .disabled(watchedWebPageCount == 0)
+
+                if let lastRefreshStartedAt = watchedWebPageRefreshSchedule.lastRefreshStartedAt {
+                    LabeledContent("Last started", value: lastRefreshStartedAt.formatted(date: .abbreviated, time: .shortened))
+                }
+
+                if let lastRefreshCompletedAt = watchedWebPageRefreshSchedule.lastRefreshCompletedAt {
+                    LabeledContent("Last completed", value: lastRefreshCompletedAt.formatted(date: .abbreviated, time: .shortened))
+                }
+
+                if let lastSkippedReason = watchedWebPageRefreshSchedule.lastSkippedReason {
+                    LabeledContent("Last skipped", value: lastSkippedReason)
+                }
+
+                HStack {
+                    Button {
+                        Task { @MainActor in
+                            await runScheduledWatchedWebPageRefresh()
+                        }
+                    } label: {
+                        Label("Run Scheduled Refresh", systemImage: "clock.arrow.circlepath")
+                    }
+                    .disabled(watchedWebPageCount == 0 || store.preferences.localOnlyMode == true)
+                    .help(store.preferences.localOnlyMode == true ? "Turn off local-only mode before refreshing web pages from the network." : "Capture due watched web pages now.")
+
+                    Spacer()
+                }
+                .buttonStyle(.bordered)
+            }
+
             Section("Index State") {
                 LabeledContent("Indexed chunks", value: "\(store.knowledgeSources.reduce(0) { $0 + $1.chunkCount })")
                 LabeledContent("Vector records", value: "\(store.knowledgeSources.reduce(0) { $0 + $1.embeddingRecordCount })")
@@ -958,6 +1000,55 @@ struct SettingsSurface: View {
         }.count
     }
 
+    private var watchedWebPageRefreshSchedule: WatchedWebPageRefreshSchedule {
+        store.preferences.watchedWebPageRefreshSchedule ?? WatchedWebPageRefreshSchedule()
+    }
+
+    private var watchedWebPageRefreshEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { watchedWebPageRefreshSchedule.isEnabled },
+            set: { newValue in
+                updateWatchedWebPageRefreshSchedule { schedule in
+                    schedule.isEnabled = newValue
+                    if newValue {
+                        schedule.lastSkippedReason = nil
+                    }
+                }
+            }
+        )
+    }
+
+    private var watchedWebPageRefreshDaysBinding: Binding<Int> {
+        Binding(
+            get: {
+                max(1, Int((watchedWebPageRefreshSchedule.boundedRefreshInterval / 86_400).rounded()))
+            },
+            set: { newValue in
+                updateWatchedWebPageRefreshSchedule { schedule in
+                    schedule.refreshInterval = TimeInterval(max(1, newValue)) * 86_400
+                }
+            }
+        )
+    }
+
+    private var watchedWebPageRefreshBatchBinding: Binding<Int> {
+        Binding(
+            get: { watchedWebPageRefreshSchedule.boundedMaximumBatchSize },
+            set: { newValue in
+                updateWatchedWebPageRefreshSchedule { schedule in
+                    schedule.maximumBatchSize = newValue
+                }
+            }
+        )
+    }
+
+    private func updateWatchedWebPageRefreshSchedule(_ update: (inout WatchedWebPageRefreshSchedule) -> Void) {
+        var schedule = watchedWebPageRefreshSchedule
+        update(&schedule)
+        store.preferences.watchedWebPageRefreshSchedule = schedule
+        persist()
+    }
+
     private func checkWatchedWebPageFreshness() {
         let queuedIDs = store.queueStaleWatchedWebPageKnowledgeSources(maximumSourceCount: Int.max)
         if queuedIDs.isEmpty {
@@ -965,6 +1056,24 @@ struct SettingsSurface: View {
         } else {
             knowledgeRefreshMessage = "Queued \(queuedIDs.count) watched web page\(queuedIDs.count == 1 ? "" : "s") for refresh."
         }
+        persist()
+    }
+
+    @MainActor
+    private func runScheduledWatchedWebPageRefresh() async {
+        knowledgeRefreshMessage = "Running watched web-page refresh..."
+        let summary = await store.runScheduledWatchedWebPageRefresh(force: true)
+
+        if let skippedReason = summary.skippedReason,
+           summary.queuedSourceIDs.isEmpty {
+            knowledgeRefreshMessage = skippedReason
+        } else {
+            let refreshed = summary.refreshedSourceIDs.count
+            let failed = summary.failedSourceIDs.count
+            knowledgeRefreshMessage = "Refreshed \(refreshed) watched page\(refreshed == 1 ? "" : "s")"
+                + (failed > 0 ? "; \(failed) failed." : ".")
+        }
+
         persist()
     }
 

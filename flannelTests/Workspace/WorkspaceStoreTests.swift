@@ -4423,6 +4423,130 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Scheduled watched web page refresh captures and rebuilds stale sources")
+    func scheduledWatchedWebPageRefreshCapturesAndRebuildsStaleSources() async throws {
+        let (_, store) = try makeLoadedStore()
+        let storageURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("flannel-scheduled-web-\(UUID().uuidString)", isDirectory: true)
+            .standardizedFileURL
+        defer { try? FileManager.default.removeItem(at: storageURL) }
+        let now = Date(timeIntervalSince1970: 1_788_200_000)
+        let oldCaptureDate = now.addingTimeInterval(-3 * WorkspaceStore.defaultWatchedWebPageRefreshInterval)
+        let url = "https://example.com/docs/scheduled-refresh"
+        let source = KnowledgeSource(
+            title: "Scheduled docs",
+            kind: .webPage,
+            location: url,
+            status: .ready,
+            lastIndexedAt: oldCaptureDate,
+            isWatched: true,
+            documentCount: 1
+        )
+        store.preferences.localOnlyMode = false
+        store.preferences.localStorageLabel = storageURL.path
+        store.preferences.watchedWebPageRefreshSchedule = WatchedWebPageRefreshSchedule(
+            isEnabled: true,
+            refreshInterval: WorkspaceStore.defaultWatchedWebPageRefreshInterval,
+            maximumBatchSize: 1
+        )
+        store.knowledgeSources = [source]
+        store.libraryAssets = [
+            webPageAsset(
+                title: source.title,
+                url: url,
+                capturedAt: oldCaptureDate,
+                text: "Old scheduled documentation snapshot."
+            )
+        ]
+        let captureService = WebPageCaptureService(captureHandler: { url, capturedAt, _ in
+            CapturedWebPage(
+                url: url,
+                title: "Scheduled docs refreshed",
+                text: "NEBULA SCHEDULE 917 refreshed web capture is indexed into local retrieval after the scheduled ingest run.",
+                excerpt: "NEBULA SCHEDULE 917 refreshed web capture.",
+                statusCode: 200,
+                contentType: "text/html",
+                capturedAt: capturedAt
+            )
+        })
+
+        let summary = await store.runScheduledWatchedWebPageRefresh(
+            now: now,
+            webPageCaptureService: captureService
+        )
+        let rebuiltSource = try #require(store.knowledgeSources.first(where: { $0.id == source.id }))
+        let asset = try #require(store.libraryAssets.first(where: { $0.sourceIdentifier == url }))
+        let packet = store.localKnowledgeRetrievalPacket(for: "NEBULA SCHEDULE scheduled ingest", limit: 3)
+
+        #expect(summary.queuedSourceIDs == [source.id])
+        #expect(summary.refreshedSourceIDs == [source.id])
+        #expect(summary.failedSourceIDs.isEmpty)
+        #expect(summary.skippedReason == nil)
+        #expect(rebuiltSource.status == .ready)
+        #expect(rebuiltSource.documentCount == 1)
+        #expect(rebuiltSource.chunkCount > 0)
+        #expect(asset.summaryStatus == .ready)
+        #expect(asset.transcript?.text.contains("NEBULA SCHEDULE 917") == true)
+        #expect(packet.results.contains { $0.chunk.knowledgeSourceID == source.id })
+        #expect(store.preferences.watchedWebPageRefreshSchedule?.lastRefreshStartedAt == now)
+        #expect(store.preferences.watchedWebPageRefreshSchedule?.lastRefreshCompletedAt == now)
+        #expect(store.preferences.watchedWebPageRefreshSchedule?.lastQueuedSourceIDs == [source.id])
+    }
+
+    @MainActor
+    @Test("Scheduled watched web page refresh respects local-only mode")
+    func scheduledWatchedWebPageRefreshRespectsLocalOnlyMode() async throws {
+        let (_, store) = try makeLoadedStore()
+        let now = Date(timeIntervalSince1970: 1_788_200_000)
+        let oldCaptureDate = now.addingTimeInterval(-3 * WorkspaceStore.defaultWatchedWebPageRefreshInterval)
+        let url = "https://example.com/docs/local-only-schedule"
+        let source = KnowledgeSource(
+            title: "Local-only docs",
+            kind: .webPage,
+            location: url,
+            status: .ready,
+            lastIndexedAt: oldCaptureDate,
+            isWatched: true,
+            documentCount: 1
+        )
+        store.preferences.localOnlyMode = true
+        store.preferences.watchedWebPageRefreshSchedule = WatchedWebPageRefreshSchedule(
+            isEnabled: true,
+            refreshInterval: WorkspaceStore.defaultWatchedWebPageRefreshInterval,
+            maximumBatchSize: 1
+        )
+        store.knowledgeSources = [source]
+        store.libraryAssets = [
+            webPageAsset(
+                title: source.title,
+                url: url,
+                capturedAt: oldCaptureDate,
+                text: "Local-only mode keeps this existing capture untouched."
+            )
+        ]
+        let captureService = WebPageCaptureService(captureHandler: { _, _, _ in
+            throw WebPageCaptureError.networkFailed("Capture should not run while local-only mode is active.")
+        })
+
+        let summary = await store.runScheduledWatchedWebPageRefresh(
+            now: now,
+            webPageCaptureService: captureService
+        )
+        let untouchedSource = try #require(store.knowledgeSources.first(where: { $0.id == source.id }))
+        let untouchedAsset = try #require(store.libraryAssets.first(where: { $0.sourceIdentifier == url }))
+
+        #expect(summary.queuedSourceIDs.isEmpty)
+        #expect(summary.refreshedSourceIDs.isEmpty)
+        #expect(summary.failedSourceIDs.isEmpty)
+        #expect(summary.skippedReason == "Local-only mode is active.")
+        #expect(untouchedSource.status == .ready)
+        #expect(untouchedSource.lastErrorMessage == nil)
+        #expect(untouchedAsset.summaryStatus == .ready)
+        #expect(store.preferences.watchedWebPageRefreshSchedule?.lastSkippedReason == "Local-only mode is active.")
+        #expect(store.preferences.watchedWebPageRefreshSchedule?.lastRefreshStartedAt == nil)
+    }
+
+    @MainActor
     @Test("Code repository knowledge source indexes recursive readable files with default exclusions")
     func codeRepositoryKnowledgeSourceIndexesRecursiveReadableFilesWithDefaultExclusions() throws {
         let (_, store) = try makeLoadedStore()

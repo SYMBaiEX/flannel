@@ -33,6 +33,22 @@ struct WorkspaceDashboardSnapshot: Sendable {
     let confirmationCount: Int
 }
 
+struct WatchedWebPageRefreshRunSummary: Hashable, Sendable {
+    var queuedSourceIDs: [UUID]
+    var refreshedSourceIDs: [UUID]
+    var failedSourceIDs: [UUID]
+    var skippedReason: String?
+
+    static func skipped(_ reason: String) -> WatchedWebPageRefreshRunSummary {
+        WatchedWebPageRefreshRunSummary(
+            queuedSourceIDs: [],
+            refreshedSourceIDs: [],
+            failedSourceIDs: [],
+            skippedReason: reason
+        )
+    }
+}
+
 struct IntegrationStatusRow: Identifiable, Sendable {
     let id: String
     let title: String
@@ -4707,6 +4723,93 @@ final class WorkspaceStore {
         return candidates.map(\.id)
     }
 
+    @discardableResult
+    func runScheduledWatchedWebPageRefresh(
+        now: Date = .now,
+        force: Bool = false,
+        webPageCaptureService: WebPageCaptureService = WebPageCaptureService()
+    ) async -> WatchedWebPageRefreshRunSummary {
+        var schedule = preferences.watchedWebPageRefreshSchedule ?? WatchedWebPageRefreshSchedule()
+
+        func skip(_ reason: String) -> WatchedWebPageRefreshRunSummary {
+            schedule.lastSkippedReason = reason
+            preferences.watchedWebPageRefreshSchedule = schedule
+            return .skipped(reason)
+        }
+
+        guard schedule.isEnabled else {
+            return skip("Automatic watched web-page refresh is disabled.")
+        }
+
+        guard preferences.automationsEnabled ?? true else {
+            return skip("Local automations are disabled.")
+        }
+
+        guard !(preferences.localOnlyMode ?? true) else {
+            return skip("Local-only mode is active.")
+        }
+
+        guard knowledgeSources.contains(where: { $0.kind == .webPage && $0.isWatched }) else {
+            return skip("No watched web pages are configured.")
+        }
+
+        guard force || schedule.isDue(now: now) else {
+            return skip("The watched web-page refresh interval has not elapsed.")
+        }
+
+        schedule.lastRefreshStartedAt = now
+        schedule.lastSkippedReason = nil
+        preferences.watchedWebPageRefreshSchedule = schedule
+
+        let alreadyQueuedIDs = knowledgeSources
+            .filter { $0.kind == .webPage && $0.isWatched && $0.status == .queued }
+            .map(\.id)
+        let newlyQueuedIDs = queueStaleWatchedWebPageKnowledgeSources(
+            olderThan: schedule.boundedRefreshInterval,
+            maximumSourceCount: schedule.boundedMaximumBatchSize,
+            now: now
+        )
+        var queuedSourceIDs: [UUID] = []
+        for sourceID in alreadyQueuedIDs + newlyQueuedIDs {
+            guard queuedSourceIDs.contains(sourceID) == false else { continue }
+            queuedSourceIDs.append(sourceID)
+            if queuedSourceIDs.count == schedule.boundedMaximumBatchSize {
+                break
+            }
+        }
+
+        var refreshedSourceIDs: [UUID] = []
+        var failedSourceIDs: [UUID] = []
+
+        for sourceID in queuedSourceIDs {
+            let refreshedSource = await captureWebPageKnowledgeSource(
+                sourceID,
+                now: now,
+                webPageCaptureService: webPageCaptureService
+            )
+            if refreshedSource?.status == .ready {
+                refreshedSourceIDs.append(sourceID)
+            } else {
+                failedSourceIDs.append(sourceID)
+            }
+        }
+
+        schedule = preferences.watchedWebPageRefreshSchedule ?? schedule
+        schedule.lastRefreshCompletedAt = now
+        schedule.lastQueuedSourceIDs = queuedSourceIDs
+        schedule.lastSkippedReason = queuedSourceIDs.isEmpty
+            ? "No watched web captures were older than the refresh interval."
+            : nil
+        preferences.watchedWebPageRefreshSchedule = schedule
+
+        return WatchedWebPageRefreshRunSummary(
+            queuedSourceIDs: queuedSourceIDs,
+            refreshedSourceIDs: refreshedSourceIDs,
+            failedSourceIDs: failedSourceIDs,
+            skippedReason: schedule.lastSkippedReason
+        )
+    }
+
     func localKnowledgeDocumentInputs(
         excludingPrompt prompt: String? = nil,
         knowledgeSourceIDs: Set<UUID>? = nil
@@ -5745,7 +5848,8 @@ final class WorkspaceStore {
     @discardableResult
     func captureWebPageKnowledgeSource(
         _ sourceID: UUID,
-        now: Date = .now
+        now: Date = .now,
+        webPageCaptureService: WebPageCaptureService = WebPageCaptureService()
     ) async -> KnowledgeSource? {
         guard let sourceIndex = knowledgeSources.firstIndex(where: { $0.id == sourceID }) else { return nil }
         let source = knowledgeSources[sourceIndex]
@@ -5787,7 +5891,7 @@ final class WorkspaceStore {
         )
 
         do {
-            let capturedPage = try await WebPageCaptureService().capture(url: url, capturedAt: now)
+            let capturedPage = try await webPageCaptureService.capture(url: url, capturedAt: now)
             return storeCapturedWebPage(capturedPage, for: sourceID, rebuild: true)
         } catch {
             markKnowledgeSourceCaptureFailed(
