@@ -8,6 +8,10 @@ This repository documents a working implementation, not a roadmap-only feature l
 
 Flannel is released under the MIT License. See [LICENSE](LICENSE).
 
+## Open source release hygiene
+
+Before public pushes, use [OPEN_SOURCE_RELEASE_CHECKLIST.md](docs/OPEN_SOURCE_RELEASE_CHECKLIST.md) to verify repository visibility, secret hygiene, local-data ignores, and validation commands.
+
 ## Current scope
 
 - Local-first app defaults with default local-only routing and explicit provider activation checks.

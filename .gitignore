@@ -19,6 +19,11 @@ Icon?
 .mcp.*.json
 .opencode/
 .continue/
+.aider*
+.roo/
+.windsurf/
+.zed/
+.kiro/
 *.swp
 *.swo
 *.tmp
@@ -73,12 +78,15 @@ ExportOptions.plist
 
 # Local runtime data and logs
 *.log
+*.har
+*.trace.zip
 *.db
 *.db-shm
 *.db-wal
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+*.jsonl
 *.store
 *.trace
 Application Support/
@@ -89,6 +97,8 @@ Containers/
 *.flannelworkspace.json
 *.flannelbackup
 *.flannel-snapshot.json
+*.flannelstate
+*.flannelindex
 *-workspace-export.json
 *-workspace-snapshot.json
 flannel-workspace-*
@@ -99,6 +109,14 @@ flannel-workspace-*
 flannel-chat-export.*
 *.chat.jsonl
 *.transcript.jsonl
+*.messages.jsonl
+*.conversation.jsonl
+*.conversations.jsonl
+*.history.jsonl
+*.rag.jsonl
+*.vectorstore.json
+*.knowledge-index.json
+*.embedding-cache.json
 Flannel-Exports/
 Exports/
 
@@ -130,9 +148,15 @@ supabase*.json
 .yarnrc
 .yarnrc.yml
 .netrc
+.pypirc
+.gem/credentials
 secrets/
 private/
 local-secrets/
+.auth/
+.tokens/
+.keys/
+.credentials/
 
 # Local-only app and Xcode configuration
 *.local
@@ -154,3 +178,18 @@ ServiceAccount*.plist
 *.plist.private
 *.plist.secret
 *.plist.secrets
+
+# Cloud, deployment, and package-manager auth copied into project roots
+.aws/
+.azure/
+.gcloud/
+.config/gcloud/
+.docker/config.json
+.kube/
+.vercel/
+.netlify/
+.wrangler/
+wrangler.toml.local
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
