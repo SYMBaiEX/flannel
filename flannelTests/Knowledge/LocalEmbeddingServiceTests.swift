@@ -51,6 +51,50 @@ struct LocalEmbeddingServiceTests {
         #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
     }
 
+    @Test("Gemini embeddings use native batch endpoint and API key header")
+    func geminiEmbeddingsUseNativeBatchEndpointAndAPIKeyHeader() throws {
+        let keychain = KeychainSecretStore()
+        var provider = ProviderConfiguration(
+            kind: .gemini,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "Google Gemini API",
+            endpoint: "https://generativelanguage.googleapis.com/v1beta/openai",
+            modelIdentifier: "gemini-embedding-2",
+            capabilities: [.chat, .streaming, .embeddings, .openAICompatible],
+            supportsEmbeddings: true
+        )
+        let reference = try #require(ProviderSetupService.shared.canonicalSecretReference(for: provider))
+        _ = try keychain.save(
+            "fixture-gemini-embedding-key",
+            account: reference.account,
+            service: reference.service
+        )
+        defer { try? keychain.delete(reference) }
+        provider.secretReference = reference.rawValue
+
+        let request = try LocalEmbeddingService(keychain: keychain).makeURLRequest(
+            for: LocalEmbeddingRequest(
+                provider: provider,
+                inputs: ["first private chunk", "second private chunk"]
+            )
+        )
+        let body = try #require(request.httpBody)
+        let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let requests = try #require(json["requests"] as? [[String: Any]])
+        let firstPayload = try #require(requests.first)
+        let content = try #require(firstPayload["content"] as? [String: Any])
+        let parts = try #require(content["parts"] as? [[String: Any]])
+
+        #expect(request.url?.absoluteString == "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:batchEmbedContents")
+        #expect(request.httpMethod == "POST")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
+        #expect(request.value(forHTTPHeaderField: "x-goog-api-key") == "fixture-gemini-embedding-key")
+        #expect(requests.count == 2)
+        #expect(firstPayload["model"] as? String == "models/gemini-embedding-2")
+        #expect(parts.first?["text"] as? String == "first private chunk")
+    }
+
     @Test("Remote embeddings reject noncanonical Keychain references")
     func remoteEmbeddingsRejectNoncanonicalKeychainReferences() throws {
         let keychain = KeychainSecretStore()
@@ -78,7 +122,7 @@ struct LocalEmbeddingServiceTests {
         #expect(try keychain.read(reference) == "borrowed-embedding-key")
     }
 
-    @Test("Embedding parsers decode Ollama and OpenAI-compatible vectors")
+    @Test("Embedding parsers decode Ollama, Gemini, and OpenAI-compatible vectors")
     func embeddingParsersDecodeProviderVectors() throws {
         let service = LocalEmbeddingService()
         let ollamaProvider = ProviderConfiguration(
@@ -93,6 +137,12 @@ struct LocalEmbeddingServiceTests {
             endpoint: "http://localhost:1234",
             modelIdentifier: "text-embedding-local"
         )
+        let geminiProvider = ProviderConfiguration(
+            kind: .gemini,
+            displayName: "Google Gemini API",
+            endpoint: "https://generativelanguage.googleapis.com/v1beta/openai",
+            modelIdentifier: "gemini-embedding-2"
+        )
 
         let ollama = try service.parse(
             data: Data(#"{"model":"nomic-embed-text","embeddings":[[0.1,0.2,0.3]]}"#.utf8),
@@ -104,10 +154,16 @@ struct LocalEmbeddingServiceTests {
             provider: openAICompatibleProvider,
             modelIdentifier: "text-embedding-local"
         )
+        let gemini = try service.parse(
+            data: Data(#"{"embeddings":[{"values":[0.6,0.7]},{"values":[0.8,0.9]}]}"#.utf8),
+            provider: geminiProvider,
+            modelIdentifier: "gemini-embedding-2"
+        )
 
         #expect(ollama.modelIdentifier == "nomic-embed-text")
         #expect(ollama.vectorDimension == 3)
         #expect(compatible.vectors == [[0.1, 0.2], [0.4, 0.5]])
+        #expect(gemini.vectors == [[0.6, 0.7], [0.8, 0.9]])
     }
 
     @MainActor

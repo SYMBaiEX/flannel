@@ -63,7 +63,10 @@ nonisolated struct LocalEmbeddingService: Sendable {
         case .lmStudio, .customOpenAICompatible, .openAI, .groq, .openRouter:
             return try makeOpenAICompatibleRequest(provider: request.provider, model: model, inputs: request.inputs)
 
-        case .anthropic, .chatGPTCLI, .claudeCodeCLI, .gemini, .xAI, .mistral, .perplexity, .vercelAISDKBridge:
+        case .gemini:
+            return try makeGeminiRequest(provider: request.provider, model: model, inputs: request.inputs)
+
+        case .anthropic, .chatGPTCLI, .claudeCodeCLI, .xAI, .mistral, .perplexity, .vercelAISDKBridge:
             throw LocalEmbeddingError.unsupportedProvider(request.provider.displayName)
         }
     }
@@ -106,7 +109,23 @@ nonisolated struct LocalEmbeddingService: Sendable {
             let vectors = payload.data.sorted { $0.index < $1.index }.map(\.embedding)
             return LocalEmbeddingResult(modelIdentifier: modelIdentifier, vectors: vectors)
 
-        case .anthropic, .chatGPTCLI, .claudeCodeCLI, .gemini, .xAI, .mistral, .perplexity, .vercelAISDKBridge:
+        case .gemini:
+            let payload = try JSONDecoder().decode(GeminiEmbeddingResponse.self, from: data)
+            if let embeddings = payload.embeddings {
+                return LocalEmbeddingResult(
+                    modelIdentifier: modelIdentifier,
+                    vectors: embeddings.map(\.values)
+                )
+            }
+            if let embedding = payload.embedding {
+                return LocalEmbeddingResult(
+                    modelIdentifier: modelIdentifier,
+                    vectors: [embedding.values]
+                )
+            }
+            return LocalEmbeddingResult(modelIdentifier: modelIdentifier, vectors: [])
+
+        case .anthropic, .chatGPTCLI, .claudeCodeCLI, .xAI, .mistral, .perplexity, .vercelAISDKBridge:
             throw LocalEmbeddingError.unsupportedProvider(provider.displayName)
         }
     }
@@ -168,6 +187,41 @@ nonisolated struct LocalEmbeddingService: Sendable {
         return request
     }
 
+    private func makeGeminiRequest(
+        provider: ProviderConfiguration,
+        model: String,
+        inputs: [String]
+    ) throws -> URLRequest {
+        guard let secretReference = ProviderSetupService.shared.trustedSecretReference(for: provider) else {
+            throw LocalEmbeddingError.missingKeychainReference(provider.displayName)
+        }
+
+        let normalizedModel = model.removingGeminiModelsPrefix()
+        let url = try geminiEndpoint(
+            provider.endpoint,
+            modelIdentifier: normalizedModel,
+            method: "batchEmbedContents"
+        )
+        let apiKey = try keychain.read(secretReference)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
+        request.httpBody = try JSONEncoder().encode(
+            GeminiBatchEmbeddingRequestPayload(
+                requests: inputs.map { input in
+                    GeminiEmbeddingRequestPayload(
+                        model: "models/\(normalizedModel)",
+                        content: GeminiEmbeddingContent(
+                            parts: [GeminiEmbeddingPart(text: input)]
+                        )
+                    )
+                }
+            )
+        )
+        return request
+    }
+
     private func endpoint(
         _ rawValue: String,
         appending pathComponents: [String],
@@ -191,6 +245,37 @@ nonisolated struct LocalEmbeddingService: Sendable {
         }
 
         components.path = "/" + path
+        guard let url = components.url else {
+            throw LocalEmbeddingError.invalidEndpoint
+        }
+        return url
+    }
+
+    private func geminiEndpoint(
+        _ rawValue: String,
+        modelIdentifier: String,
+        method: String
+    ) throws -> URL {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var components = URLComponents(string: trimmed),
+              components.scheme != nil,
+              components.host != nil else {
+            throw LocalEmbeddingError.invalidEndpoint
+        }
+
+        var pathComponents = components.path
+            .split(separator: "/")
+            .map(String.init)
+        if pathComponents.last?.lowercased() == "openai" {
+            pathComponents.removeLast()
+        }
+        if pathComponents.contains(where: { $0.isGeminiVersionPath }) == false {
+            pathComponents.append("v1beta")
+        }
+        pathComponents.append("models")
+        pathComponents.append("\(modelIdentifier):\(method)")
+
+        components.path = "/" + pathComponents.joined(separator: "/")
         guard let url = components.url else {
             throw LocalEmbeddingError.invalidEndpoint
         }
@@ -271,6 +356,23 @@ nonisolated private struct OpenAICompatibleEmbeddingRequestPayload: Encodable {
     var input: [String]
 }
 
+nonisolated private struct GeminiBatchEmbeddingRequestPayload: Encodable {
+    var requests: [GeminiEmbeddingRequestPayload]
+}
+
+nonisolated private struct GeminiEmbeddingRequestPayload: Encodable {
+    var model: String
+    var content: GeminiEmbeddingContent
+}
+
+nonisolated private struct GeminiEmbeddingContent: Encodable {
+    var parts: [GeminiEmbeddingPart]
+}
+
+nonisolated private struct GeminiEmbeddingPart: Encodable {
+    var text: String
+}
+
 nonisolated private struct OllamaEmbeddingResponse: Decodable {
     var model: String?
     var embeddings: [[Double]]
@@ -283,4 +385,31 @@ nonisolated private struct OpenAICompatibleEmbeddingResponse: Decodable {
     }
 
     var data: [DataItem]
+}
+
+nonisolated private struct GeminiEmbeddingResponse: Decodable {
+    nonisolated struct Embedding: Decodable {
+        var values: [Double]
+    }
+
+    var embeddings: [Embedding]?
+    var embedding: Embedding?
+}
+
+nonisolated private extension String {
+    var isGeminiVersionPath: Bool {
+        let lowercased = lowercased()
+        guard lowercased.hasPrefix("v") else { return false }
+        let suffix = lowercased.dropFirst()
+        let numericPrefix = suffix.prefix { $0.isNumber }
+        guard numericPrefix.isEmpty == false else { return false }
+        let remainder = suffix.dropFirst(numericPrefix.count)
+        return remainder.isEmpty || remainder == "beta"
+    }
+
+    func removingGeminiModelsPrefix() -> String {
+        let prefix = "models/"
+        guard lowercased().hasPrefix(prefix) else { return self }
+        return String(dropFirst(prefix.count))
+    }
 }

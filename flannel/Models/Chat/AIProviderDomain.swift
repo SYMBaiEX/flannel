@@ -621,7 +621,8 @@ enum AIKnownProviderCatalog {
             endpoint: "https://generativelanguage.googleapis.com/v1beta/openai",
             defaultModelIdentifier: "gemini-2.5-pro",
             recommendedModelIdentifiers: ["gemini-2.5-pro", "gemini-2.5-flash"],
-            capabilities: [.chat, .streaming, .toolCalling, .vision, .openAICompatible],
+            embeddingModelIdentifiers: ["gemini-embedding-2", "gemini-embedding-001"],
+            capabilities: [.chat, .streaming, .toolCalling, .embeddings, .vision, .openAICompatible],
             credentialRequirement: .requiredAPIKey,
             modelDiscoveryStrategy: .openAICompatibleModels,
             requestBoundary: .externalAPI,
@@ -629,7 +630,9 @@ enum AIKnownProviderCatalog {
             supportedRuntimeInterfaces: [.openAICompatible],
             discoveryCapabilities: [.openAICompatibleModelList],
             cliContract: nil,
-            sourceReferences: []
+            sourceReferences: [
+                AIProviderSourceReference(label: "Gemini embeddings", url: "https://ai.google.dev/gemini-api/docs/embeddings")
+            ]
         ),
         AIProviderCatalogEntry(
             providerKind: .xAI,

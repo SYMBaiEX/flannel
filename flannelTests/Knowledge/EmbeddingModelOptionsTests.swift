@@ -23,6 +23,19 @@ struct EmbeddingModelOptionsTests {
     }
 
     @MainActor
+    @Test("Gemini catalog embedding models are selectable without chat model pollution")
+    func geminiCatalogEmbeddingModelsAreSelectableWithoutChatModelPollution() throws {
+        let (_, store) = try makeLoadedStore()
+        let geminiProvider = try #require(store.providerConfigurations.first { $0.kind == .gemini && $0.accessMode == .apiKey })
+
+        #expect(geminiProvider.supportsEmbeddings)
+        #expect(geminiProvider.capabilities.contains(.embeddings))
+        #expect(store.embeddingModelOptions.contains("gemini-embedding-2"))
+        #expect(store.embeddingModelOptions.contains("gemini-embedding-001"))
+        #expect(store.embeddingModelOptions.contains(geminiProvider.modelIdentifier) == false)
+    }
+
+    @MainActor
     @Test("Provider backed indexing can use OpenAI catalog embedding model")
     func providerBackedIndexingCanUseOpenAICatalogEmbeddingModel() async throws {
         let (_, store) = try makeLoadedStore()
