@@ -4293,10 +4293,11 @@ final class WorkspaceStore {
                 }
             }
 
-            let results = resultsByChunkID.values
-                .sorted(by: compareKnowledgeResults)
-                .prefix(max(0, limit))
-                .map { $0 }
+            let results = indexingService.rerankResults(
+                Array(resultsByChunkID.values),
+                for: query,
+                limit: limit
+            )
             return LocalKnowledgeRetrievalPacket(query: query, results: results)
         } catch {
             return localKnowledgeRetrievalPacket(
@@ -6683,22 +6684,6 @@ final class WorkspaceStore {
             throw LocalKnowledgeVectorStoreError.inconsistentEmbeddingDimensions
         }
         return vector
-    }
-
-    private func compareKnowledgeResults(
-        _ lhs: LocalKnowledgeSearchResult,
-        _ rhs: LocalKnowledgeSearchResult
-    ) -> Bool {
-        if lhs.score != rhs.score {
-            return lhs.score > rhs.score
-        }
-        if lhs.chunk.sourceTitle != rhs.chunk.sourceTitle {
-            return lhs.chunk.sourceTitle.localizedCaseInsensitiveCompare(rhs.chunk.sourceTitle) == .orderedAscending
-        }
-        if lhs.chunk.ordinal != rhs.chunk.ordinal {
-            return lhs.chunk.ordinal < rhs.chunk.ordinal
-        }
-        return lhs.chunk.id < rhs.chunk.id
     }
 
     private func resolvedKnowledgeSource(for citation: AIChatCitation) -> KnowledgeSource? {

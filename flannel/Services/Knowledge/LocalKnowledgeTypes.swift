@@ -89,6 +89,28 @@ nonisolated struct LocalKnowledgeChunkingOptions: Sendable, Hashable {
     }
 }
 
+nonisolated struct LocalKnowledgeRerankingOptions: Sendable, Hashable {
+    var isEnabled: Bool
+    var sourceRepeatPenaltyFraction: Double
+    var adjacentChunkPenaltyFraction: Double
+    var termNoveltyBoostFraction: Double
+    var minimumSourceRepeatPenalty: Double
+
+    init(
+        isEnabled: Bool = true,
+        sourceRepeatPenaltyFraction: Double = 0.28,
+        adjacentChunkPenaltyFraction: Double = 0.12,
+        termNoveltyBoostFraction: Double = 0.08,
+        minimumSourceRepeatPenalty: Double = 2.0
+    ) {
+        self.isEnabled = isEnabled
+        self.sourceRepeatPenaltyFraction = sourceRepeatPenaltyFraction
+        self.adjacentChunkPenaltyFraction = adjacentChunkPenaltyFraction
+        self.termNoveltyBoostFraction = termNoveltyBoostFraction
+        self.minimumSourceRepeatPenalty = minimumSourceRepeatPenalty
+    }
+}
+
 nonisolated struct LocalKnowledgeIndex: Sendable, Hashable {
     var sources: [LocalKnowledgeSourceSnapshot]
     var chunks: [LocalKnowledgeChunk]

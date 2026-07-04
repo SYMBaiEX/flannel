@@ -81,6 +81,90 @@ struct LocalKnowledgeIndexingServiceTests {
         #expect(citation.sourceIdentifier == topResult.chunk.id)
     }
 
+    @Test("Local reranking diversifies top retrieval results across sources")
+    func localRerankingDiversifiesTopRetrievalResultsAcrossSources() throws {
+        let results = [
+            searchResult(
+                title: "Long Project Notes",
+                sourceIdentifier: "source-a",
+                ordinal: 0,
+                score: 100,
+                matchedTerms: ["local", "rerank"]
+            ),
+            searchResult(
+                title: "Long Project Notes",
+                sourceIdentifier: "source-a",
+                ordinal: 1,
+                score: 98,
+                matchedTerms: ["local", "rerank"]
+            ),
+            searchResult(
+                title: "Long Project Notes",
+                sourceIdentifier: "source-a",
+                ordinal: 2,
+                score: 97,
+                matchedTerms: ["local", "rerank"]
+            ),
+            searchResult(
+                title: "Side Source A",
+                sourceIdentifier: "source-b",
+                ordinal: 0,
+                score: 96,
+                matchedTerms: ["local", "rerank"]
+            ),
+            searchResult(
+                title: "Side Source B",
+                sourceIdentifier: "source-c",
+                ordinal: 0,
+                score: 95,
+                matchedTerms: ["local", "rerank"]
+            )
+        ]
+
+        let reranked = service.rerankResults(results, for: "local rerank", limit: 3)
+        let raw = service.rerankResults(
+            results,
+            for: "local rerank",
+            limit: 3,
+            options: LocalKnowledgeRerankingOptions(isEnabled: false)
+        )
+
+        #expect(reranked.map(\.chunk.sourceIdentifier) == ["source-a", "source-b", "source-c"])
+        #expect(raw.map(\.chunk.sourceIdentifier) == ["source-a", "source-a", "source-a"])
+    }
+
+    @Test("Local reranking boosts candidates with uncovered query terms")
+    func localRerankingBoostsCandidatesWithUncoveredQueryTerms() throws {
+        let results = [
+            searchResult(
+                title: "Primary Source",
+                sourceIdentifier: "source-a",
+                ordinal: 0,
+                score: 40,
+                matchedTerms: ["local", "rerank"]
+            ),
+            searchResult(
+                title: "Primary Source",
+                sourceIdentifier: "source-a",
+                ordinal: 1,
+                score: 39,
+                matchedTerms: ["local", "rerank"]
+            ),
+            searchResult(
+                title: "Security Source",
+                sourceIdentifier: "source-b",
+                ordinal: 0,
+                score: 38,
+                matchedTerms: ["safety"]
+            )
+        ]
+
+        let reranked = service.rerankResults(results, for: "local rerank safety", limit: 2)
+
+        #expect(reranked.map(\.chunk.sourceIdentifier) == ["source-a", "source-b"])
+        #expect(reranked[1].matchedTerms == ["safety"])
+    }
+
     @Test("File input reads local text and returns searchable citations")
     func fileInputReadsLocalText() throws {
         let fileURL = FileManager.default.temporaryDirectory
@@ -246,6 +330,70 @@ struct LocalKnowledgeIndexingServiceTests {
         #expect(hybridResults.first?.matchedTerms == ["semantic"])
     }
 
+    @Test("Hybrid search diversifies reranked top K across sources")
+    func hybridSearchDiversifiesRerankedTopKAcrossSources() throws {
+        let candidateResults = [
+            searchResult(
+                title: "Long Project Notes",
+                sourceIdentifier: "source-a",
+                ordinal: 0,
+                score: 100,
+                matchedTerms: ["local", "rerank"]
+            ),
+            searchResult(
+                title: "Long Project Notes",
+                sourceIdentifier: "source-a",
+                ordinal: 1,
+                score: 98,
+                matchedTerms: ["local", "rerank"]
+            ),
+            searchResult(
+                title: "Long Project Notes",
+                sourceIdentifier: "source-a",
+                ordinal: 2,
+                score: 97,
+                matchedTerms: ["local", "rerank"]
+            ),
+            searchResult(
+                title: "Side Source A",
+                sourceIdentifier: "source-b",
+                ordinal: 0,
+                score: 96,
+                matchedTerms: ["local", "rerank"]
+            ),
+            searchResult(
+                title: "Side Source B",
+                sourceIdentifier: "source-c",
+                ordinal: 0,
+                score: 95,
+                matchedTerms: ["local", "rerank"]
+            )
+        ]
+        let chunks = candidateResults.map(\.chunk)
+        let index = LocalKnowledgeIndex(
+            sources: [
+                sourceSnapshot(id: "source-a", title: "Long Project Notes", chunkCount: 3),
+                sourceSnapshot(id: "source-b", title: "Side Source A", chunkCount: 1),
+                sourceSnapshot(id: "source-c", title: "Side Source B", chunkCount: 1)
+            ],
+            chunks: chunks,
+            chunkingOptions: LocalKnowledgeChunkingOptions()
+        )
+        let vectorRecords = chunks.map {
+            vectorRecord(for: $0, vector: [1, 0])
+        }
+
+        let results = service.hybridSearch(
+            "local rerank",
+            in: index,
+            vectorRecords: vectorRecords,
+            queryVector: [1, 0],
+            limit: 3
+        )
+
+        #expect(results.map(\.chunk.sourceIdentifier) == ["source-a", "source-b", "source-c"])
+    }
+
     @Test("Hybrid search ignores semantic vectors with mismatched dimensions")
     func hybridSearchIgnoresMismatchedVectorDimensions() throws {
         let index = try service.buildIndex(
@@ -409,5 +557,72 @@ struct LocalKnowledgeIndexingServiceTests {
             documentAttributes: [.documentType: NSAttributedString.DocumentType.officeOpenXML]
         )
         try data.write(to: fileURL, options: .atomic)
+    }
+
+    private func searchResult(
+        title: String,
+        sourceIdentifier: String,
+        ordinal: Int,
+        score: Double,
+        matchedTerms: [String]
+    ) -> LocalKnowledgeSearchResult {
+        let text = "Fixture \(title) chunk \(ordinal): \(matchedTerms.joined(separator: " "))."
+        let chunk = LocalKnowledgeChunk(
+            id: "\(sourceIdentifier)-\(ordinal)",
+            sourceIdentifier: sourceIdentifier,
+            knowledgeSourceID: nil,
+            sourceTitle: title,
+            sourceKind: .workspaceNotes,
+            sourceLocation: "flannel://tests/\(sourceIdentifier)",
+            ordinal: ordinal,
+            characterRange: 0..<text.count,
+            text: text,
+            normalizedText: matchedTerms.joined(separator: " "),
+            termFrequencies: Dictionary(uniqueKeysWithValues: matchedTerms.map { ($0, 1) }),
+            titleTermFrequencies: [:],
+            locationTermFrequencies: [:],
+            contentFingerprint: "\(sourceIdentifier)-\(ordinal)-fingerprint"
+        )
+
+        return LocalKnowledgeSearchResult(
+            chunk: chunk,
+            score: score,
+            matchedTerms: matchedTerms,
+            snippet: text
+        )
+    }
+
+    private func sourceSnapshot(
+        id: String,
+        title: String,
+        chunkCount: Int
+    ) -> LocalKnowledgeSourceSnapshot {
+        LocalKnowledgeSourceSnapshot(
+            id: id,
+            knowledgeSourceID: nil,
+            title: title,
+            kind: .workspaceNotes,
+            location: "flannel://tests/\(id)",
+            contentFingerprint: "\(id)-fingerprint",
+            chunkCount: chunkCount
+        )
+    }
+
+    private func vectorRecord(
+        for chunk: LocalKnowledgeChunk,
+        vector: [Double]
+    ) -> LocalKnowledgeVectorRecord {
+        LocalKnowledgeVectorRecord(
+            chunkID: chunk.id,
+            sourceIdentifier: chunk.sourceIdentifier,
+            knowledgeSourceID: chunk.knowledgeSourceID,
+            sourceTitle: chunk.sourceTitle,
+            sourceKind: chunk.sourceKind,
+            sourceLocation: chunk.sourceLocation,
+            ordinal: chunk.ordinal,
+            contentFingerprint: chunk.contentFingerprint,
+            text: chunk.text,
+            vector: vector
+        )
     }
 }

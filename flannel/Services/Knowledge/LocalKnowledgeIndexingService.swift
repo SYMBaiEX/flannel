@@ -41,7 +41,8 @@ nonisolated struct LocalKnowledgeIndexingService: Sendable {
     func search(
         _ query: String,
         in index: LocalKnowledgeIndex,
-        limit: Int = 8
+        limit: Int = 8,
+        rerankingOptions: LocalKnowledgeRerankingOptions = LocalKnowledgeRerankingOptions()
     ) -> [LocalKnowledgeSearchResult] {
         let queryTerms = orderedUniqueTokens(in: query)
         guard queryTerms.isEmpty == false else {
@@ -84,10 +85,12 @@ nonisolated struct LocalKnowledgeIndexingService: Sendable {
             )
         }
 
-        return scoredResults
-            .sorted(by: compareResults)
-            .prefix(max(0, limit))
-            .map { $0 }
+        return rerankResults(
+            scoredResults,
+            for: query,
+            limit: limit,
+            options: rerankingOptions
+        )
     }
 
     func retrievalPacket(
@@ -153,7 +156,8 @@ nonisolated struct LocalKnowledgeIndexingService: Sendable {
         in index: LocalKnowledgeIndex,
         vectorRecords: [LocalKnowledgeVectorRecord],
         queryVector providedQueryVector: [Double]? = nil,
-        limit: Int = 8
+        limit: Int = 8,
+        rerankingOptions: LocalKnowledgeRerankingOptions = LocalKnowledgeRerankingOptions()
     ) -> [LocalKnowledgeSearchResult] {
         let queryTerms = orderedUniqueTokens(in: query)
         guard queryTerms.isEmpty == false else {
@@ -161,7 +165,12 @@ nonisolated struct LocalKnowledgeIndexingService: Sendable {
         }
 
         let keywordResults = Dictionary(
-            uniqueKeysWithValues: search(query, in: index, limit: index.chunks.count).map { ($0.chunk.id, $0) }
+            uniqueKeysWithValues: search(
+                query,
+                in: index,
+                limit: index.chunks.count,
+                rerankingOptions: LocalKnowledgeRerankingOptions(isEnabled: false)
+            ).map { ($0.chunk.id, $0) }
         )
         let vectorsByChunkID = Dictionary(uniqueKeysWithValues: vectorRecords.map { ($0.chunkID, $0.vector) })
         let queryVector = providedQueryVector ?? LocalEmbeddingService().deterministicLocalVector(for: query)
@@ -185,10 +194,51 @@ nonisolated struct LocalKnowledgeIndexingService: Sendable {
             )
         }
 
-        return scoredResults
-            .sorted(by: compareResults)
-            .prefix(max(0, limit))
-            .map { $0 }
+        return rerankResults(
+            scoredResults,
+            for: query,
+            limit: limit,
+            options: rerankingOptions
+        )
+    }
+
+    func rerankResults(
+        _ results: [LocalKnowledgeSearchResult],
+        for query: String,
+        limit: Int,
+        options: LocalKnowledgeRerankingOptions = LocalKnowledgeRerankingOptions()
+    ) -> [LocalKnowledgeSearchResult] {
+        let boundedLimit = max(0, limit)
+        guard boundedLimit > 0 else { return [] }
+
+        let sortedResults = results.sorted(by: compareResults)
+        guard options.isEnabled,
+              sortedResults.count > 1 else {
+            return Array(sortedResults.prefix(boundedLimit))
+        }
+
+        let queryTerms = Set(orderedUniqueTokens(in: query))
+        var selected: [LocalKnowledgeSearchResult] = []
+        var remaining = sortedResults
+        var coveredTerms = Set<String>()
+        var selectedCountBySource: [String: Int] = [:]
+
+        while selected.count < boundedLimit, remaining.isEmpty == false {
+            let selectedIndex = bestRerankedCandidateIndex(
+                in: remaining,
+                selected: selected,
+                selectedCountBySource: selectedCountBySource,
+                coveredTerms: coveredTerms,
+                queryTerms: queryTerms,
+                options: options
+            )
+            let next = remaining.remove(at: selectedIndex)
+            selected.append(next)
+            coveredTerms.formUnion(next.matchedTerms)
+            selectedCountBySource[next.chunk.sourceIdentifier, default: 0] += 1
+        }
+
+        return selected
     }
 }
 
@@ -550,6 +600,77 @@ private extension LocalKnowledgeIndexingService {
             return lhs.chunk.ordinal < rhs.chunk.ordinal
         }
         return lhs.chunk.id < rhs.chunk.id
+    }
+
+    nonisolated func bestRerankedCandidateIndex(
+        in candidates: [LocalKnowledgeSearchResult],
+        selected: [LocalKnowledgeSearchResult],
+        selectedCountBySource: [String: Int],
+        coveredTerms: Set<String>,
+        queryTerms: Set<String>,
+        options: LocalKnowledgeRerankingOptions
+    ) -> Int {
+        candidates.indices.max { lhsIndex, rhsIndex in
+            let lhs = candidates[lhsIndex]
+            let rhs = candidates[rhsIndex]
+            let lhsScore = rerankingScore(
+                for: lhs,
+                selected: selected,
+                selectedCountBySource: selectedCountBySource,
+                coveredTerms: coveredTerms,
+                queryTerms: queryTerms,
+                options: options
+            )
+            let rhsScore = rerankingScore(
+                for: rhs,
+                selected: selected,
+                selectedCountBySource: selectedCountBySource,
+                coveredTerms: coveredTerms,
+                queryTerms: queryTerms,
+                options: options
+            )
+
+            if lhsScore != rhsScore {
+                return lhsScore < rhsScore
+            }
+
+            return compareResults(rhs, lhs)
+        } ?? 0
+    }
+
+    nonisolated func rerankingScore(
+        for result: LocalKnowledgeSearchResult,
+        selected: [LocalKnowledgeSearchResult],
+        selectedCountBySource: [String: Int],
+        coveredTerms: Set<String>,
+        queryTerms: Set<String>,
+        options: LocalKnowledgeRerankingOptions
+    ) -> Double {
+        var score = result.score
+        let sourceRepeatCount = selectedCountBySource[result.chunk.sourceIdentifier, default: 0]
+
+        if sourceRepeatCount > 0 {
+            let repeatPenalty = max(
+                options.minimumSourceRepeatPenalty,
+                abs(result.score) * options.sourceRepeatPenaltyFraction * Double(sourceRepeatCount)
+            )
+            score -= repeatPenalty
+        }
+
+        if selected.contains(where: { selectedResult in
+            selectedResult.chunk.sourceIdentifier == result.chunk.sourceIdentifier
+                && abs(selectedResult.chunk.ordinal - result.chunk.ordinal) <= 1
+        }) {
+            score -= abs(result.score) * options.adjacentChunkPenaltyFraction
+        }
+
+        let matchedTerms = Set(result.matchedTerms)
+        let novelTerms = matchedTerms.subtracting(coveredTerms)
+        let noveltyDenominator = max(1, min(queryTerms.count, matchedTerms.count))
+        let noveltyRatio = Double(novelTerms.count) / Double(noveltyDenominator)
+        score += abs(result.score) * options.termNoveltyBoostFraction * noveltyRatio
+
+        return score
     }
 
     nonisolated func semanticMatchedTerms(
