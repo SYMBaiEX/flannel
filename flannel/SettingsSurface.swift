@@ -540,7 +540,7 @@ struct SettingsSurface: View {
                 if !store.localProviderHealthSnapshots.isEmpty {
                     LocalDiscoveryHealthSummary(
                         healthSnapshots: store.localProviderHealthSnapshots,
-                        localModelCatalog: store.localModelCatalog
+                        localModelRegistry: store.localAIModelRegistry
                     )
                 }
 
@@ -5029,18 +5029,29 @@ private extension LLMProviderKind {
 
 private struct LocalDiscoveryHealthSummary: View {
     var healthSnapshots: [AIProviderHealth]
-    var localModelCatalog: [LocalModelDescriptor]
+    var localModelRegistry: [AIModelDescriptor]
 
     private var readyProviderCount: Int {
         healthSnapshots.filter(\.canServeRequests).count
     }
 
     private var loadedModelCount: Int {
-        healthSnapshots.reduce(0) { $0 + $1.loadedModelCount }
+        localModelRegistry.filter { $0.loadedInstanceCount > 0 }.count
+    }
+
+    private var chatModelCount: Int {
+        localModelRegistry.filter { $0.capabilities.contains(.chat) }.count
     }
 
     private var embeddingModelCount: Int {
-        localModelCatalog.filter { $0.capabilities.contains(.embeddings) }.count
+        localModelRegistry.filter { $0.capabilities.contains(.embeddings) }.count
+    }
+
+    private var agentReadyModelCount: Int {
+        localModelRegistry.filter {
+            $0.capabilities.contains(.chat)
+                && ($0.contextWindow ?? 0) >= WorkspaceStore.agentReadyLocalContextWindowTokens
+        }.count
     }
 
     var body: some View {
@@ -5054,13 +5065,26 @@ private struct LocalDiscoveryHealthSummary: View {
                     )
                     summaryMetric(
                         "Models",
-                        value: "\(localModelCatalog.count)",
+                        value: "\(localModelRegistry.count)",
                         systemImage: "cpu"
                     )
+                    summaryMetric(
+                        "Chat",
+                        value: "\(chatModelCount)",
+                        systemImage: "bubble.left.and.text.bubble.right"
+                    )
+                }
+
+                GridRow {
                     summaryMetric(
                         "Loaded",
                         value: "\(loadedModelCount)",
                         systemImage: "memorychip"
+                    )
+                    summaryMetric(
+                        "64k+",
+                        value: "\(agentReadyModelCount)",
+                        systemImage: "rectangle.expand.vertical"
                     )
                     summaryMetric(
                         "Embeddings",

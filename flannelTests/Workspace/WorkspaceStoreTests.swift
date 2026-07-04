@@ -4105,6 +4105,88 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Local discovery exposes endpoint aware AI model registry")
+    func localDiscoveryExposesEndpointAwareAIModelRegistry() throws {
+        let (_, store) = try makeLoadedStore()
+        let ollamaEndpoint = "http://localhost:11434"
+        let lmStudioEndpoint = "http://localhost:1234"
+        let checkedAt = Date(timeIntervalSince1970: 1_820_000_000)
+
+        store.localDiscoveryResults = [
+            LocalProviderDiscoveryResult(
+                providerKind: .ollama,
+                endpoint: ollamaEndpoint,
+                status: .ready,
+                models: [
+                    LocalModelDescriptor(
+                        name: "qwen3:14b",
+                        displayName: "Qwen 3 14B",
+                        providerKind: .ollama,
+                        endpoint: ollamaEndpoint,
+                        family: "qwen3",
+                        parameterSize: "14B",
+                        quantization: "Q4_K_M",
+                        contextWindowTokens: 65_536,
+                        loadedInstanceCount: 1,
+                        sizeBytes: 8_000_000_000,
+                        capabilities: [.chat, .streaming, .toolCalling, .vision, .reasoning]
+                    )
+                ],
+                discoveredAt: checkedAt
+            ),
+            LocalProviderDiscoveryResult(
+                providerKind: .lmStudio,
+                endpoint: lmStudioEndpoint,
+                status: .ready,
+                models: [
+                    LocalModelDescriptor(
+                        name: "embed-local",
+                        displayName: "Nomic Embed",
+                        publisher: "Nomic",
+                        providerKind: .lmStudio,
+                        endpoint: lmStudioEndpoint,
+                        contextWindowTokens: 2_048,
+                        capabilities: [.embeddings, .openAICompatible]
+                    )
+                ],
+                discoveredAt: checkedAt
+            )
+        ]
+
+        let registry = store.localAIModelRegistry
+        let qwen = try #require(registry.first { $0.identifier == "qwen3:14b" })
+        let embedding = try #require(registry.first { $0.identifier == "embed-local" })
+
+        #expect(registry.count == 2)
+        #expect(qwen.providerKind == .ollama)
+        #expect(qwen.providerMode == .nativeAPI)
+        #expect(qwen.sourceEndpoint == ollamaEndpoint)
+        #expect(qwen.displayName == "Qwen 3 14B")
+        #expect(qwen.publisher == "Ollama")
+        #expect(qwen.family == "qwen3")
+        #expect(qwen.parameterCountLabel == "14B")
+        #expect(qwen.quantizationLabel == "Q4_K_M")
+        #expect(qwen.contextWindow == 65_536)
+        #expect(qwen.installedSizeBytes == 8_000_000_000)
+        #expect(qwen.loadedInstanceCount == 1)
+        #expect(qwen.capabilities.contains(.chat))
+        #expect(qwen.capabilities.contains(.streaming))
+        #expect(qwen.capabilities.contains(.toolUse))
+        #expect(qwen.capabilities.contains(.vision))
+        #expect(qwen.capabilities.contains(.reasoning))
+        #expect(qwen.lastDiscoveredAt == checkedAt)
+        #expect(qwen.id.contains(ollamaEndpoint))
+        #expect(embedding.providerKind == .lmStudio)
+        #expect(embedding.providerMode == .openAICompatible)
+        #expect(embedding.publisher == "Nomic")
+        #expect(embedding.capabilities == Set([AIModelCapability.embeddings]))
+        #expect(store.localChatModelRegistry.map(\.identifier) == ["qwen3:14b"])
+        #expect(store.localEmbeddingModelRegistry.map(\.identifier) == ["embed-local"])
+        #expect(store.loadedLocalModelRegistry.map(\.identifier) == ["qwen3:14b"])
+        #expect(store.agentReadyLocalModelRegistry.map(\.identifier) == ["qwen3:14b"])
+    }
+
+    @MainActor
     @Test("Local provider health snapshots keep endpoint specific identity")
     func localProviderHealthSnapshotsKeepEndpointSpecificIdentity() throws {
         let (_, store) = try makeLoadedStore()

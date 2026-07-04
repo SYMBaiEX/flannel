@@ -153,6 +153,7 @@ struct AIModelDescriptor: Identifiable, Codable, Hashable, Sendable {
     var contextWindow: Int?
     var maxOutputTokens: Int?
     var installedSizeBytes: Int64?
+    var sourceEndpoint: String?
     var isAvailableLocally: Bool
     var loadedInstanceCount: Int
     var capabilities: Set<AIModelCapability>
@@ -161,7 +162,11 @@ struct AIModelDescriptor: Identifiable, Codable, Hashable, Sendable {
     var lastDiscoveredAt: Date?
 
     var id: String {
-        "\(providerKind.rawValue):\(providerMode.rawValue):\(identifier)"
+        if let sourceEndpoint,
+           !sourceEndpoint.isEmpty {
+            return "\(providerKind.rawValue):\(providerMode.rawValue):\(sourceEndpoint):\(identifier)"
+        }
+        return "\(providerKind.rawValue):\(providerMode.rawValue):\(identifier)"
     }
 
     var supportsStreaming: Bool {
@@ -188,6 +193,7 @@ struct AIModelDescriptor: Identifiable, Codable, Hashable, Sendable {
         contextWindow: Int? = nil,
         maxOutputTokens: Int? = nil,
         installedSizeBytes: Int64? = nil,
+        sourceEndpoint: String? = nil,
         isAvailableLocally: Bool = true,
         loadedInstanceCount: Int = 0,
         capabilities: Set<AIModelCapability> = [],
@@ -206,6 +212,7 @@ struct AIModelDescriptor: Identifiable, Codable, Hashable, Sendable {
         self.contextWindow = contextWindow
         self.maxOutputTokens = maxOutputTokens
         self.installedSizeBytes = installedSizeBytes
+        self.sourceEndpoint = sourceEndpoint
         self.isAvailableLocally = isAvailableLocally
         self.loadedInstanceCount = loadedInstanceCount
         self.capabilities = capabilities

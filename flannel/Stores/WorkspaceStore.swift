@@ -380,6 +380,7 @@ struct AssistantContextSnapshot: Sendable {
 final class WorkspaceStore {
     private static let maximumKnowledgeDirectoryFiles = 160
     private static let maximumKnowledgeFileBytes = 2_500_000
+    nonisolated static let agentReadyLocalContextWindowTokens = 64_000
     nonisolated private static let defaultToolSecretReader: ToolSecretReader = { reference in
         try KeychainSecretStore().read(reference)
     }
@@ -813,6 +814,52 @@ final class WorkspaceStore {
             }
     }
 
+    var localAIModelRegistry: [AIModelDescriptor] {
+        localDiscoveryResults
+            .flatMap { result in
+                result.models.map { model in
+                    Self.aiModelDescriptor(for: model, discoveredAt: result.discoveredAt)
+                }
+            }
+            .sorted { lhs, rhs in
+                let lhsProvider = lhs.providerKind.displayName
+                let rhsProvider = rhs.providerKind.displayName
+                if lhsProvider != rhsProvider {
+                    return lhsProvider.localizedCaseInsensitiveCompare(rhsProvider) == .orderedAscending
+                }
+
+                let lhsEndpoint = lhs.sourceEndpoint ?? ""
+                let rhsEndpoint = rhs.sourceEndpoint ?? ""
+                if lhsEndpoint != rhsEndpoint {
+                    return lhsEndpoint.localizedCaseInsensitiveCompare(rhsEndpoint) == .orderedAscending
+                }
+
+                if lhs.displayName != rhs.displayName {
+                    return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+                }
+
+                return lhs.identifier.localizedCaseInsensitiveCompare(rhs.identifier) == .orderedAscending
+            }
+    }
+
+    var localChatModelRegistry: [AIModelDescriptor] {
+        localAIModelRegistry.filter { $0.capabilities.contains(.chat) }
+    }
+
+    var localEmbeddingModelRegistry: [AIModelDescriptor] {
+        localAIModelRegistry.filter { $0.capabilities.contains(.embeddings) }
+    }
+
+    var loadedLocalModelRegistry: [AIModelDescriptor] {
+        localAIModelRegistry.filter { $0.loadedInstanceCount > 0 }
+    }
+
+    var agentReadyLocalModelRegistry: [AIModelDescriptor] {
+        localChatModelRegistry.filter {
+            ($0.contextWindow ?? 0) >= Self.agentReadyLocalContextWindowTokens
+        }
+    }
+
     var embeddingModelOptions: [String] {
         var candidates = [LocalEmbeddingService.deterministicModelIdentifier]
         candidates += localModelCatalog
@@ -866,6 +913,55 @@ final class WorkspaceStore {
             warningMessage: warning,
             failureMessage: failure
         )
+    }
+
+    private static func aiModelDescriptor(
+        for model: LocalModelDescriptor,
+        discoveredAt: Date
+    ) -> AIModelDescriptor {
+        let providerKind = AIProviderKind(model.providerKind)
+        let providerMode = AIKnownProviderCatalog.entry(for: model.providerKind)?.providerMode ?? .nativeAPI
+
+        return AIModelDescriptor(
+            providerKind: providerKind,
+            providerMode: providerMode,
+            identifier: model.name,
+            displayName: model.displayName ?? model.name,
+            publisher: model.publisher ?? providerKind.displayName,
+            family: model.family,
+            parameterCountLabel: model.parameterSize,
+            quantizationLabel: model.quantization,
+            contextWindow: model.contextWindowTokens,
+            installedSizeBytes: model.sizeBytes,
+            sourceEndpoint: model.endpoint,
+            isAvailableLocally: true,
+            loadedInstanceCount: max(0, model.loadedInstanceCount ?? 0),
+            capabilities: Set(model.capabilities.compactMap(Self.aiModelCapability)),
+            lastDiscoveredAt: discoveredAt
+        )
+    }
+
+    private static func aiModelCapability(for capability: ModelCapability) -> AIModelCapability? {
+        switch capability {
+        case .chat:
+            return .chat
+        case .streaming:
+            return .streaming
+        case .toolCalling:
+            return .toolUse
+        case .embeddings:
+            return .embeddings
+        case .vision:
+            return .vision
+        case .reasoning:
+            return .reasoning
+        case .webSearch:
+            return .retrieval
+        case .structuredOutput:
+            return .structuredOutput
+        case .imageGeneration, .openAICompatible, .anthropicCompatible:
+            return nil
+        }
     }
 
     private static func localProviderHealthStatus(
