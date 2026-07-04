@@ -3233,7 +3233,7 @@ struct WorkspaceStoreTests {
 
         let result = await store.runTool(
             .browserAutomation,
-            query: "open: file:///Users/symbiex/.ssh/id_rsa",
+            query: "open: file:///Users/example/.ssh/id_rsa",
             webPageCaptureService: WebPageCaptureService(),
             browserAutomationService: service
         )

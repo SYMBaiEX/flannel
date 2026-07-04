@@ -233,6 +233,6 @@ Flannel is released under the MIT License. See [LICENSE](LICENSE).
 
 ## Specs
 
-Detailed implementation alignment and acceptance details remain in [FLANNEL_AI_CHAT_SPEC.md](/Users/symbiex/dev/austin/flannel/flannel/docs/FLANNEL_AI_CHAT_SPEC.md).
+Detailed implementation alignment and acceptance details remain in [FLANNEL_AI_CHAT_SPEC.md](docs/FLANNEL_AI_CHAT_SPEC.md).
 
-macOS 26 chat-first layout goals and screenshot acceptance criteria are documented in [MACOS26_CHAT_UI_VISUAL_QA.md](/Users/symbiex/dev/austin/flannel/flannel/docs/MACOS26_CHAT_UI_VISUAL_QA.md).
+macOS 26 chat-first layout goals and screenshot acceptance criteria are documented in [MACOS26_CHAT_UI_VISUAL_QA.md](docs/MACOS26_CHAT_UI_VISUAL_QA.md).
