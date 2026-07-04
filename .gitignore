@@ -6,6 +6,8 @@ Icon?
 
 # Local editor and Codex state
 .codex/
+.claude/
+.cursor/
 .vscode/
 .idea/
 *.swp
@@ -22,6 +24,8 @@ DerivedData/
 
 # Xcode user-local state
 xcuserdata/
+*.xcuserdatad/
+*.xcdebugger/
 *.xcuserstate
 *.xcscmblueprint
 *.moved-aside
@@ -34,16 +38,25 @@ xcuserdata/
 *.p8
 *.p12
 *.cer
+*.crt
+*.csr
+*.jks
+*.keystore
 *.developerprofile
 ExportOptions.plist
 
 # Local runtime data and logs
 *.log
+*.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
 *.store
 *.trace
+Application Support/
+Containers/
 
 # Flannel private exports and local handoff artifacts
 *.flannelworkspace.json
@@ -62,6 +75,8 @@ Exports/
 *.env
 *.pem
 *.key
+*.token
+*.apikey
 *.private
 *.secret
 *.auth.json
@@ -69,6 +84,7 @@ Exports/
 .netrc
 secrets/
 private/
+local-secrets/
 
 # Local-only app and Xcode configuration
 *.local
