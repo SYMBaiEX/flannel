@@ -5479,6 +5479,55 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Nested chat folders expose paths recursive counts and safe parent moves")
+    func nestedChatFoldersExposePathsRecursiveCountsAndSafeMoves() throws {
+        let container = try ModelContainer(
+            for: Item.self,
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let store = WorkspaceStore()
+        try store.loadOrCreate(in: context)
+        store.chatFolders.removeAll()
+        store.assistantThreads.removeAll()
+
+        let parent = try #require(store.addChatFolder(title: "Research", symbolName: "folder"))
+        let child = try #require(store.addChatFolder(title: "Agents", parentID: parent.id, symbolName: "cpu"))
+        let grandchild = try #require(store.addChatFolder(title: "Eval Runs", parentID: child.id, symbolName: "chart.bar"))
+        let sibling = try #require(store.addChatFolder(title: "Writing", symbolName: "text.quote"))
+
+        let parentThreadID = store.createAssistantThread(folderID: parent.id).id
+        store.assistantThreads[try #require(store.assistantThreads.firstIndex(where: { $0.id == parentThreadID }))].title = "Research notes"
+        let childThreadID = store.createAssistantThread(folderID: child.id).id
+        store.assistantThreads[try #require(store.assistantThreads.firstIndex(where: { $0.id == childThreadID }))].title = "Agent plan"
+        let grandchildThreadID = store.createAssistantThread(folderID: grandchild.id).id
+        store.assistantThreads[try #require(store.assistantThreads.firstIndex(where: { $0.id == grandchildThreadID }))].title = "Eval report"
+        let siblingThreadID = store.createAssistantThread(folderID: sibling.id).id
+        store.assistantThreads[try #require(store.assistantThreads.firstIndex(where: { $0.id == siblingThreadID }))].title = "Draft outline"
+
+        #expect(store.descendantFolderIDs(of: parent.id) == Set([child.id, grandchild.id]))
+        #expect(store.folderIDsIncludingDescendants(of: parent.id) == Set([parent.id, child.id, grandchild.id]))
+        #expect(store.threadCount(inFolder: parent.id) == 1)
+        #expect(store.threadCount(inFolder: parent.id, includingDescendants: true) == 3)
+        #expect(store.threadCount(inFolder: child.id, includingDescendants: true) == 2)
+        #expect(store.threadCount(inFolder: sibling.id, includingDescendants: true) == 1)
+        #expect(store.folderPathTitle(for: grandchild.id) == "Research / Agents / Eval Runs")
+        #expect(store.searchChats("Research / Agents").contains { $0.threadID == grandchildThreadID })
+
+        #expect(store.moveChatFolder(parent.id, toParent: grandchild.id) == false)
+        #expect(store.chatFolders.first(where: { $0.id == parent.id })?.parentID == nil)
+
+        #expect(store.moveChatFolder(child.id, toParent: sibling.id))
+        #expect(store.folderPathTitle(for: grandchild.id) == "Writing / Agents / Eval Runs")
+        #expect(store.threadCount(inFolder: parent.id, includingDescendants: true) == 1)
+        #expect(store.threadCount(inFolder: sibling.id, includingDescendants: true) == 3)
+        #expect(store.searchChats("Writing / Agents").contains { $0.threadID == grandchildThreadID })
+        #expect(store.searchChats("Research").contains { $0.threadID == parentThreadID })
+        #expect(store.searchChats("Research").contains { $0.threadID == childThreadID } == false)
+        #expect(store.searchChats("Writing").contains { $0.threadID == siblingThreadID })
+    }
+
+    @MainActor
     @Test("Model comparison runs persist with immutable provider snapshots")
     func modelComparisonRunProviderSnapshotPersists() throws {
         let container = try ModelContainer(

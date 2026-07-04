@@ -35,6 +35,7 @@ struct SettingsSurface: View {
     @State private var ollamaPullModelName = "llama3.1"
     @State private var ollamaPullEndpoint = "http://localhost:11434"
     @State private var ollamaPullMessage: String?
+    @State private var newChatFolderParentID: UUID?
     @State private var deletingOllamaModelID: String?
     @State private var inspectingOllamaModelID: String?
     @State private var loadingLMStudioModelID: String?
@@ -156,6 +157,10 @@ struct SettingsSurface: View {
         !newKnowledgeSourceLocation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var chatFolderRows: [(folder: ChatFolder, depth: Int)] {
+        flattenedChatFolders(parentID: nil, depth: 0)
+    }
+
     private var sidebarSettings: some View {
         let sidebarWidth = FlannelSidebarSurface.settings.columnWidth
 
@@ -272,25 +277,41 @@ struct SettingsSurface: View {
                         detail: "Create folders for research, writing, coding, projects, or any recurring AI workflow."
                     )
                 } else {
-                    ForEach(store.chatFolders.indices, id: \.self) { index in
-                        ChatFolderSettingsRow(
-                            folder: $store.chatFolders[index],
-                            parentOptions: parentOptions(for: store.chatFolders[index]),
-                            threadCount: store.threadCount(inFolder: store.chatFolders[index].id),
-                            delete: {
-                                _ = store.deleteChatFolder(store.chatFolders[index].id)
-                                persist()
-                            },
-                            persist: persist
-                        )
+                    ForEach(chatFolderRows, id: \.folder.id) { row in
+                        if let index = store.chatFolders.firstIndex(where: { $0.id == row.folder.id }) {
+                            ChatFolderSettingsRow(
+                                folder: $store.chatFolders[index],
+                                depth: row.depth,
+                                parentOptions: parentOptions(for: store.chatFolders[index]),
+                                directThreadCount: store.threadCount(inFolder: store.chatFolders[index].id),
+                                totalThreadCount: store.threadCount(inFolder: store.chatFolders[index].id, includingDescendants: true),
+                                delete: {
+                                    _ = store.deleteChatFolder(store.chatFolders[index].id)
+                                    persist()
+                                },
+                                moveFolder: { parentID in
+                                    _ = store.moveChatFolder(store.chatFolders[index].id, toParent: parentID)
+                                    persist()
+                                },
+                                persist: persist
+                            )
+                        }
                     }
                 }
 
-                HStack {
+                HStack(alignment: .firstTextBaseline) {
                     TextField("New folder", text: $newChatFolderTitle)
+                    Picker("Parent", selection: $newChatFolderParentID) {
+                        Text("Top Level").tag(Optional<UUID>.none)
+                        ForEach(newFolderParentOptions) { option in
+                            Text(option.title).tag(Optional(option.folder.id))
+                        }
+                    }
+                    .frame(maxWidth: 220)
                     Button("Add") {
-                        if store.addChatFolder(title: newChatFolderTitle) != nil {
+                        if store.addChatFolder(title: newChatFolderTitle, parentID: newChatFolderParentID) != nil {
                             newChatFolderTitle = ""
+                            newChatFolderParentID = nil
                             persist()
                         }
                     }
@@ -2271,11 +2292,33 @@ struct SettingsSurface: View {
         persist()
     }
 
-    private func parentOptions(for folder: ChatFolder) -> [ChatFolder] {
+    private var newFolderParentOptions: [ChatFolderParentOption] {
+        chatFolderRows.map { row in
+            ChatFolderParentOption(folder: row.folder, depth: row.depth)
+        }
+    }
+
+    private func parentOptions(for folder: ChatFolder) -> [ChatFolderParentOption] {
         let disallowedIDs = store.descendantFolderIDs(of: folder.id).union([folder.id])
-        return store.chatFolders
-            .filter { !disallowedIDs.contains($0.id) }
-            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        return chatFolderRows
+            .filter { !disallowedIDs.contains($0.folder.id) }
+            .map { row in
+                ChatFolderParentOption(folder: row.folder, depth: row.depth)
+            }
+    }
+
+    private func flattenedChatFolders(parentID: UUID?, depth: Int) -> [(folder: ChatFolder, depth: Int)] {
+        store.chatFolders
+            .filter { $0.parentID == parentID }
+            .sorted { lhs, rhs in
+                if lhs.isPinned != rhs.isPinned {
+                    return lhs.isPinned && !rhs.isPinned
+                }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+            .flatMap { folder in
+                [(folder, depth)] + flattenedChatFolders(parentID: folder.id, depth: depth + 1)
+            }
     }
 
     private func chooseExportDirectory() {
@@ -5394,11 +5437,25 @@ private struct LocalDiscoverySettingsRow: View {
     }
 }
 
+private struct ChatFolderParentOption: Identifiable {
+    var folder: ChatFolder
+    var depth: Int
+
+    var id: UUID { folder.id }
+
+    var title: String {
+        "\(String(repeating: "  ", count: depth))\(folder.title)"
+    }
+}
+
 private struct ChatFolderSettingsRow: View {
     @Binding var folder: ChatFolder
-    var parentOptions: [ChatFolder]
-    var threadCount: Int
+    var depth: Int
+    var parentOptions: [ChatFolderParentOption]
+    var directThreadCount: Int
+    var totalThreadCount: Int
     var delete: () -> Void
+    var moveFolder: (UUID?) -> Void
     var persist: () -> Void
 
     var body: some View {
@@ -5432,19 +5489,17 @@ private struct ChatFolderSettingsRow: View {
                         Picker("Parent", selection: Binding(
                             get: { folder.parentID },
                             set: {
-                                folder.parentID = $0
-                                folder.updatedAt = .now
-                                persist()
+                                moveFolder($0)
                             }
                         )) {
                             Text("None").tag(Optional<UUID>.none)
                             ForEach(parentOptions) { option in
-                                Text(option.title).tag(Optional(option.id))
+                                Text(option.title).tag(Optional(option.folder.id))
                             }
                         }
                     }
 
-                    Text("\(threadCount) chats")
+                    Text(threadCountSummary)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -5459,7 +5514,18 @@ private struct ChatFolderSettingsRow: View {
                 .accessibilityLabel("Delete \(folder.title)")
             }
         }
+        .padding(.leading, CGFloat(depth) * 14)
         .padding(.vertical, 4)
+    }
+
+    private var threadCountSummary: String {
+        let total = totalThreadCount == 1 ? "1 chat" : "\(totalThreadCount) chats"
+        guard totalThreadCount != directThreadCount else {
+            return total
+        }
+
+        let direct = directThreadCount == 1 ? "1 direct" : "\(directThreadCount) direct"
+        return "\(total) including \(direct)"
     }
 }
 

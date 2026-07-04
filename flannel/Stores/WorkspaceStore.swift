@@ -2073,6 +2073,24 @@ final class WorkspaceStore {
     }
 
     @discardableResult
+    func moveChatFolder(_ folderID: UUID, toParent parentID: UUID?) -> Bool {
+        guard let index = chatFolders.firstIndex(where: { $0.id == folderID }) else { return false }
+
+        if let parentID {
+            guard chatFolders.contains(where: { $0.id == parentID }),
+                  parentID != folderID,
+                  !descendantFolderIDs(of: folderID).contains(parentID) else {
+                return false
+            }
+        }
+
+        guard chatFolders[index].parentID != parentID else { return true }
+        chatFolders[index].parentID = parentID
+        chatFolders[index].updatedAt = .now
+        return true
+    }
+
+    @discardableResult
     func deleteChatFolder(_ folderID: UUID) -> Bool {
         guard chatFolders.contains(where: { $0.id == folderID }) else { return false }
         let removedIDs = descendantFolderIDs(of: folderID).union([folderID])
@@ -2176,6 +2194,18 @@ final class WorkspaceStore {
         assistantThreads.filter { $0.folderID == folderID }.count
     }
 
+    func threadCount(inFolder folderID: UUID?, includingDescendants: Bool) -> Int {
+        guard includingDescendants,
+              let folderID else {
+            return threadCount(inFolder: folderID)
+        }
+
+        let folderIDs = folderIDsIncludingDescendants(of: folderID)
+        return assistantThreads.filter { thread in
+            thread.folderID.map(folderIDs.contains) == true
+        }.count
+    }
+
     func chatHistoryThreads(
         includeArchived: Bool = true,
         filters: ChatHistoryFilters = ChatHistoryFilters(),
@@ -2200,6 +2230,39 @@ final class WorkspaceStore {
             stack.append(contentsOf: chatFolders.filter { $0.parentID == childID }.map(\.id))
         }
         return result
+    }
+
+    func folderIDsIncludingDescendants(of folderID: UUID) -> Set<UUID> {
+        guard chatFolders.contains(where: { $0.id == folderID }) else {
+            return []
+        }
+
+        return descendantFolderIDs(of: folderID).union([folderID])
+    }
+
+    func folderPathTitle(for folderID: UUID?, separator: String = " / ") -> String? {
+        guard let folderID,
+              let folder = chatFolders.first(where: { $0.id == folderID }) else {
+            return nil
+        }
+
+        return folderPathTitle(for: folder, separator: separator)
+    }
+
+    func folderPathTitle(for folder: ChatFolder, separator: String = " / ") -> String {
+        var titles = [folder.title]
+        var visitedIDs = Set([folder.id])
+        var parentID = folder.parentID
+
+        while let currentParentID = parentID,
+              !visitedIDs.contains(currentParentID),
+              let parent = chatFolders.first(where: { $0.id == currentParentID }) {
+            titles.append(parent.title)
+            visitedIDs.insert(currentParentID)
+            parentID = parent.parentID
+        }
+
+        return titles.reversed().joined(separator: separator)
     }
 
     func searchChats(
@@ -2238,9 +2301,11 @@ final class WorkspaceStore {
         var results: [AssistantChatSearchResult] = []
         for thread in threads {
             let folder = folder(for: thread)
+            let folderPath = folderPathTitle(for: thread.folderID)
             if thread.title.localizedCaseInsensitiveContains(query)
                 || thread.tagNames.contains(where: { $0.localizedCaseInsensitiveContains(query) })
-                || folder?.title.localizedCaseInsensitiveContains(query) == true {
+                || folder?.title.localizedCaseInsensitiveContains(query) == true
+                || folderPath?.localizedCaseInsensitiveContains(query) == true {
                 results.append(
                     AssistantChatSearchResult(
                         id: "thread-\(thread.id.uuidString)",

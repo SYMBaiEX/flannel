@@ -2521,7 +2521,7 @@ private struct AppSidebar: View {
                                 selectedFolderID = row.folder.id
                             } label: {
                                 Label(
-                                    row.folder.title,
+                                    folderMenuTitle(row),
                                     systemImage: selectedFolderID == row.folder.id ? "checkmark" : row.folder.symbolName
                                 )
                             }
@@ -2606,7 +2606,8 @@ private struct AppSidebar: View {
             isArchived: store.archivedAssistantThreadIDs.contains(thread.id),
             isPinned: isThreadPinned(thread),
             folder: store.folder(for: thread),
-            folders: folderRows.map { $0.folder },
+            folderDisplayTitle: store.folderPathTitle(for: thread.folderID),
+            folders: folderRows,
             tags: store.tags,
             choose: { open(thread) },
             archiveToggle: { toggleArchive(thread.id) },
@@ -2649,8 +2650,8 @@ private struct AppSidebar: View {
         }
         if selectedFolderID != nil && selectedFolderIsAvailable {
             return scope == .archived
-                ? "Archived conversations assigned to this folder stay searchable here."
-                : "Start a chat while this folder is selected, or move existing chats here from their row menu."
+                ? "Archived conversations assigned to this folder or its subfolders stay searchable here."
+                : "Start a chat while this folder is selected, or move existing chats into this folder tree from their row menu."
         }
         return scope == .archived
             ? "Archived conversations stay searchable here."
@@ -2662,7 +2663,10 @@ private struct AppSidebar: View {
               selectedFolderIsAvailable else {
             return threads
         }
-        return threads.filter { $0.folderID == selectedFolderID }
+        let folderIDs = store.folderIDsIncludingDescendants(of: selectedFolderID)
+        return threads.filter { thread in
+            thread.folderID.map(folderIDs.contains) == true
+        }
     }
 
     private func filterBySelectedTag(_ threads: [AssistantThread]) -> [AssistantThread] {
@@ -2724,7 +2728,8 @@ private struct AppSidebar: View {
               selectedFolderIsAvailable else {
             return true
         }
-        return store.assistantThreads.first(where: { $0.id == threadID })?.folderID == selectedFolderID
+        let folderIDs = store.folderIDsIncludingDescendants(of: selectedFolderID)
+        return store.assistantThreads.first(where: { $0.id == threadID })?.folderID.map(folderIDs.contains) == true
     }
 
     private func matchesSelectedTag(_ threadID: UUID) -> Bool {
@@ -2747,6 +2752,10 @@ private struct AppSidebar: View {
             .flatMap { folder in
                 [(folder, depth)] + flattenedFolders(parentID: folder.id, depth: depth + 1)
             }
+    }
+
+    private func folderMenuTitle(_ row: (folder: ChatFolder, depth: Int)) -> String {
+        "\(String(repeating: "  ", count: row.depth))\(row.folder.title)"
     }
 
     private func open(_ thread: AssistantThread) {
@@ -3235,7 +3244,8 @@ private struct SidebarThreadRow: View {
     var isArchived: Bool
     var isPinned: Bool
     var folder: ChatFolder?
-    var folders: [ChatFolder]
+    var folderDisplayTitle: String?
+    var folders: [(folder: ChatFolder, depth: Int)]
     var tags: [WorkspaceTag]
     var choose: () -> Void
     var archiveToggle: () -> Void
@@ -3286,7 +3296,7 @@ private struct SidebarThreadRow: View {
             parts.append("Archived")
         }
         if let folder {
-            parts.append("Folder \(folder.title)")
+            parts.append("Folder \(folderDisplayTitle ?? folder.title)")
         }
         parts.append("updated \(thread.updatedAt.formatted(date: .abbreviated, time: .shortened))")
         return parts.joined(separator: ", ")
@@ -3340,7 +3350,7 @@ private struct SidebarThreadRow: View {
                             }
 
                             if let folder {
-                                CapsuleLabel(folder.title, icon: folder.symbolName)
+                                CapsuleLabel(folderDisplayTitle ?? folder.title, icon: folder.symbolName)
                                     .font(.caption2.weight(.medium))
                                     .foregroundStyle(.secondary)
                             }
@@ -3410,11 +3420,11 @@ private struct SidebarThreadRow: View {
                     Button("No Folder") {
                         assignFolder(nil)
                     }
-                    ForEach(folders) { folder in
+                    ForEach(folders, id: \.folder.id) { row in
                         Button {
-                            assignFolder(folder.id)
+                            assignFolder(row.folder.id)
                         } label: {
-                            Label(folder.title, systemImage: folder.symbolName)
+                            Label(folderMenuTitle(row), systemImage: row.folder.symbolName)
                         }
                     }
                 }
@@ -3448,9 +3458,13 @@ private struct SidebarThreadRow: View {
             parts.append("Updated \(updatedTimeText)")
         }
         if let folder {
-            parts.append("Folder \(folder.title)")
+            parts.append("Folder \(folderDisplayTitle ?? folder.title)")
         }
         return parts.joined(separator: ", ")
+    }
+
+    private func folderMenuTitle(_ row: (folder: ChatFolder, depth: Int)) -> String {
+        "\(String(repeating: "  ", count: row.depth))\(row.folder.title)"
     }
 }
 
