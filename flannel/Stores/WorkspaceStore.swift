@@ -5110,7 +5110,7 @@ final class WorkspaceStore {
             ToolConfiguration(
                 kind: .webSearch,
                 title: "Web Search",
-                detail: "Search the web through a BYOK Brave Search connector optimized for agents and RAG.",
+                detail: "Search the web through a BYOK Brave or Perplexity connector optimized for agents and RAG.",
                 permissionPolicy: .askEveryTime,
                 requiresNetwork: true,
                 endpoint: WebSearchService.defaultEndpoint
@@ -7507,7 +7507,7 @@ final class WorkspaceStore {
                 title: tool.title,
                 query: query,
                 status: .unavailable,
-                output: "Web Search needs a Brave Search API key saved in Keychain before Flannel can make live network requests.",
+                output: "Web Search needs a web search API key saved in Keychain before Flannel can make live network requests.",
                 usedNetwork: false,
                 modifiedFiles: false
             )
@@ -7522,7 +7522,7 @@ final class WorkspaceStore {
                     title: tool.title,
                     query: query,
                     status: .unavailable,
-                    output: "Web Search found an empty Keychain secret for \(secretReference.rawValue). Save a valid Brave Search API key.",
+                    output: "Web Search found an empty Keychain secret for \(secretReference.rawValue). Save a valid web search API key.",
                     usedNetwork: false,
                     modifiedFiles: false
                 )

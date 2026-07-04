@@ -1932,7 +1932,7 @@ struct SettingsSurface: View {
             guard let tool = try store.saveToolAPIKey(toolID, secret: secret) else { return }
             toolSecretDrafts[toolID] = ""
             toolSetupMessages[toolID] = tool.secretReference == nil
-                ? "Paste a Brave Search API key before saving."
+                ? "Paste a web search API key before saving."
                 : "API key saved in Keychain."
             persist()
         } catch {
@@ -2192,7 +2192,7 @@ private extension ToolConfiguration {
         case .x:
             "X API bearer token"
         case .webSearch:
-            "Brave Search API key"
+            "Web search API key"
         case .webPageReader, .localFileRead, .localFileWrite, .terminal, .codeExecution, .browserAutomation, .workspaceSearch, .ragRetrieval:
             "API key"
         }

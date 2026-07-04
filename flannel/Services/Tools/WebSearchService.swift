@@ -98,6 +98,7 @@ nonisolated enum WebSearchServiceError: LocalizedError, Equatable {
 
 nonisolated struct WebSearchService: Sendable {
     static let defaultEndpoint = "https://api.search.brave.com/res/v1/llm/context"
+    static let perplexityEndpoint = "https://api.perplexity.ai/search"
 
     typealias Transport = @Sendable (URLRequest) async throws -> (Data, HTTPURLResponse?)
 
@@ -140,6 +141,15 @@ nonisolated struct WebSearchService: Sendable {
             throw WebSearchServiceError.invalidEndpoint
         }
 
+        if isPerplexityHost(endpointURL) {
+            return try makePerplexityRequest(
+                endpointURL: endpointURL,
+                query: query,
+                apiKey: searchRequest.apiKey,
+                limit: max(1, min(searchRequest.resultLimit, 20))
+            )
+        }
+
         let limit = max(1, min(searchRequest.resultLimit, usesLLMContextEndpoint(endpointURL) ? 50 : 20))
         components.queryItems = requestQueryItems(
             existing: components.queryItems ?? [],
@@ -157,6 +167,28 @@ nonisolated struct WebSearchService: Sendable {
         request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(searchRequest.apiKey, forHTTPHeaderField: "X-Subscription-Token")
+        return request
+    }
+
+    private func makePerplexityRequest(
+        endpointURL: URL,
+        query: String,
+        apiKey: String,
+        limit: Int
+    ) throws -> URLRequest {
+        guard let url = normalizedPerplexitySearchURL(from: endpointURL) else {
+            throw WebSearchServiceError.invalidEndpoint
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(
+            PerplexitySearchRequestPayload(query: query, maxResults: limit)
+        )
         return request
     }
 
@@ -191,6 +223,28 @@ nonisolated struct WebSearchService: Sendable {
 
     private func usesLLMContextEndpoint(_ url: URL) -> Bool {
         url.path.lowercased().contains("/llm/context")
+    }
+
+    private func isPerplexityHost(_ url: URL) -> Bool {
+        url.host?.lowercased() == "api.perplexity.ai"
+    }
+
+    private func normalizedPerplexitySearchURL(from url: URL) -> URL? {
+        guard isPerplexityHost(url),
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+
+        let path = components.path
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            .lowercased()
+        if path.isEmpty {
+            components.path = "/search"
+        } else if path != "search" {
+            return nil
+        }
+        components.queryItems = nil
+        return components.url
     }
 
     private static func urlSessionTransport(_ request: URLRequest) async throws -> (Data, HTTPURLResponse?) {
@@ -318,5 +372,15 @@ nonisolated struct WebSearchService: Sendable {
             .replacingOccurrences(of: "&gt;", with: ">")
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+nonisolated private struct PerplexitySearchRequestPayload: Encodable {
+    var query: String
+    var maxResults: Int
+
+    enum CodingKeys: String, CodingKey {
+        case query
+        case maxResults = "max_results"
     }
 }

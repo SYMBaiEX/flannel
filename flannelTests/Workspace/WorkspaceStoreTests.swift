@@ -1831,7 +1831,7 @@ struct WorkspaceStoreTests {
 
         #expect(result.status == .unavailable)
         #expect(result.usedNetwork == false)
-        #expect(result.output.contains("Brave Search API key"))
+        #expect(result.output.contains("web search API key"))
     }
 
     @MainActor
@@ -1890,6 +1890,71 @@ struct WorkspaceStoreTests {
         #expect(request.value(forHTTPHeaderField: "X-Subscription-Token") == "test-brave-key")
         #expect(request.url?.absoluteString.contains("/res/v1/llm/context") == true)
         #expect(request.url?.query?.contains("q=Brave%20Search%20API%20agents") == true)
+    }
+
+    @MainActor
+    @Test("Web search runs Perplexity Search API connector with injected transport")
+    func webSearchRunsPerplexityConnectorWithInjectedTransport() async throws {
+        let (_, store) = try makeLoadedStore()
+        let webSearchIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .webSearch }))
+        store.toolConfigurations[webSearchIndex].isEnabled = true
+        store.toolConfigurations[webSearchIndex].permissionPolicy = .alwaysAllow
+        store.toolConfigurations[webSearchIndex].endpoint = WebSearchService.perplexityEndpoint
+        store.toolConfigurations[webSearchIndex].secretReference = "flannel.test:perplexity-search"
+        store.preferences.localOnlyMode = false
+        let recorder = ToolRequestRecorder()
+        let service = WebSearchService { request in
+            await recorder.record(request)
+            let body = try #require(request.httpBody)
+            let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            #expect(json["query"] as? String == "Perplexity Search API agents")
+            #expect(json["max_results"] as? Int == 8)
+
+            let payload = """
+            {
+              "id": "search-fixture",
+              "results": [
+                {
+                  "title": "Perplexity Search API",
+                  "url": "https://docs.perplexity.ai/docs/search/quickstart",
+                  "snippet": "The Search API returns structured ranked results for web-grounded agent workflows.",
+                  "date": "2026-06-01",
+                  "last_updated": "2026-07-01"
+                }
+              ]
+            }
+            """
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )
+            return (Data(payload.utf8), response)
+        }
+
+        let result = await store.runTool(
+            .webSearch,
+            query: "Perplexity Search API agents",
+            webPageCaptureService: WebPageCaptureService(),
+            webSearchService: service,
+            secretReader: { reference in
+                #expect(reference.rawValue == "flannel.test:perplexity-search")
+                return "test-perplexity-key"
+            }
+        )
+        let requests = await recorder.requests
+        let request = try #require(requests.first)
+
+        #expect(result.status == .completed)
+        #expect(result.usedNetwork == true)
+        #expect(result.output.contains("Live web search"))
+        #expect(result.output.contains("Perplexity Search API"))
+        #expect(result.output.contains("structured ranked results"))
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.absoluteString == WebSearchService.perplexityEndpoint)
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-perplexity-key")
+        #expect(request.value(forHTTPHeaderField: "X-Subscription-Token") == nil)
     }
 
     @MainActor
