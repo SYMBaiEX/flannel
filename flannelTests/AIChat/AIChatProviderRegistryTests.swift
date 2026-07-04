@@ -1037,6 +1037,46 @@ struct AIChatProviderRegistryTests {
         #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("code.claude.com/docs/en/data-usage") }))
     }
 
+    @Test("Known provider catalog exposes setup mode guides")
+    func knownProviderCatalogExposesSetupModeGuides() throws {
+        let openAIAPI = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.openAI))
+        let chatGPTCLI = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.chatGPTCLI))
+        let anthropicAPI = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.anthropic))
+        let claudeCLI = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.claudeCodeCLI))
+        let ollama = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.ollama))
+        let customEndpoint = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.customOpenAICompatible))
+
+        #expect(openAIAPI.modeGuide.credentialPath == .officialAPIKey)
+        #expect(openAIAPI.modeGuide.credentialBoundary.contains("macOS Keychain"))
+        #expect(openAIAPI.modeGuide.credentialBoundary.contains("Subscription sign-in") == true)
+        #expect(openAIAPI.modeGuide.requestBoundary.contains("hosted provider API"))
+        #expect(openAIAPI.modeGuide.command == nil)
+
+        #expect(chatGPTCLI.modeGuide.credentialPath == .localAccountCLI)
+        #expect(chatGPTCLI.modeGuide.credentialBoundary.contains("local CLI"))
+        #expect(chatGPTCLI.modeGuide.credentialBoundary.contains("does not store a provider API key"))
+        #expect(chatGPTCLI.modeGuide.command == "codex exec --json -")
+        #expect(chatGPTCLI.modeGuide.promptTransport?.contains("stdin") == true)
+        #expect(chatGPTCLI.modeGuide.outputContract?.contains("JSONL") == true)
+        #expect(chatGPTCLI.modeGuide.verificationSummary.contains("codex login status"))
+
+        #expect(anthropicAPI.modeGuide.credentialPath == .officialAPIKey)
+        #expect(anthropicAPI.modeGuide.credentialBoundary.contains("provider API key"))
+        #expect(anthropicAPI.modeGuide.command == nil)
+
+        #expect(claudeCLI.modeGuide.credentialPath == .localAccountCLI)
+        #expect(claudeCLI.modeGuide.command == "claude -p --output-format stream-json --verbose")
+        #expect(claudeCLI.modeGuide.promptTransport?.contains("print-mode") == true)
+        #expect(claudeCLI.modeGuide.outputContract?.contains("stream-json") == true)
+        #expect(claudeCLI.modeGuide.verificationSummary.contains("claude auth status --text"))
+
+        #expect(ollama.modeGuide.credentialPath == .noCredential)
+        #expect(ollama.modeGuide.requestBoundary.contains("local server"))
+
+        #expect(customEndpoint.modeGuide.credentialPath == .optionalEndpointKey)
+        #expect(customEndpoint.modeGuide.setupSummary.contains("base URL"))
+    }
+
     @Test("Known provider catalog advertises local discovery and hosted model descriptors")
     func knownProviderCatalogAdvertisesLocalDiscoveryAndHostedModelDescriptors() throws {
         let ollama = try #require(AIKnownProviderCatalog.entry(for: LLMProviderKind.ollama))

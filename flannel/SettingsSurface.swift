@@ -3455,6 +3455,75 @@ private struct ProviderNextStepCallout: View {
     }
 }
 
+private struct ProviderModeGuideCallout: View {
+    var guide: AIProviderModeGuide
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(guide.credentialPath.title)
+                        .font(.caption.weight(.semibold))
+                    Text(guide.credentialBoundary)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } icon: {
+                Image(systemName: guide.credentialPath.systemImage)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                guideFact("Request boundary", detail: guide.requestBoundary)
+                guideFact("Setup", detail: guide.setupSummary)
+                guideFact("Readiness", detail: guide.verificationSummary)
+                if let command = guide.command {
+                    guideFact("Command", detail: command)
+                }
+                if let promptTransport = guide.promptTransport {
+                    guideFact("Prompt", detail: promptTransport)
+                }
+                if let outputContract = guide.outputContract {
+                    guideFact("Output", detail: outputContract)
+                }
+            }
+        }
+        .padding(9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(.secondary.opacity(0.14), lineWidth: 0.5)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private func guideFact(_ title: String, detail: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 88, alignment: .leading)
+            Text(detail)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var accessibilitySummary: String {
+        [
+            guide.credentialPath.title,
+            guide.credentialBoundary,
+            guide.requestBoundary,
+            guide.setupSummary,
+            guide.verificationSummary
+        ].joined(separator: ". ")
+    }
+}
+
 private struct ProviderSourceReferences: View {
     var references: [AIProviderSourceReference]
 
@@ -3581,6 +3650,10 @@ private struct ProviderSettingsRow: View {
             ProviderNextStepCallout(step: nextStep)
 
             ProviderSetupSummary(provider: provider, report: report)
+
+            if let modeGuide {
+                ProviderModeGuideCallout(guide: modeGuide)
+            }
 
             if !sourceReferences.isEmpty {
                 ProviderSourceReferences(references: sourceReferences)
@@ -3825,6 +3898,10 @@ private struct ProviderSettingsRow: View {
 
     private var sourceReferences: [AIProviderSourceReference] {
         AIKnownProviderCatalog.entry(for: provider.kind)?.sourceReferences ?? []
+    }
+
+    private var modeGuide: AIProviderModeGuide? {
+        AIKnownProviderCatalog.entry(for: provider.kind)?.modeGuide
     }
 
     private var showsSecretConfiguration: Bool {

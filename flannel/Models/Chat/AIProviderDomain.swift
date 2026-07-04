@@ -412,6 +412,62 @@ struct AIProviderSourceReference: Identifiable, Hashable, Sendable {
     }
 }
 
+enum AIProviderCredentialPath: String, Codable, CaseIterable, Hashable, Sendable {
+    case noCredential
+    case officialAPIKey
+    case optionalEndpointKey
+    case localAccountCLI
+    case localBridge
+
+    nonisolated var title: String {
+        switch self {
+        case .noCredential:
+            "No credential"
+        case .officialAPIKey:
+            "Official API key"
+        case .optionalEndpointKey:
+            "Endpoint key"
+        case .localAccountCLI:
+            "Local account CLI"
+        case .localBridge:
+            "Local bridge"
+        }
+    }
+
+    nonisolated var systemImage: String {
+        switch self {
+        case .noCredential:
+            "lock"
+        case .officialAPIKey, .optionalEndpointKey:
+            "key"
+        case .localAccountCLI:
+            "terminal"
+        case .localBridge:
+            "point.3.connected.trianglepath.dotted"
+        }
+    }
+}
+
+struct AIProviderModeGuide: Identifiable, Hashable, Sendable {
+    var providerKind: AIProviderKind
+    var providerMode: AIProviderMode
+    var accessMode: ProviderAccessMode
+    var credentialPath: AIProviderCredentialPath
+    var title: String
+    var credentialBoundary: String
+    var requestBoundary: String
+    var setupSummary: String
+    var verificationSummary: String
+    var command: String?
+    var promptTransport: String?
+    var outputContract: String?
+    var sourceReferences: [AIProviderSourceReference]
+
+    nonisolated var id: String {
+        "\(providerKind.rawValue):\(providerMode.rawValue):\(credentialPath.rawValue)"
+    }
+}
+
 struct AIProviderCatalogEntry: Identifiable, Hashable, Sendable {
     var providerKind: AIProviderKind
     var providerMode: AIProviderMode
@@ -484,6 +540,27 @@ struct AIProviderCatalogEntry: Identifiable, Hashable, Sendable {
         cliContract?.recommendedCommand
     }
 
+    nonisolated var modeGuide: AIProviderModeGuide {
+        let credentialPath = Self.credentialPath(for: credentialRequirement)
+        let requestBoundary = requestBoundaryGuide
+        let command = cliContract?.recommendedCommand
+        return AIProviderModeGuide(
+            providerKind: providerKind,
+            providerMode: providerMode,
+            accessMode: accessMode,
+            credentialPath: credentialPath,
+            title: "\(displayName) route contract",
+            credentialBoundary: credentialBoundaryGuide(credentialPath: credentialPath),
+            requestBoundary: requestBoundary,
+            setupSummary: setupGuide(credentialPath: credentialPath),
+            verificationSummary: verificationGuide(credentialPath: credentialPath),
+            command: command,
+            promptTransport: promptTransportGuide,
+            outputContract: outputContractGuide,
+            sourceReferences: sourceReferences
+        )
+    }
+
     nonisolated var normalizedRecommendedModelIdentifiers: [String] {
         Self.normalizedModelIdentifiers(recommendedModelIdentifiers + [defaultModelIdentifier])
     }
@@ -517,6 +594,112 @@ struct AIProviderCatalogEntry: Identifiable, Hashable, Sendable {
             normalized.append(trimmed)
         }
         return normalized
+    }
+
+    nonisolated private static func credentialPath(
+        for requirement: AIProviderCredentialRequirement
+    ) -> AIProviderCredentialPath {
+        switch requirement {
+        case .none:
+            .noCredential
+        case .requiredAPIKey:
+            .officialAPIKey
+        case .optionalAPIKey:
+            .optionalEndpointKey
+        case .subscriptionCLI:
+            .localAccountCLI
+        case .localBridge:
+            .localBridge
+        }
+    }
+
+    nonisolated private func credentialBoundaryGuide(credentialPath: AIProviderCredentialPath) -> String {
+        switch credentialPath {
+        case .noCredential:
+            return "No provider account is required. Flannel talks to a local server on this Mac or loopback network."
+        case .officialAPIKey:
+            return "Uses a provider API key saved in macOS Keychain. Subscription sign-in to a consumer app does not satisfy this route."
+        case .optionalEndpointKey:
+            return "Uses the endpoint's own key policy. If a key is needed, Flannel stores that endpoint key in macOS Keychain."
+        case .localAccountCLI:
+            return "Uses the account already authenticated inside the local CLI. Flannel does not store a provider API key for this route."
+        case .localBridge:
+            return "Uses a local bridge process. Provider credentials stay owned by the bridge, not by this row."
+        }
+    }
+
+    nonisolated private var requestBoundaryGuide: String {
+        switch requestBoundary {
+        case .localServer:
+            "Requests stay on the configured local server endpoint."
+        case .localCLI:
+            "Requests are handed to a local command-line process, which may use its own signed-in account or network policy."
+        case .externalAPI:
+            "Requests leave this Mac for the configured hosted provider API."
+        case .localBridge:
+            "Requests go to the configured local bridge endpoint, and the bridge owns downstream provider calls."
+        }
+    }
+
+    nonisolated private func setupGuide(credentialPath: AIProviderCredentialPath) -> String {
+        switch credentialPath {
+        case .noCredential:
+            return "Start the local provider, run discovery, then select an installed chat model."
+        case .officialAPIKey:
+            return "Create the provider API route, save its BYOK key to Keychain, then pick a supported model."
+        case .optionalEndpointKey:
+            return "Confirm the base URL, decide whether the endpoint needs a key, then run model discovery or enter a model id."
+        case .localAccountCLI:
+            let command = recommendedCLICommand ?? cliContract?.preferredExecutable ?? "the CLI command"
+            return "Install and sign in to the CLI, keep the command direct argv-style, then use `\(command)` as the route command."
+        case .localBridge:
+            return "Start the local bridge, confirm its health endpoint, then select a model exposed by the bridge."
+        }
+    }
+
+    nonisolated private func verificationGuide(credentialPath: AIProviderCredentialPath) -> String {
+        switch credentialPath {
+        case .noCredential:
+            return "Readiness checks the local endpoint and discovered model inventory."
+        case .officialAPIKey:
+            return "Readiness verifies Keychain access, model configuration, and a provider-compatible model or health call."
+        case .optionalEndpointKey:
+            return "Readiness verifies endpoint shape, optional Keychain access, and the configured model route."
+        case .localAccountCLI:
+            if let statusArguments = cliContract?.statusCommandArguments,
+               !statusArguments.isEmpty {
+                let command = ([cliContract?.preferredExecutable].compactMap { $0 } + statusArguments).joined(separator: " ")
+                return "Readiness resolves the executable and runs `\(command)` before chat uses the configured command."
+            }
+            return "Readiness resolves the executable and runs a local CLI smoke check before routing chat."
+        case .localBridge:
+            return "Readiness checks the bridge health endpoint before routing chat."
+        }
+    }
+
+    nonisolated private var promptTransportGuide: String? {
+        guard let cliContract else { return nil }
+        if cliContract.supportsPromptViaStdin {
+            return "Prompt can be sent through stdin or placeholders."
+        }
+        if cliContract.supportsPromptPlaceholderArguments {
+            return "Prompt is supplied through a print-mode argument or placeholder."
+        }
+        return "Prompt transport is defined by the configured CLI command."
+    }
+
+    nonisolated private var outputContractGuide: String? {
+        guard let decoding = cliContract?.defaultOutputDecoding else { return nil }
+        switch decoding {
+        case .plainText:
+            return "Flannel reads plain stdout as assistant text."
+        case .codexJSONLines:
+            return "Flannel expects Codex JSONL events and extracts assistant message text."
+        case .claudeJSON:
+            return "Flannel expects one Claude JSON response and extracts assistant content."
+        case .claudeStreamJSON:
+            return "Flannel expects Claude stream-json events and extracts assistant deltas."
+        }
     }
 }
 
