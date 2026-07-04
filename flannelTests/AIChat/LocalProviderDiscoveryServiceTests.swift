@@ -119,6 +119,8 @@ struct LocalProviderDiscoveryServiceTests {
         #expect(model.contextWindowTokens == 16384)
         #expect(model.loadedInstanceCount == 1)
         #expect(model.sizeVRAMBytes == 2_147_483_648)
+        #expect(model.discoverySource == .ollamaNative)
+        #expect(model.metadataCompleteness == .complete)
         #expect(model.capabilities.contains(.chat))
         #expect(model.capabilities.contains(.toolCalling))
         #expect(model.capabilities.contains(.vision))
@@ -178,6 +180,10 @@ struct LocalProviderDiscoveryServiceTests {
         #expect(chat.capabilities.contains(.streaming))
         #expect(chat.capabilities.contains(.toolCalling))
         #expect(chat.capabilities.contains(.embeddings) == false)
+        #expect(chat.discoverySource == .ollamaNative)
+        #expect(chat.metadataCompleteness == .partial)
+        #expect(embedding.discoverySource == .ollamaNative)
+        #expect(embedding.metadataCompleteness == .partial)
         #expect(embedding.capabilities == [.embeddings])
     }
 
@@ -233,6 +239,8 @@ struct LocalProviderDiscoveryServiceTests {
         #expect(model.contextWindowTokens == 32768)
         #expect(model.loadedInstanceCount == 0)
         #expect(model.modifiedAt != nil)
+        #expect(model.discoverySource == .ollamaNative)
+        #expect(model.metadataCompleteness == .complete)
         #expect(model.capabilities.contains(.chat))
         #expect(model.capabilities.contains(.streaming))
         #expect(model.capabilities.contains(.vision))
@@ -363,6 +371,8 @@ struct LocalProviderDiscoveryServiceTests {
         #expect(model.loadedInstanceIDs == ["loaded-gemma"])
         #expect(model.sizeBytes == 18_038_862_643)
         #expect(model.selectedVariant == "4bit")
+        #expect(model.discoverySource == .openAICompatibleFallback)
+        #expect(model.metadataCompleteness == .compatibilityOnly)
         #expect(model.capabilities.contains(.chat))
         #expect(model.capabilities.contains(.streaming))
         #expect(model.capabilities.contains(.anthropicCompatible))
@@ -409,6 +419,8 @@ struct LocalProviderDiscoveryServiceTests {
 
         #expect(result.status == .ready)
         #expect(result.models.first?.name == "qwen/qwen3-14b")
+        #expect(result.models.first?.discoverySource == .lmStudioNative)
+        #expect(result.models.first?.metadataCompleteness == .complete)
         #expect(requests.map(\.url) == ["http://localhost:1234/api/v1/models"])
     }
 
@@ -463,12 +475,16 @@ struct LocalProviderDiscoveryServiceTests {
         #expect(chat.contextWindowTokens == 65536)
         #expect(chat.loadedInstanceCount == 2)
         #expect(chat.loadedInstanceIDs == ["loaded-qwen", "loaded-qwen-second"])
+        #expect(chat.discoverySource == .lmStudioNative)
+        #expect(chat.metadataCompleteness == .complete)
         #expect(chat.capabilities.contains(.chat))
         #expect(chat.capabilities.contains(.streaming))
         #expect(chat.capabilities.contains(.toolCalling))
         #expect(chat.capabilities.contains(.openAICompatible))
         #expect(chat.capabilities.contains(.anthropicCompatible))
         #expect(chat.capabilities.contains(.embeddings) == false)
+        #expect(embedding.discoverySource == .lmStudioNative)
+        #expect(embedding.metadataCompleteness == .complete)
         #expect(embedding.capabilities == [.embeddings, .openAICompatible])
     }
 

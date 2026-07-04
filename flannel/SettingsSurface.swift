@@ -1822,6 +1822,8 @@ struct SettingsSurface: View {
                 model.sizeBytes.map { String($0) } ?? "",
                 model.sizeVRAMBytes.map { String($0) } ?? "",
                 model.selectedVariant ?? "",
+                model.effectiveDiscoverySource.title,
+                model.effectiveMetadataCompleteness.title,
                 model.capabilities.map(\.title).joined(separator: " ")
             ]
             return fields.joined(separator: " ")
@@ -5407,6 +5409,13 @@ private struct LocalDiscoverySettingsRow: View {
         if let selectedVariant = model.selectedVariant,
            selectedVariant != model.name {
             metadata.append(selectedVariant)
+        }
+        if model.effectiveDiscoverySource != .unknown {
+            metadata.append(model.effectiveDiscoverySource.title)
+        }
+        if model.effectiveMetadataCompleteness != .complete,
+           model.effectiveMetadataCompleteness != .unknown {
+            metadata.append(model.effectiveMetadataCompleteness.title)
         }
         let capabilities = model.capabilities.map(\.title).joined(separator: ", ")
         return (metadata + [capabilities]).filter { !$0.isEmpty }.joined(separator: " - ")

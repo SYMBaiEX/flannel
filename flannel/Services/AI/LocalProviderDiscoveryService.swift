@@ -269,6 +269,8 @@ struct LocalProviderDiscoveryService: Sendable {
                 sizeVRAMBytes: runningModel?.sizeVRAM,
                 modifiedAt: showDetails?.modifiedAt ?? model.modifiedAt,
                 expiresAt: runningModel?.expiresAt,
+                discoverySource: .ollamaNative,
+                metadataCompleteness: showDetails == nil ? .partial : .complete,
                 capabilities: ollamaCapabilities(for: model, details: showDetails)
             )
         })
@@ -297,6 +299,8 @@ struct LocalProviderDiscoveryService: Sendable {
                 loadedInstanceIDs: loadedInstanceIDs(from: model.loadedInstances),
                 sizeBytes: model.sizeBytes,
                 selectedVariant: model.selectedVariant,
+                discoverySource: .lmStudioNative,
+                metadataCompleteness: .complete,
                 capabilities: lmStudioCapabilities(for: model)
             )
         })
@@ -330,6 +334,8 @@ struct LocalProviderDiscoveryService: Sendable {
                 loadedInstanceIDs: loadedInstanceIDs(from: model.loadedInstances),
                 sizeBytes: model.sizeBytes,
                 selectedVariant: model.selectedVariant,
+                discoverySource: .openAICompatibleFallback,
+                metadataCompleteness: .compatibilityOnly,
                 capabilities: openAICompatibleCapabilities(for: model)
             )
         })
@@ -357,6 +363,8 @@ struct LocalProviderDiscoveryService: Sendable {
             loadedInstanceIDs: loadedInstanceIDs(from: model.loadedInstances),
             sizeBytes: model.sizeBytes,
             selectedVariant: model.selectedVariant,
+            discoverySource: .openAICompatibleFallback,
+            metadataCompleteness: .compatibilityOnly,
             capabilities: lmStudioFallbackCapabilities(for: model)
         )
     }

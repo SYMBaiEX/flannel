@@ -667,6 +667,62 @@ enum ModelCapability: String, Codable, CaseIterable, Identifiable, Hashable, Sen
     }
 }
 
+enum LocalModelDiscoverySource: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
+    case ollamaNative
+    case lmStudioNative
+    case openAICompatibleFallback
+    case manual
+    case unknown
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .ollamaNative:
+            "Ollama native"
+        case .lmStudioNative:
+            "LM Studio native"
+        case .openAICompatibleFallback:
+            "OpenAI-compatible fallback"
+        case .manual:
+            "Manual"
+        case .unknown:
+            "Unknown"
+        }
+    }
+
+    var isNativeLocalMetadata: Bool {
+        switch self {
+        case .ollamaNative, .lmStudioNative:
+            true
+        case .openAICompatibleFallback, .manual, .unknown:
+            false
+        }
+    }
+}
+
+enum LocalModelMetadataCompleteness: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
+    case complete
+    case partial
+    case compatibilityOnly
+    case unknown
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .complete:
+            "Complete metadata"
+        case .partial:
+            "Partial metadata"
+        case .compatibilityOnly:
+            "Compatibility metadata"
+        case .unknown:
+            "Unknown metadata"
+        }
+    }
+}
+
 struct LocalModelDescriptor: Identifiable, Codable, Hashable, Sendable {
     var id: String
     var name: String
@@ -686,7 +742,17 @@ struct LocalModelDescriptor: Identifiable, Codable, Hashable, Sendable {
     var modifiedAt: Date?
     var expiresAt: Date?
     var selectedVariant: String?
+    var discoverySource: LocalModelDiscoverySource?
+    var metadataCompleteness: LocalModelMetadataCompleteness?
     var capabilities: [ModelCapability]
+
+    var effectiveDiscoverySource: LocalModelDiscoverySource {
+        discoverySource ?? .unknown
+    }
+
+    var effectiveMetadataCompleteness: LocalModelMetadataCompleteness {
+        metadataCompleteness ?? .unknown
+    }
 
     init(
         id: String? = nil,
@@ -707,6 +773,8 @@ struct LocalModelDescriptor: Identifiable, Codable, Hashable, Sendable {
         modifiedAt: Date? = nil,
         expiresAt: Date? = nil,
         selectedVariant: String? = nil,
+        discoverySource: LocalModelDiscoverySource? = nil,
+        metadataCompleteness: LocalModelMetadataCompleteness? = nil,
         capabilities: [ModelCapability] = [.chat, .streaming]
     ) {
         self.id = id ?? "\(providerKind.rawValue):\(endpoint):\(name)"
@@ -727,6 +795,8 @@ struct LocalModelDescriptor: Identifiable, Codable, Hashable, Sendable {
         self.modifiedAt = modifiedAt
         self.expiresAt = expiresAt
         self.selectedVariant = selectedVariant
+        self.discoverySource = discoverySource
+        self.metadataCompleteness = metadataCompleteness
         self.capabilities = capabilities
     }
 }
