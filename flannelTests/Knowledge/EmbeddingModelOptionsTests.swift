@@ -10,6 +10,78 @@ import Testing
 
 struct EmbeddingModelOptionsTests {
     @MainActor
+    @Test("OpenAI catalog embedding models are selectable without chat model pollution")
+    func openAICatalogEmbeddingModelsAreSelectableWithoutChatModelPollution() throws {
+        let (_, store) = try makeLoadedStore()
+        let openAIProvider = try #require(store.providerConfigurations.first { $0.kind == .openAI && $0.accessMode == .apiKey })
+
+        #expect(openAIProvider.supportsEmbeddings)
+        #expect(openAIProvider.capabilities.contains(.embeddings))
+        #expect(store.embeddingModelOptions.contains("text-embedding-3-small"))
+        #expect(store.embeddingModelOptions.contains("text-embedding-3-large"))
+        #expect(store.embeddingModelOptions.contains(openAIProvider.modelIdentifier) == false)
+    }
+
+    @MainActor
+    @Test("Provider backed indexing can use OpenAI catalog embedding model")
+    func providerBackedIndexingCanUseOpenAICatalogEmbeddingModel() async throws {
+        let (_, store) = try makeLoadedStore()
+        store.preferences.localOnlyMode = false
+        store.preferences.allowCloudProviders = true
+
+        let providerIndex = try #require(store.providerConfigurations.firstIndex { $0.kind == .openAI && $0.accessMode == .apiKey })
+        let providerID = store.providerConfigurations[providerIndex].id
+        _ = try #require(try store.saveProviderAPIKey(providerID, secret: "fixture-openai-embedding-secret"))
+        let savedReference = try #require(
+            ProviderSetupService.shared.parseSecretReference(store.providerConfigurations[providerIndex].secretReference)
+        )
+        defer { try? KeychainSecretStore().delete(savedReference) }
+
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("flannel-openai-catalog-embedding-\(UUID().uuidString).txt")
+            .standardizedFileURL
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        try "OpenAI catalog embeddings should persist semantic vectors for local RAG.".write(
+            to: fileURL,
+            atomically: true,
+            encoding: .utf8
+        )
+        store.knowledgeSources = [
+            KnowledgeSource(
+                title: "OpenAI embedding source",
+                kind: .file,
+                location: fileURL.path,
+                status: .queued,
+                embeddingModelIdentifier: "text-embedding-3-small"
+            )
+        ]
+        store.knowledgeIndexManifests = []
+
+        let embeddingService = LocalEmbeddingService()
+        let vectorStore = LocalKnowledgeVectorStore(providerEmbeddingGenerator: { provider, modelIdentifier, inputs in
+            #expect(provider.kind == .openAI)
+            #expect(modelIdentifier == "text-embedding-3-small")
+            return LocalEmbeddingResult(
+                modelIdentifier: modelIdentifier,
+                vectors: inputs.map {
+                    embeddingService.deterministicLocalVector(for: $0)
+                }
+            )
+        })
+
+        await store.rebuildKnowledgeIndexManifestsUsingConfiguredEmbeddings(vectorStore: vectorStore)
+
+        let source = try #require(store.knowledgeSources.first)
+        let manifest = try #require(store.knowledgeIndexManifests.first)
+        #expect(source.status == .ready)
+        #expect(source.embeddingRecordCount == source.chunkCount)
+        #expect(source.embeddingModelIdentifier == "text-embedding-3-small")
+        #expect(manifest.embeddingState == .generated)
+        #expect(manifest.embeddingProviderKind == .openAI)
+        #expect(manifest.embeddingModelIdentifier == "text-embedding-3-small")
+    }
+
+    @MainActor
     @Test("Embedding model options exclude discovered local chat-only models")
     func embeddingModelOptionsExcludeDiscoveredLocalChatOnlyModels() throws {
         let (_, store) = try makeLoadedStore()

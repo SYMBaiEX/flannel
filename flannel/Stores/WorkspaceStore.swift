@@ -787,8 +787,11 @@ final class WorkspaceStore {
 
         for provider in providerConfigurations where provider.supportsEmbeddings {
             let discoveredEmbeddingNames = discoveredEmbeddingModels(for: provider).map(\.name)
+            let catalogEmbeddingNames = catalogEmbeddingModelIdentifiers(for: provider)
             if provider.accessMode == .localServer, !discoveredEmbeddingNames.isEmpty {
                 candidates += discoveredEmbeddingNames
+            } else if !catalogEmbeddingNames.isEmpty {
+                candidates += catalogEmbeddingNames
             } else {
                 candidates.append(provider.modelIdentifier)
                 candidates += provider.availableModels
@@ -797,6 +800,10 @@ final class WorkspaceStore {
         }
 
         return Self.sortedUniqueModelNames(candidates)
+    }
+
+    private func catalogEmbeddingModelIdentifiers(for provider: ProviderConfiguration) -> [String] {
+        AIKnownProviderCatalog.entry(for: provider.kind)?.normalizedEmbeddingModelIdentifiers ?? []
     }
 
     var localProviderHealthSnapshots: [AIProviderHealth] {
@@ -6532,6 +6539,8 @@ final class WorkspaceStore {
 
         return provider.modelIdentifier == modelIdentifier
             || provider.availableModels.contains(modelIdentifier)
+            || provider.discoveredModelNames.contains(modelIdentifier)
+            || catalogEmbeddingModelIdentifiers(for: provider).contains(modelIdentifier)
     }
 
     private func queryVector(

@@ -421,6 +421,7 @@ struct AIProviderCatalogEntry: Identifiable, Hashable, Sendable {
     var endpoint: String?
     var defaultModelIdentifier: String
     var recommendedModelIdentifiers: [String]
+    var embeddingModelIdentifiers: [String] = []
     var capabilities: [ModelCapability]
     var credentialRequirement: AIProviderCredentialRequirement
     var modelDiscoveryStrategy: AIProviderModelDiscoveryStrategy
@@ -485,6 +486,10 @@ struct AIProviderCatalogEntry: Identifiable, Hashable, Sendable {
 
     nonisolated var normalizedRecommendedModelIdentifiers: [String] {
         Self.normalizedModelIdentifiers(recommendedModelIdentifiers + [defaultModelIdentifier])
+    }
+
+    nonisolated var normalizedEmbeddingModelIdentifiers: [String] {
+        Self.normalizedModelIdentifiers(embeddingModelIdentifiers)
     }
 
     nonisolated var modelDescriptors: [AIModelDescriptor] {
@@ -571,7 +576,8 @@ enum AIKnownProviderCatalog {
             endpoint: "https://api.openai.com/v1",
             defaultModelIdentifier: "gpt-5.5",
             recommendedModelIdentifiers: ["gpt-5.5", "gpt-5.5-mini"],
-            capabilities: [.chat, .streaming, .toolCalling, .vision, .reasoning, .structuredOutput],
+            embeddingModelIdentifiers: ["text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002"],
+            capabilities: [.chat, .streaming, .toolCalling, .embeddings, .vision, .reasoning, .structuredOutput],
             credentialRequirement: .requiredAPIKey,
             modelDiscoveryStrategy: .openAICompatibleModels,
             requestBoundary: .externalAPI,
@@ -580,7 +586,8 @@ enum AIKnownProviderCatalog {
             discoveryCapabilities: [.openAICompatibleModelList],
             cliContract: nil,
             sourceReferences: [
-                AIProviderSourceReference(label: "OpenAI Responses API", url: "https://platform.openai.com/docs/api-reference/responses")
+                AIProviderSourceReference(label: "OpenAI Responses API", url: "https://platform.openai.com/docs/api-reference/responses"),
+                AIProviderSourceReference(label: "OpenAI embeddings", url: "https://developers.openai.com/api/docs/guides/embeddings")
             ]
         ),
         AIProviderCatalogEntry(
@@ -728,7 +735,7 @@ enum AIKnownProviderCatalog {
             endpoint: "http://localhost:8080/v1",
             defaultModelIdentifier: "",
             recommendedModelIdentifiers: [],
-            capabilities: [.chat, .streaming, .toolCalling, .openAICompatible],
+            capabilities: [.chat, .streaming, .toolCalling, .embeddings, .openAICompatible],
             credentialRequirement: .optionalAPIKey,
             modelDiscoveryStrategy: .openAICompatibleModels,
             requestBoundary: .externalAPI,
