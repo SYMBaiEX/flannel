@@ -48,10 +48,22 @@ ExportOptions.plist
 # Environment files and plaintext credential material
 .env
 .env.*
+.envrc
 *.env
 *.pem
 *.key
 *.private
 *.secret
+*.auth.json
+*.credentials.json
+.netrc
 secrets/
 private/
+
+# Local-only app and Xcode configuration
+*.local
+*.local.json
+*.xcconfig.local
+Local.xcconfig
+Secrets.xcconfig
+Config.local.xcconfig
