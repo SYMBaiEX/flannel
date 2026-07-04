@@ -6,11 +6,19 @@ Icon?
 
 # Local editor and Codex state
 .codex/
+.agents/
 .claude/
+.claude-*/
 .cursor/
 .vscode/
 .idea/
 .local/
+.cache/
+.gemini/
+.mcp.json
+.mcp.*.json
+.opencode/
+.continue/
 *.swp
 *.swo
 *.tmp
@@ -101,6 +109,7 @@ Exports/
 .envrc
 .xcode.env
 *.env
+*.env.local
 *.pem
 *.key
 *.token
@@ -115,6 +124,8 @@ Exports/
 credentials.json
 service-account*.json
 *service-account*.json
+firebase*.json
+supabase*.json
 .npmrc
 .yarnrc
 .yarnrc.yml
@@ -128,7 +139,18 @@ local-secrets/
 *.local.json
 *.xcconfig.local
 *.xcconfig.private
+*.xcconfig.secret
+*.xcconfig.secrets
 Local.xcconfig
 Private.xcconfig
 Secrets.xcconfig
 Config.local.xcconfig
+
+# Third-party SDK credential manifests commonly dropped into app projects
+GoogleService-Info.plist
+GoogleService-Info-*.plist
+ServiceAccount*.plist
+*.plist.local
+*.plist.private
+*.plist.secret
+*.plist.secrets
