@@ -23,9 +23,17 @@ struct ChatAttachmentImportResult: Sendable {
 
 struct ChatAttachmentService: Sendable {
     var maximumExcerptBytes: Int
+    var maximumDirectoryPreviewFiles: Int
+    var maximumDirectoryScanFiles: Int
 
-    init(maximumExcerptBytes: Int = 24_000) {
+    init(
+        maximumExcerptBytes: Int = 24_000,
+        maximumDirectoryPreviewFiles: Int = 32,
+        maximumDirectoryScanFiles: Int = 5_000
+    ) {
         self.maximumExcerptBytes = maximumExcerptBytes
+        self.maximumDirectoryPreviewFiles = maximumDirectoryPreviewFiles
+        self.maximumDirectoryScanFiles = maximumDirectoryScanFiles
     }
 
     func importAttachments(from urls: [URL]) -> ChatAttachmentImportResult {
@@ -64,10 +72,11 @@ struct ChatAttachmentService: Sendable {
         ])
 
         let contentType = resourceValues.contentType ?? UTType(filenameExtension: url.pathExtension)
-        let kind = attachmentKind(for: contentType, isDirectory: resourceValues.isDirectory == true)
+        let isDirectory = resourceValues.isDirectory == true
+        let kind = attachmentKind(for: contentType, isDirectory: isDirectory)
         let byteCount = resourceValues.fileSize.map(Int64.init)
         let bookmarkData = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
-        let excerpt = try excerpt(from: url, contentType: contentType, kind: kind)
+        let excerpt = try excerpt(from: url, contentType: contentType, kind: kind, isDirectory: isDirectory)
 
         return AIChatAttachment(
             kind: kind,
@@ -82,7 +91,7 @@ struct ChatAttachmentService: Sendable {
 
     private func attachmentKind(for contentType: UTType?, isDirectory: Bool) -> AIChatAttachmentKind {
         if isDirectory {
-            return .document
+            return .workspaceAsset
         }
 
         guard let contentType else {
@@ -101,7 +110,16 @@ struct ChatAttachmentService: Sendable {
         return .document
     }
 
-    private func excerpt(from url: URL, contentType: UTType?, kind: AIChatAttachmentKind) throws -> String? {
+    private func excerpt(
+        from url: URL,
+        contentType: UTType?,
+        kind: AIChatAttachmentKind,
+        isDirectory: Bool
+    ) throws -> String? {
+        if isDirectory {
+            return directoryPreviewExcerpt(from: url)
+        }
+
         if isPDF(url, contentType: contentType),
            let text = decodePDFText(from: url) {
             return normalizedExcerpt(from: text)
@@ -140,6 +158,22 @@ struct ChatAttachmentService: Sendable {
             || contentType.identifier.contains("markdown")
     }
 
+    private nonisolated static func isSupportedPreviewFile(_ url: URL) -> Bool {
+        supportedPreviewExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    private nonisolated static let supportedPreviewExtensions: Set<String> = [
+        "txt", "md", "markdown", "json", "csv", "html", "htm", "pdf", "docx",
+        "swift", "js", "ts", "tsx", "jsx", "py", "rb", "go", "rs",
+        "java", "kt", "c", "cc", "cpp", "h", "hpp", "m", "mm", "sh",
+        "zsh", "yaml", "yml", "toml", "xml"
+    ]
+
+    private nonisolated static let defaultDirectoryPreviewExclusions: Set<String> = [
+        ".build", ".git", ".next", ".venv", "build", "DerivedData", "dist",
+        "node_modules", "Pods", "private", "secrets", "vendor"
+    ]
+
     private nonisolated func isPDF(_ url: URL, contentType: UTType?) -> Bool {
         contentType?.conforms(to: .pdf) == true
             || url.pathExtension.localizedCaseInsensitiveCompare("pdf") == .orderedSame
@@ -171,6 +205,92 @@ struct ChatAttachmentService: Sendable {
         return text.isEmpty ? nil : text
     }
 
+    private nonisolated func directoryPreviewExcerpt(from rootURL: URL) -> String? {
+        guard let enumerator = FileManager.default.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isReadableKey, .fileSizeKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return nil
+        }
+
+        let rootURL = rootURL.standardizedFileURL
+        let rootPath = rootURL.path.hasSuffix("/") ? rootURL.path : rootURL.path + "/"
+        let isGitRepository = FileManager.default.fileExists(
+            atPath: rootURL.appendingPathComponent(".git", isDirectory: true).path
+        )
+        var scannedFileCount = 0
+        var supportedFileCount = 0
+        var totalSupportedBytes: Int64 = 0
+        var previewRows: [DirectoryPreviewRow] = []
+
+        for case let fileURL as URL in enumerator {
+            guard scannedFileCount < maximumDirectoryScanFiles else { break }
+
+            let values = try? fileURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .fileSizeKey])
+            if values?.isDirectory == true {
+                if Self.defaultDirectoryPreviewExclusions.contains(fileURL.lastPathComponent) {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
+
+            guard values?.isRegularFile == true,
+                  FileManager.default.isReadableFile(atPath: fileURL.path) else {
+                continue
+            }
+
+            scannedFileCount += 1
+            guard Self.isSupportedPreviewFile(fileURL) else { continue }
+
+            supportedFileCount += 1
+            let byteCount = Int64(values?.fileSize ?? 0)
+            totalSupportedBytes += max(0, byteCount)
+
+            if previewRows.count < maximumDirectoryPreviewFiles {
+                let path = relativePath(for: fileURL.standardizedFileURL, rootPath: rootPath)
+                previewRows.append(DirectoryPreviewRow(path: path, byteCount: byteCount))
+            }
+        }
+
+        let sortedRows = previewRows.sorted {
+            $0.path.localizedStandardCompare($1.path) == .orderedAscending
+        }
+        var lines = [
+            "Directory preview: \(rootURL.lastPathComponent)",
+            "Type: \(isGitRepository ? "Git repository or code workspace" : "Local folder")",
+            "Supported files found: \(supportedFileCount)",
+            "Supported bytes: \(ByteCountFormatter.string(fromByteCount: totalSupportedBytes, countStyle: .file))"
+        ]
+
+        if scannedFileCount >= maximumDirectoryScanFiles {
+            lines.append("Scan capped after \(maximumDirectoryScanFiles) readable file\(maximumDirectoryScanFiles == 1 ? "" : "s").")
+        }
+
+        if sortedRows.isEmpty {
+            lines.append("No supported preview files were found.")
+        } else {
+            lines.append("Preview files:")
+            lines.append(contentsOf: sortedRows.map { row in
+                "- \(row.path) (\(ByteCountFormatter.string(fromByteCount: row.byteCount, countStyle: .file)))"
+            })
+            if supportedFileCount > sortedRows.count {
+                lines.append("...and \(supportedFileCount - sortedRows.count) more supported file\(supportedFileCount - sortedRows.count == 1 ? "" : "s").")
+            }
+        }
+
+        return normalizedExcerpt(from: lines.joined(separator: "\n"))
+    }
+
+    private nonisolated func relativePath(for fileURL: URL, rootPath: String) -> String {
+        guard fileURL.path.hasPrefix(rootPath) else {
+            return fileURL.lastPathComponent
+        }
+
+        let relativePath = String(fileURL.path.dropFirst(rootPath.count))
+        return relativePath.isEmpty ? fileURL.lastPathComponent : relativePath
+    }
+
     private nonisolated func normalizedExcerpt(from text: String) -> String? {
         let normalized = text
             .replacingOccurrences(of: "\u{0000}", with: "")
@@ -181,6 +301,11 @@ struct ChatAttachmentService: Sendable {
         return normalized.count > 8_000
             ? String(normalized.prefix(8_000)) + "\n[Excerpt truncated]"
             : normalized
+    }
+
+    private nonisolated struct DirectoryPreviewRow: Hashable, Sendable {
+        var path: String
+        var byteCount: Int64
     }
 }
 

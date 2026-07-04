@@ -74,6 +74,81 @@ struct ChatAttachmentServiceTests {
         #expect(attachment.promptContextBlock.contains("DOCX FROST NEEDLE"))
     }
 
+    @Test("Directory attachment import creates a capped local repository preview")
+    func directoryAttachmentImportCreatesRepositoryPreview() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(
+            at: directory.appendingPathComponent(".git", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: directory.appendingPathComponent("Sources", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: directory.appendingPathComponent("node_modules/left-pad", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try "print(\"alpha\")".write(
+            to: directory.appendingPathComponent("Sources/App.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "# Project".write(
+            to: directory.appendingPathComponent("README.md"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "should be skipped".write(
+            to: directory.appendingPathComponent("node_modules/left-pad/index.js"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let result = ChatAttachmentService(
+            maximumExcerptBytes: 512,
+            maximumDirectoryPreviewFiles: 4
+        )
+        .importAttachments(from: [directory])
+        let attachment = try #require(result.attachments.first)
+        let excerpt = try #require(attachment.excerpt)
+
+        #expect(result.failures.isEmpty)
+        #expect(attachment.kind == .workspaceAsset)
+        #expect(excerpt.contains("Directory preview:"))
+        #expect(excerpt.contains("Git repository or code workspace"))
+        #expect(excerpt.contains("Supported files found: 2"))
+        #expect(excerpt.contains("README.md"))
+        #expect(excerpt.contains("Sources/App.swift"))
+        #expect(!excerpt.contains("node_modules"))
+        #expect(attachment.promptContextBlock.contains("Directory preview:"))
+    }
+
+    @Test("Directory attachment preview reports capped file counts")
+    func directoryAttachmentPreviewReportsCappedRows() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        for index in 0..<5 {
+            try "note \(index)".write(
+                to: directory.appendingPathComponent("note-\(index).md"),
+                atomically: true,
+                encoding: .utf8
+            )
+        }
+
+        let result = ChatAttachmentService(
+            maximumDirectoryPreviewFiles: 2,
+            maximumDirectoryScanFiles: 10
+        )
+        .importAttachments(from: [directory])
+        let excerpt = try #require(result.attachments.first?.excerpt)
+
+        #expect(excerpt.contains("Supported files found: 5"))
+        #expect(excerpt.contains("Preview files:"))
+        #expect(excerpt.contains("...and 3 more supported files."))
+    }
+
     @Test("Attachment prompt context combines message text with file metadata")
     func attachmentPromptContextCombinesMessageAndMetadata() {
         let message = AssistantMessage(
