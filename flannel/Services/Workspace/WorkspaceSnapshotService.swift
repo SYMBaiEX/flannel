@@ -221,13 +221,30 @@ struct WorkspaceSnapshotService: Sendable {
         preferences.confirmBeforeExternalActions = true
         preferences.automationsEnabled = false
 
+        let localProviderIDs = Set(
+            snapshot.providerConfigurations
+                .filter { $0.privacyScope == .localOnly }
+                .map(\.id)
+        )
+        let safeProjects = snapshot.projects.map { project in
+            var copy = project
+            if let preferredProviderID = copy.aiProfile.preferredProviderID,
+               !localProviderIDs.contains(preferredProviderID) {
+                copy.aiProfile.preferredProviderID = nil
+            }
+            if copy.aiProfile.cloudAccessPolicy == .allowCloudProviders {
+                copy.aiProfile.cloudAccessPolicy = .localOnly
+            }
+            return copy
+        }
+
         return Item(
             workspaceID: UUID(),
-            schemaVersion: 4,
+            schemaVersion: 5,
             timestamp: importedAt,
             updatedAt: importedAt,
             selectedDestination: snapshot.selectedDestination,
-            selectedProjectID: snapshot.projects.contains(where: { $0.id == snapshot.selectedProjectID }) ? snapshot.selectedProjectID : nil,
+            selectedProjectID: safeProjects.contains(where: { $0.id == snapshot.selectedProjectID }) ? snapshot.selectedProjectID : nil,
             selectedDraftID: snapshot.drafts.contains(where: { $0.id == snapshot.selectedDraftID }) ? snapshot.selectedDraftID : nil,
             selectedAssetID: snapshot.libraryAssets.contains(where: { $0.id == snapshot.selectedAssetID }) ? snapshot.selectedAssetID : nil,
             selectedCalendarEntryID: snapshot.calendarEntries.contains(where: { $0.id == snapshot.selectedCalendarEntryID }) ? snapshot.selectedCalendarEntryID : nil,
@@ -235,7 +252,7 @@ struct WorkspaceSnapshotService: Sendable {
             accounts: snapshot.accounts,
             providerConfigurations: sanitizedProviderConfigurations(snapshot.providerConfigurations),
             libraryAssets: snapshot.libraryAssets,
-            projects: snapshot.projects,
+            projects: safeProjects,
             drafts: snapshot.drafts,
             calendarEntries: snapshot.calendarEntries,
             assistantThreads: snapshot.assistantThreads,

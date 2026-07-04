@@ -849,6 +849,7 @@ struct WorkspaceProject: Identifiable, Codable, Hashable, Sendable {
     var publishTargets: [ContentPlatform]
     var tagNames: [String]
     var dueDate: Date?
+    var aiProfile: WorkspaceAIProfile
     var createdAt: Date
     var updatedAt: Date
     var lastActivityAt: Date
@@ -867,6 +868,7 @@ struct WorkspaceProject: Identifiable, Codable, Hashable, Sendable {
         publishTargets: [ContentPlatform] = [],
         tagNames: [String] = [],
         dueDate: Date? = nil,
+        aiProfile: WorkspaceAIProfile = WorkspaceAIProfile(),
         createdAt: Date = .now,
         updatedAt: Date = .now,
         lastActivityAt: Date = .now
@@ -884,6 +886,7 @@ struct WorkspaceProject: Identifiable, Codable, Hashable, Sendable {
         self.publishTargets = publishTargets
         self.tagNames = tagNames
         self.dueDate = dueDate
+        self.aiProfile = aiProfile
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.lastActivityAt = lastActivityAt
@@ -904,9 +907,167 @@ struct WorkspaceProject: Identifiable, Codable, Hashable, Sendable {
         publishTargets = try container.decode([ContentPlatform].self, forKey: .publishTargets, default: [])
         tagNames = try container.decode([String].self, forKey: .tagNames, default: [])
         dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate)
+        aiProfile = try container.decode(WorkspaceAIProfile.self, forKey: .aiProfile, default: WorkspaceAIProfile())
         createdAt = try container.decode(Date.self, forKey: .createdAt, default: .now)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt, default: createdAt)
         lastActivityAt = try container.decode(Date.self, forKey: .lastActivityAt, default: updatedAt)
+    }
+}
+
+enum WorkspaceCloudAccessPolicy: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
+    case inherit
+    case localOnly
+    case localAndCLI
+    case allowCloudProviders
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .inherit:
+            "Inherit Workspace"
+        case .localOnly:
+            "Local Models Only"
+        case .localAndCLI:
+            "Local + Account CLI"
+        case .allowCloudProviders:
+            "Allow Cloud Providers"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .inherit:
+            "Use the global privacy mode from Privacy settings."
+        case .localOnly:
+            "Only local server routes such as Ollama and LM Studio may run for this project."
+        case .localAndCLI:
+            "Allow local servers and locally authenticated account CLI routes, but block hosted API routes."
+        case .allowCloudProviders:
+            "Allow any route already permitted by the global workspace privacy settings."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .inherit:
+            "arrow.triangle.branch"
+        case .localOnly:
+            "lock"
+        case .localAndCLI:
+            "terminal"
+        case .allowCloudProviders:
+            "network"
+        }
+    }
+
+    func allows(_ provider: ProviderConfiguration) -> Bool {
+        switch self {
+        case .inherit, .allowCloudProviders:
+            true
+        case .localOnly:
+            provider.privacyScope == .localOnly
+        case .localAndCLI:
+            provider.privacyScope != .externalAPI
+        }
+    }
+}
+
+enum WorkspaceLocalMemoryPolicy: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
+    case inherit
+    case include
+    case exclude
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .inherit:
+            "Inherit Workspace"
+        case .include:
+            "Include Local Memory"
+        case .exclude:
+            "Exclude Local Memory"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .inherit:
+            "Use the global memory setting."
+        case .include:
+            "Project chats may use relevant local memories when global memory is enabled."
+        case .exclude:
+            "Project chats skip saved memories even if global memory is enabled."
+        }
+    }
+}
+
+struct WorkspaceAIProfile: Codable, Hashable, Sendable {
+    var preferredProviderID: UUID?
+    var defaultModelPresetID: UUID?
+    var defaultSystemPromptProfileID: UUID?
+    var customSystemPrompt: String
+    var knowledgeSourceIDs: [UUID]
+    var toolConfigurationIDs: [UUID]
+    var cloudAccessPolicy: WorkspaceCloudAccessPolicy
+    var localMemoryPolicy: WorkspaceLocalMemoryPolicy
+    var indexingRuleNotes: String
+
+    init(
+        preferredProviderID: UUID? = nil,
+        defaultModelPresetID: UUID? = nil,
+        defaultSystemPromptProfileID: UUID? = nil,
+        customSystemPrompt: String = "",
+        knowledgeSourceIDs: [UUID] = [],
+        toolConfigurationIDs: [UUID] = [],
+        cloudAccessPolicy: WorkspaceCloudAccessPolicy = .inherit,
+        localMemoryPolicy: WorkspaceLocalMemoryPolicy = .inherit,
+        indexingRuleNotes: String = ""
+    ) {
+        self.preferredProviderID = preferredProviderID
+        self.defaultModelPresetID = defaultModelPresetID
+        self.defaultSystemPromptProfileID = defaultSystemPromptProfileID
+        self.customSystemPrompt = customSystemPrompt
+        self.knowledgeSourceIDs = knowledgeSourceIDs
+        self.toolConfigurationIDs = toolConfigurationIDs
+        self.cloudAccessPolicy = cloudAccessPolicy
+        self.localMemoryPolicy = localMemoryPolicy
+        self.indexingRuleNotes = indexingRuleNotes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        preferredProviderID = try container.decodeIfPresent(UUID.self, forKey: .preferredProviderID)
+        defaultModelPresetID = try container.decodeIfPresent(UUID.self, forKey: .defaultModelPresetID)
+        defaultSystemPromptProfileID = try container.decodeIfPresent(UUID.self, forKey: .defaultSystemPromptProfileID)
+        customSystemPrompt = try container.decode(String.self, forKey: .customSystemPrompt, default: "")
+        knowledgeSourceIDs = try container.decode([UUID].self, forKey: .knowledgeSourceIDs, default: [])
+        toolConfigurationIDs = try container.decode([UUID].self, forKey: .toolConfigurationIDs, default: [])
+        cloudAccessPolicy = try container.decode(
+            WorkspaceCloudAccessPolicy.self,
+            forKey: .cloudAccessPolicy,
+            default: .inherit
+        )
+        localMemoryPolicy = try container.decode(
+            WorkspaceLocalMemoryPolicy.self,
+            forKey: .localMemoryPolicy,
+            default: .inherit
+        )
+        indexingRuleNotes = try container.decode(String.self, forKey: .indexingRuleNotes, default: "")
+    }
+
+    var hasScopedKnowledge: Bool {
+        !knowledgeSourceIDs.isEmpty
+    }
+
+    var hasScopedTools: Bool {
+        !toolConfigurationIDs.isEmpty
+    }
+
+    var hasSystemPromptOverride: Bool {
+        defaultSystemPromptProfileID != nil
+            || !customSystemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
@@ -1727,7 +1888,7 @@ final class Item {
 
     init(
         workspaceID: UUID = UUID(),
-        schemaVersion: Int = 4,
+        schemaVersion: Int = 5,
         timestamp: Date = .now,
         updatedAt: Date = .now,
         selectedDestination: WorkspaceDestination = .home,

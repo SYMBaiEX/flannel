@@ -297,6 +297,40 @@ struct SettingsSurface: View {
                     .disabled(newChatFolderTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
+
+            Section("Project AI Profile") {
+                if store.projects.isEmpty {
+                    EmptySettingsRow(
+                        title: "No projects",
+                        detail: "Create a project before assigning model, prompt, knowledge, tool, and privacy defaults."
+                    )
+                } else {
+                    Picker("Active project", selection: Binding(
+                        get: { store.selectedProjectID },
+                        set: {
+                            store.selectedProjectID = $0
+                            persist()
+                        }
+                    )) {
+                        ForEach(store.projects) { project in
+                            Text(project.title).tag(Optional(project.id))
+                        }
+                    }
+
+                    if let selectedProjectID = store.selectedProjectID,
+                       let index = store.projects.firstIndex(where: { $0.id == selectedProjectID }) {
+                        ProjectAIProfileSettings(
+                            project: $store.projects[index],
+                            providers: store.providerConfigurations,
+                            modelPresets: store.modelPresets,
+                            promptProfiles: store.promptProfiles,
+                            knowledgeSources: store.knowledgeSources,
+                            toolConfigurations: store.toolConfigurations,
+                            persist: persist
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -6651,6 +6685,253 @@ private struct ChatTemplateSettingsRow: View {
     }
 }
 
+private struct ProjectAIProfileSettings: View {
+    @Binding var project: WorkspaceProject
+    var providers: [ProviderConfiguration]
+    var modelPresets: [ModelPreset]
+    var promptProfiles: [SystemPromptProfile]
+    var knowledgeSources: [KnowledgeSource]
+    var toolConfigurations: [ToolConfiguration]
+    var persist: () -> Void
+
+    private var sortedProviders: [ProviderConfiguration] {
+        providers.sorted {
+            $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+        }
+    }
+
+    private var sortedKnowledgeSources: [KnowledgeSource] {
+        knowledgeSources.sorted {
+            $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
+    }
+
+    private var sortedToolConfigurations: [ToolConfiguration] {
+        toolConfigurations.sorted {
+            $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
+    }
+
+    private var knowledgeSummary: String {
+        let selectedCount = sortedKnowledgeSources.filter { project.aiProfile.knowledgeSourceIDs.contains($0.id) }.count
+        return selectedCount == 0
+            ? "Use all workspace knowledge"
+            : "\(selectedCount) project source\(selectedCount == 1 ? "" : "s")"
+    }
+
+    private var toolSummary: String {
+        let selectedCount = sortedToolConfigurations.filter { project.aiProfile.toolConfigurationIDs.contains($0.id) }.count
+        return selectedCount == 0
+            ? "Use all enabled tools"
+            : "\(selectedCount) project tool\(selectedCount == 1 ? "" : "s")"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("Default provider", selection: Binding(
+                get: { project.aiProfile.preferredProviderID },
+                set: {
+                    project.aiProfile.preferredProviderID = $0
+                    touch()
+                }
+            )) {
+                Text("Workspace routing").tag(Optional<UUID>.none)
+                ForEach(sortedProviders) { provider in
+                    Text("\(provider.displayName) - \(provider.modelIdentifier)").tag(Optional(provider.id))
+                }
+            }
+            .disabled(sortedProviders.isEmpty)
+
+            Picker("Model preset", selection: Binding(
+                get: { project.aiProfile.defaultModelPresetID },
+                set: {
+                    project.aiProfile.defaultModelPresetID = $0
+                    touch()
+                }
+            )) {
+                Text("Workspace default").tag(Optional<UUID>.none)
+                ForEach(modelPresets) { preset in
+                    Text(preset.title).tag(Optional(preset.id))
+                }
+            }
+            .disabled(modelPresets.isEmpty)
+
+            Picker("Prompt profile", selection: Binding(
+                get: { project.aiProfile.defaultSystemPromptProfileID },
+                set: {
+                    project.aiProfile.defaultSystemPromptProfileID = $0
+                    touch()
+                }
+            )) {
+                Text("Workspace default").tag(Optional<UUID>.none)
+                ForEach(promptProfiles) { profile in
+                    Text(profile.title).tag(Optional(profile.id))
+                }
+            }
+            .disabled(promptProfiles.isEmpty)
+
+            TextField("Project system prompt override", text: Binding(
+                get: { project.aiProfile.customSystemPrompt },
+                set: {
+                    project.aiProfile.customSystemPrompt = $0
+                    touch()
+                }
+            ), axis: .vertical)
+            .lineLimit(2...6)
+
+            HStack {
+                Picker("Network policy", selection: Binding(
+                    get: { project.aiProfile.cloudAccessPolicy },
+                    set: {
+                        project.aiProfile.cloudAccessPolicy = $0
+                        touch()
+                    }
+                )) {
+                    ForEach(WorkspaceCloudAccessPolicy.allCases) { policy in
+                        Label(policy.title, systemImage: policy.systemImage).tag(policy)
+                    }
+                }
+
+                Picker("Memory", selection: Binding(
+                    get: { project.aiProfile.localMemoryPolicy },
+                    set: {
+                        project.aiProfile.localMemoryPolicy = $0
+                        touch()
+                    }
+                )) {
+                    ForEach(WorkspaceLocalMemoryPolicy.allCases) { policy in
+                        Text(policy.title).tag(policy)
+                    }
+                }
+            }
+
+            Text(project.aiProfile.cloudAccessPolicy.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            DisclosureGroup {
+                if sortedKnowledgeSources.isEmpty {
+                    Text("Add local files, folders, repositories, web pages, chat history, or workspace notes from Knowledge settings.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 6)
+                } else {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 210), spacing: 6, alignment: .leading)],
+                        alignment: .leading,
+                        spacing: 6
+                    ) {
+                        ForEach(sortedKnowledgeSources) { source in
+                            Toggle(isOn: knowledgeSourceBinding(for: source.id)) {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(source.title)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                    Text("\(source.kind.settingsTitle) - \(source.status.settingsTitle)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .toggleStyle(.checkbox)
+                        }
+                    }
+                    .padding(.top, 6)
+                }
+            } label: {
+                Label(knowledgeSummary, systemImage: "books.vertical")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            DisclosureGroup {
+                if sortedToolConfigurations.isEmpty {
+                    Text("Add tool configurations from Tool settings before scoping this project.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 6)
+                } else {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 180), spacing: 6, alignment: .leading)],
+                        alignment: .leading,
+                        spacing: 6
+                    ) {
+                        ForEach(sortedToolConfigurations) { tool in
+                            Toggle(isOn: toolBinding(for: tool.id)) {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(tool.title)
+                                        .lineLimit(1)
+                                    Text(tool.permissionPolicy.settingsTitle)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .toggleStyle(.checkbox)
+                        }
+                    }
+                    .padding(.top, 6)
+                }
+            } label: {
+                Label(toolSummary, systemImage: "wrench.and.screwdriver")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            TextField("Indexing notes", text: Binding(
+                get: { project.aiProfile.indexingRuleNotes },
+                set: {
+                    project.aiProfile.indexingRuleNotes = $0
+                    touch()
+                }
+            ), axis: .vertical)
+            .lineLimit(1...4)
+        }
+    }
+
+    private func knowledgeSourceBinding(for sourceID: UUID) -> Binding<Bool> {
+        Binding(
+            get: { project.aiProfile.knowledgeSourceIDs.contains(sourceID) },
+            set: { isSelected in
+                if isSelected {
+                    if !project.aiProfile.knowledgeSourceIDs.contains(sourceID) {
+                        project.aiProfile.knowledgeSourceIDs.append(sourceID)
+                    }
+                } else {
+                    project.aiProfile.knowledgeSourceIDs.removeAll { $0 == sourceID }
+                }
+                project.aiProfile.knowledgeSourceIDs = sortedKnowledgeSources
+                    .map(\.id)
+                    .filter { project.aiProfile.knowledgeSourceIDs.contains($0) }
+                touch()
+            }
+        )
+    }
+
+    private func toolBinding(for toolID: UUID) -> Binding<Bool> {
+        Binding(
+            get: { project.aiProfile.toolConfigurationIDs.contains(toolID) },
+            set: { isSelected in
+                if isSelected {
+                    if !project.aiProfile.toolConfigurationIDs.contains(toolID) {
+                        project.aiProfile.toolConfigurationIDs.append(toolID)
+                    }
+                } else {
+                    project.aiProfile.toolConfigurationIDs.removeAll { $0 == toolID }
+                }
+                project.aiProfile.toolConfigurationIDs = sortedToolConfigurations
+                    .map(\.id)
+                    .filter { project.aiProfile.toolConfigurationIDs.contains($0) }
+                touch()
+            }
+        )
+    }
+
+    private func touch() {
+        project.updatedAt = .now
+        project.lastActivityAt = .now
+        persist()
+    }
+}
+
 private extension AssistantMode {
     var settingsTitle: String {
         switch self {
@@ -6660,6 +6941,21 @@ private extension AssistantMode {
             "Research"
         case .drafting:
             "Drafting"
+        }
+    }
+}
+
+private extension ToolPermissionPolicy {
+    var settingsTitle: String {
+        switch self {
+        case .alwaysAllow:
+            "Always allow"
+        case .askEveryTime:
+            "Ask every time"
+        case .deny:
+            "Deny"
+        case .localOnly:
+            "Local only"
         }
     }
 }

@@ -707,10 +707,10 @@ struct ContentView: View {
         let rawHistory = sourceThread?.messages ?? []
         let providerHistory = rawHistory.filter { $0.role != .system }
         let baseSystemPrompt = store.effectiveSystemPrompt(for: sourceThread)
-        let localMemoryContext = store.localMemoryPromptContext(for: messageText)
+        let localMemoryContext = store.localMemoryPromptContext(for: messageText, thread: sourceThread)
         let contextAssembler = ChatContextAssemblyService()
 
-        let streamAttempts = store.chatProviderFallbackChain().map { provider in
+        let streamAttempts = store.chatProviderFallbackChain(for: sourceThread).map { provider in
             let assembledContext = contextAssembler.assemble(
                 ChatContextAssemblyInput(
                     baseSystemPrompt: baseSystemPrompt ?? "",
@@ -821,7 +821,7 @@ struct ContentView: View {
                             provider: attempt.provider,
                             messages: attempt.history,
                             systemPrompt: attempt.systemPrompt.isEmpty ? nil : attempt.systemPrompt,
-                            tools: toolsEnabled ? chatToolDefinitions(for: attempt.provider) : []
+                            tools: toolsEnabled ? chatToolDefinitions(for: attempt.provider, thread: sourceThread) : []
                         )
                     )
 
@@ -1324,14 +1324,16 @@ struct ContentView: View {
         return .readWorkspace
     }
 
-    private func chatToolDefinitions(for provider: ProviderConfiguration) -> [ChatToolDefinition] {
+    private func chatToolDefinitions(
+        for provider: ProviderConfiguration,
+        thread: AssistantThread?
+    ) -> [ChatToolDefinition] {
         guard provider.supportsToolCalling else { return [] }
         let localOnlyMode = store.preferences.localOnlyMode ?? true
 
-        return store.toolConfigurations
+        return store.enabledToolConfigurations(for: thread)
             .filter { tool in
-                tool.isEnabled
-                    && tool.permissionPolicy != .deny
+                tool.permissionPolicy != .deny
                     && !(localOnlyMode && tool.requiresNetwork)
             }
             .sorted { lhs, rhs in

@@ -83,6 +83,15 @@ enum WorkspaceSeed {
             publishTargets: [.youtube, .x],
             tagNames: ["launch", "creator-os", "privacy"],
             dueDate: calendar.date(byAdding: .day, value: 7, to: now),
+            aiProfile: WorkspaceAIProfile(
+                preferredProviderID: ollama.id,
+                customSystemPrompt: """
+                You are Flannel's local-first launch workspace assistant. Keep this project's answers grounded in selected project notes, local knowledge, and explicit user-provided context. Prefer Local Ollama unless the user intentionally changes the route, and call out any step that would leave this Mac.
+                """,
+                cloudAccessPolicy: .localOnly,
+                localMemoryPolicy: .include,
+                indexingRuleNotes: "Index launch notes, drafts, transcripts, and local research sources before expanding to external captures."
+            ),
             createdAt: calendar.date(byAdding: .day, value: -3, to: now) ?? now,
             updatedAt: calendar.date(byAdding: .hour, value: -1, to: now) ?? now,
             lastActivityAt: calendar.date(byAdding: .minute, value: -32, to: now) ?? now

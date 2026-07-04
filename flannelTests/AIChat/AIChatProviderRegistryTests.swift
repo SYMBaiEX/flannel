@@ -21,6 +21,7 @@ struct AIChatProviderRegistryTests {
     @Test("Active provider prefers the explicitly preferred enabled provider")
     func activeProviderRespectsEnabledPreferredProvider() throws {
         let (_, store) = try makeLoadedStore()
+        clearProjectAIProfiles(on: store)
 
         let openAI = try #require(store.providerConfigurations.first(where: { $0.kind == .openAI }))
         let ollamaIndex = try #require(store.providerConfigurations.firstIndex(where: { $0.kind == .ollama }))
@@ -58,6 +59,7 @@ struct AIChatProviderRegistryTests {
     @Test("External API providers become eligible when cloud allowance is explicit")
     func externalAPIProviderCanRunWhenCloudAllowanceIsExplicit() throws {
         let (_, store) = try makeLoadedStore()
+        clearProjectAIProfiles(on: store)
 
         let openAI = try #require(store.providerConfigurations.first(where: { $0.kind == .openAI }))
         store.preferences.localOnlyMode = false
@@ -234,6 +236,8 @@ struct AIChatProviderRegistryTests {
     @Test("Selected provider fallback chain tries the selected route before local-safe fallbacks")
     func selectedProviderFallbackChainStartsWithSelectedThenLocalSafeRoutes() throws {
         let (_, store) = try makeLoadedStore()
+        clearProjectAIProfiles(on: store)
+
         var selectedCloud = ProviderConfiguration(
             id: UUID(uuidString: "a1a5ac0d-bf75-4d8b-9fd5-0a8663d62e1c")!,
             kind: .openAI,
@@ -1390,6 +1394,7 @@ struct AIChatProviderRegistryTests {
     @Test("Selecting an OpenAI model updates only OpenAI family configuration and keeps Anthropic separate")
     func selectingOpenAIModelFromChatPickerKeepsAnthropicFamilySeparate() throws {
         let (_, store) = try makeLoadedStore()
+        clearProjectAIProfiles(on: store)
 
         let openAI = try #require(store.providerConfigurations.first(where: { $0.kind == .openAI }))
         let anthropicAPI = try #require(store.providerConfigurations.first(where: { $0.kind == .anthropic }))
@@ -1720,6 +1725,15 @@ struct AIChatProviderRegistryTests {
         let store = WorkspaceStore()
         try store.loadOrCreate(in: ModelContext(container))
         return (container, store)
+    }
+
+    @MainActor
+    private func clearProjectAIProfiles(on store: WorkspaceStore) {
+        store.projects = store.projects.map { project in
+            var updated = project
+            updated.aiProfile = WorkspaceAIProfile()
+            return updated
+        }
     }
 
     private func discoveryTargetKeys(_ targets: [(LLMProviderKind, String)]) -> [String] {

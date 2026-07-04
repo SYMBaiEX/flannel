@@ -140,6 +140,222 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Project AI profile persists and wins over workspace defaults")
+    func projectAIProfilePersistsAndWinsOverWorkspaceDefaults() throws {
+        let container = try ModelContainer(
+            for: Item.self,
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let store = WorkspaceStore()
+        try store.loadOrCreate(in: context)
+        clearProjectAIProfiles(on: store)
+        let now = Date(timeIntervalSince1970: 1_820_000_000)
+
+        let globalProfile = SystemPromptProfile(
+            title: "Global",
+            detail: "Workspace default.",
+            prompt: "GLOBAL PROMPT",
+            isDefault: true
+        )
+        let projectProfile = SystemPromptProfile(
+            title: "Launch Lab",
+            detail: "Project-specific assistant.",
+            prompt: "PROJECT PROMPT: {{project}}"
+        )
+        let globalProvider = ProviderConfiguration(
+            kind: .ollama,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "Global Local",
+            endpoint: "http://localhost:11434",
+            modelIdentifier: "global-model",
+            isEnabled: true,
+            connectionStatus: .ready,
+            isLocalPreferred: true
+        )
+        let projectProvider = ProviderConfiguration(
+            kind: .lmStudio,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "Project Local",
+            endpoint: "http://localhost:1234",
+            modelIdentifier: "project-model",
+            isEnabled: true,
+            connectionStatus: .ready
+        )
+        let projectPreset = ModelPreset(
+            title: "Project preset",
+            providerKind: .lmStudio,
+            accessMode: .localServer,
+            modelIdentifier: "project-model",
+            privacyScope: .localOnly
+        )
+        let project = WorkspaceProject(
+            title: "Launch Lab",
+            aiProfile: WorkspaceAIProfile(
+                preferredProviderID: projectProvider.id,
+                defaultModelPresetID: projectPreset.id,
+                defaultSystemPromptProfileID: projectProfile.id,
+                cloudAccessPolicy: .localOnly,
+                localMemoryPolicy: .include,
+                indexingRuleNotes: "Index only launch lab local notes."
+            )
+        )
+        let thread = AssistantThread(title: "Project chat", messages: [], pinnedProjectID: project.id)
+
+        store.providerConfigurations = [globalProvider, projectProvider]
+        store.promptProfiles = [globalProfile, projectProfile]
+        store.modelPresets = [projectPreset]
+        store.preferences.preferredProviderID = globalProvider.id
+        store.preferences.defaultSystemPromptProfileID = globalProfile.id
+        store.preferences.providerRoutingPolicy = .selectedProvider
+        store.projects = [project]
+        store.selectedProjectID = project.id
+        store.assistantThreads = [thread]
+        store.selectedAssistantThreadID = thread.id
+        try store.persist(in: context)
+
+        let reloadedStore = WorkspaceStore()
+        try reloadedStore.loadOrCreate(in: context)
+        let reloadedProject = try #require(reloadedStore.projects.first(where: { $0.id == project.id }))
+        let reloadedThread = try #require(reloadedStore.currentAssistantThread)
+        let prompt = try #require(reloadedStore.effectiveSystemPrompt(for: reloadedThread, now: now))
+
+        #expect(reloadedProject.aiProfile.defaultSystemPromptProfileID == projectProfile.id)
+        #expect(reloadedProject.aiProfile.defaultModelPresetID == projectPreset.id)
+        #expect(reloadedProject.aiProfile.preferredProviderID == projectProvider.id)
+        #expect(reloadedProject.aiProfile.indexingRuleNotes == "Index only launch lab local notes.")
+        #expect(reloadedStore.selectedProjectID == project.id)
+        #expect(prompt.contains("PROJECT PROMPT: Launch Lab"))
+        #expect(prompt.contains("GLOBAL PROMPT") == false)
+        #expect(reloadedStore.activeProvider?.id == projectProvider.id)
+        #expect(reloadedStore.activeProvider?.modelIdentifier == "project-model")
+        #expect(reloadedStore.preferences.preferredProviderID == globalProvider.id)
+    }
+
+    @MainActor
+    @Test("Project AI profile binds new chats to project defaults")
+    func projectAIProfileBindsNewChatsToProjectDefaults() throws {
+        let (_, store) = try makeLoadedStore()
+        let projectProfile = SystemPromptProfile(
+            title: "Launch Lab",
+            detail: "Project prompt.",
+            prompt: "PROJECT PROMPT: {{project}}"
+        )
+        let otherProfile = SystemPromptProfile(
+            title: "Other Project",
+            detail: "Should not leak.",
+            prompt: "Other Project prompt"
+        )
+        let project = WorkspaceProject(
+            title: "Launch Lab",
+            aiProfile: WorkspaceAIProfile(defaultSystemPromptProfileID: projectProfile.id)
+        )
+        let otherProject = WorkspaceProject(
+            title: "Other Project",
+            aiProfile: WorkspaceAIProfile(defaultSystemPromptProfileID: otherProfile.id)
+        )
+        store.promptProfiles = [projectProfile, otherProfile]
+        store.projects = [project, otherProject]
+        store.selectedProjectID = project.id
+
+        let thread = store.createAssistantThread()
+        store.selectedProjectID = otherProject.id
+
+        #expect(thread.pinnedProjectID == project.id)
+        #expect(thread.messages.first?.role == .system)
+        #expect(thread.messages.first?.text.contains("PROJECT PROMPT: Launch Lab") == true)
+        #expect(store.effectiveSystemPrompt(for: thread)?.contains("PROJECT PROMPT: Launch Lab") == true)
+        #expect(store.effectiveSystemPrompt(for: thread)?.contains("Other Project") == false)
+    }
+
+    @MainActor
+    @Test("Project AI profile scopes knowledge tools and provider privacy")
+    func projectAIProfileScopesKnowledgeToolsAndProviderPrivacy() throws {
+        let (_, store) = try makeLoadedStore()
+        let firstSource = KnowledgeSource(
+            title: "Project Notes",
+            kind: .workspaceNotes,
+            location: "flannel://project-notes",
+            status: .ready
+        )
+        let secondSource = KnowledgeSource(
+            title: "Workspace Notes",
+            kind: .workspaceNotes,
+            location: "flannel://workspace-notes",
+            status: .ready
+        )
+        let readTool = ToolConfiguration(
+            kind: .workspaceSearch,
+            title: "Workspace Search",
+            detail: "Search local workspace.",
+            permissionPolicy: .alwaysAllow,
+            isEnabled: true
+        )
+        let networkTool = ToolConfiguration(
+            kind: .webSearch,
+            title: "Web Search",
+            detail: "Search the web.",
+            permissionPolicy: .askEveryTime,
+            isEnabled: true,
+            requiresNetwork: true
+        )
+        let localProvider = ProviderConfiguration(
+            kind: .ollama,
+            accessMode: .localServer,
+            privacyScope: .localOnly,
+            displayName: "Local",
+            endpoint: "http://localhost:11434",
+            modelIdentifier: "local-model",
+            isEnabled: true,
+            connectionStatus: .ready
+        )
+        let externalProvider = ProviderConfiguration(
+            kind: .customOpenAICompatible,
+            accessMode: .openAICompatible,
+            privacyScope: .externalAPI,
+            displayName: "External compatible",
+            endpoint: "https://example.com/v1",
+            modelIdentifier: "external-model",
+            isEnabled: true,
+            connectionStatus: .ready
+        )
+        let project = WorkspaceProject(
+            title: "Local Project",
+            aiProfile: WorkspaceAIProfile(
+                preferredProviderID: externalProvider.id,
+                knowledgeSourceIDs: [firstSource.id],
+                toolConfigurationIDs: [readTool.id],
+                cloudAccessPolicy: .localOnly,
+                localMemoryPolicy: .exclude
+            )
+        )
+        let thread = AssistantThread(title: "Scoped chat", messages: [], pinnedProjectID: project.id)
+
+        store.preferences.localOnlyMode = false
+        store.preferences.allowCloudProviders = true
+        store.preferences.providerRoutingPolicy = .selectedProvider
+        store.providerConfigurations = [externalProvider, localProvider]
+        store.knowledgeSources = [firstSource, secondSource]
+        store.toolConfigurations = [readTool, networkTool]
+        store.projects = [project]
+        store.selectedProjectID = project.id
+        store.assistantThreads = [thread]
+        store.selectedAssistantThreadID = thread.id
+
+        #expect(store.currentThreadKnowledgeSourceScope() == Set([firstSource.id]))
+        #expect(store.threadKnowledgeSources(for: thread).map(\.id) == [firstSource.id])
+        #expect(store.enabledToolConfigurations(for: thread).map(\.id) == [readTool.id])
+        #expect(store.chatProviderFallbackChain(for: thread).map(\.id) == [localProvider.id])
+        #expect(store.localMemoryPromptContext(for: "anything", thread: thread) == nil)
+
+        _ = store.setThreadKnowledgeSourceScope([secondSource.id], threadID: thread.id)
+        let updatedThread = try #require(store.currentAssistantThread)
+        #expect(store.threadKnowledgeSourceScope(for: updatedThread) == Set([secondSource.id]))
+    }
+
+    @MainActor
     @Test("Chat template upsert preserves valid scoped knowledge sources")
     func chatTemplateUpsertPreservesValidScopedKnowledgeSources() throws {
         let (_, store) = try makeLoadedStore()
@@ -338,6 +554,7 @@ struct WorkspaceStoreTests {
 
         let reloadedStore = WorkspaceStore()
         try reloadedStore.loadOrCreate(in: context)
+        clearProjectAIProfiles(on: reloadedStore)
         let reloadedFirstProfile = try #require(reloadedStore.promptProfiles.first { $0.id == firstProfile.id })
         let rendered = try #require(reloadedStore.defaultSystemPrompt(now: Date(timeIntervalSince1970: 1_700_000_000)))
 
@@ -979,6 +1196,8 @@ struct WorkspaceStoreTests {
     @Test("Prompt profile variables render from current workspace context")
     func promptProfileVariablesRenderFromCurrentWorkspaceContext() throws {
         let (_, store) = try makeLoadedStore()
+        clearProjectAIProfiles(on: store)
+
         let thread = AssistantThread(
             title: "Variable Thread",
             messages: [AssistantMessage(role: .user, text: "Use the template.")],
@@ -5187,6 +5406,7 @@ struct WorkspaceStoreTests {
         let context = ModelContext(container)
         let store = WorkspaceStore()
         try store.loadOrCreate(in: context)
+        clearProjectAIProfiles(on: store)
         store.modelComparisonRuns.removeAll()
         store.providerConfigurations.removeAll()
 
@@ -5269,6 +5489,7 @@ struct WorkspaceStoreTests {
         let context = ModelContext(container)
         let store = WorkspaceStore()
         try store.loadOrCreate(in: context)
+        clearProjectAIProfiles(on: store)
         store.modelComparisonRuns.removeAll()
         store.providerConfigurations.removeAll()
         store.preferences.localOnlyMode = false
@@ -5762,6 +5983,15 @@ struct WorkspaceStoreTests {
         let store = WorkspaceStore()
         try store.loadOrCreate(in: ModelContext(container))
         return (container, store)
+    }
+
+    @MainActor
+    private func clearProjectAIProfiles(on store: WorkspaceStore) {
+        store.projects = store.projects.map { project in
+            var updated = project
+            updated.aiProfile = WorkspaceAIProfile()
+            return updated
+        }
     }
 
     private func writeSearchableDOCX(text: String, to fileURL: URL) throws {

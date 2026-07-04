@@ -314,6 +314,21 @@ struct AssistantContextSnapshot: Sendable {
             if !project.tagNames.isEmpty {
                 lines.append("Project Tags: \(project.tagNames.joined(separator: ", "))")
             }
+            if project.aiProfile.hasSystemPromptOverride {
+                lines.append("Project AI Prompt: configured")
+            }
+            if project.aiProfile.preferredProviderID != nil || project.aiProfile.defaultModelPresetID != nil {
+                lines.append("Project AI Routing: project default configured")
+            }
+            if project.aiProfile.hasScopedKnowledge {
+                lines.append("Project Knowledge Scope: \(project.aiProfile.knowledgeSourceIDs.count) source(s)")
+            }
+            if project.aiProfile.hasScopedTools {
+                lines.append("Project Tool Scope: \(project.aiProfile.toolConfigurationIDs.count) tool(s)")
+            }
+            if project.aiProfile.cloudAccessPolicy != .inherit {
+                lines.append("Project Privacy: \(project.aiProfile.cloudAccessPolicy.title)")
+            }
         }
 
         if let draft {
@@ -481,7 +496,7 @@ final class WorkspaceStore {
         normalizeWorkspace()
 
         let root = workspace ?? WorkspaceSeed.starterWorkspace()
-        root.schemaVersion = 4
+        root.schemaVersion = 5
         root.selectedDestination = selectedDestination
         root.selectedProjectID = selectedProjectID
         root.selectedDraftID = selectedDraftID
@@ -532,7 +547,7 @@ final class WorkspaceStore {
     func resetLocalWorkspace(now: Date = .now) -> UUID {
         let root = workspace ?? Item()
         root.workspaceID = UUID()
-        root.schemaVersion = 4
+        root.schemaVersion = 5
         root.timestamp = now
         root.updatedAt = now
         root.selectedDestination = .home
@@ -1288,7 +1303,23 @@ final class WorkspaceStore {
         localMemories[index].updatedAt = .now
     }
 
-    func localMemoryPromptContext(for query: String, now: Date = .now) -> String? {
+    func enabledToolConfigurations(for thread: AssistantThread? = nil) -> [ToolConfiguration] {
+        let scopedToolIDs = projectAIProfile(for: thread).map { Set($0.toolConfigurationIDs) } ?? []
+        return toolConfigurations.filter { tool in
+            tool.isEnabled
+                && (scopedToolIDs.isEmpty || scopedToolIDs.contains(tool.id))
+        }
+    }
+
+    func localMemoryPromptContext(
+        for query: String,
+        thread: AssistantThread? = nil,
+        now: Date = .now
+    ) -> String? {
+        if projectAIProfile(for: thread)?.localMemoryPolicy == .exclude {
+            return nil
+        }
+
         let settings = preferences.localMemory ?? LocalMemorySettings()
         guard settings.isEnabled,
               settings.includeInChatContext else { return nil }
@@ -2001,12 +2032,17 @@ final class WorkspaceStore {
     }
 
     func threadKnowledgeSourceScope(for thread: AssistantThread?) -> Set<UUID>? {
-        guard let thread,
-              !thread.knowledgeSourceIDs.isEmpty else {
+        if let thread,
+           !thread.knowledgeSourceIDs.isEmpty {
+            return Set(thread.knowledgeSourceIDs)
+        }
+
+        guard let profile = projectAIProfile(for: thread),
+              profile.hasScopedKnowledge else {
             return nil
         }
 
-        return Set(thread.knowledgeSourceIDs)
+        return Set(profile.knowledgeSourceIDs)
     }
 
     @discardableResult
@@ -3294,6 +3330,19 @@ final class WorkspaceStore {
         projects.first(where: { $0.id == selectedProjectID })
     }
 
+    func project(for thread: AssistantThread?) -> WorkspaceProject? {
+        if let projectID = thread?.pinnedProjectID,
+           let project = projects.first(where: { $0.id == projectID }) {
+            return project
+        }
+
+        return currentProject
+    }
+
+    func projectAIProfile(for thread: AssistantThread? = nil) -> WorkspaceAIProfile? {
+        project(for: thread)?.aiProfile
+    }
+
     var currentDraft: DraftDocument? {
         drafts.first(where: { $0.id == selectedDraftID })
     }
@@ -3323,24 +3372,35 @@ final class WorkspaceStore {
     }
 
     var activeProvider: ProviderConfiguration? {
-        chatProviderFallbackChain().first
+        chatProviderFallbackChain(for: currentAssistantThread).first
     }
 
     var runnableChatProviders: [ProviderConfiguration] {
-        providerConfigurations.filter { provider in
+        runnableChatProviders(for: currentAssistantThread)
+    }
+
+    func runnableChatProviders(for thread: AssistantThread?) -> [ProviderConfiguration] {
+        let profile = projectAIProfile(for: thread)
+        return providerConfigurations.filter { provider in
             isProviderRunnableForChat(provider)
+                && projectProfileAllows(provider, profile: profile)
         }
     }
 
-    func chatProviderFallbackChain(excluding excludedProviderIDs: Set<UUID> = []) -> [ProviderConfiguration] {
-        let enabledProviders = runnableChatProviders.filter { provider in
+    func chatProviderFallbackChain(
+        for thread: AssistantThread? = nil,
+        excluding excludedProviderIDs: Set<UUID> = []
+    ) -> [ProviderConfiguration] {
+        let profile = projectAIProfile(for: thread)
+        let enabledProviders = runnableChatProviders(for: thread).filter { provider in
             !excludedProviderIDs.contains(provider.id)
         }
         guard !enabledProviders.isEmpty else { return [] }
 
         return orderedChatProviders(
             for: preferences.providerRoutingPolicy,
-            from: enabledProviders
+            from: enabledProviders,
+            profile: profile
         )
     }
 
@@ -3372,21 +3432,32 @@ final class WorkspaceStore {
         return candidates.first
     }
 
-    private func selectedProviderRoute(from enabledProviders: [ProviderConfiguration]) -> ProviderConfiguration? {
+    private func selectedProviderRoute(
+        from enabledProviders: [ProviderConfiguration],
+        profile: WorkspaceAIProfile?
+    ) -> ProviderConfiguration? {
+        if let preferredID = profile?.preferredProviderID,
+           let provider = enabledProviders.first(where: { $0.id == preferredID }) {
+            return provider
+        }
+
         if let preferredID = preferences.preferredProviderID,
            let provider = enabledProviders.first(where: { $0.id == preferredID }) {
             return provider
         }
 
-        if let defaultPresetRoute = defaultModelPresetRoute(from: enabledProviders) {
+        if let defaultPresetRoute = defaultModelPresetRoute(from: enabledProviders, profile: profile) {
             return defaultPresetRoute
         }
 
         return enabledProviders.first(where: \.isLocalPreferred) ?? enabledProviders.first
     }
 
-    private func defaultModelPresetRoute(from enabledProviders: [ProviderConfiguration]) -> ProviderConfiguration? {
-        guard let preset = defaultModelPreset else { return nil }
+    private func defaultModelPresetRoute(
+        from enabledProviders: [ProviderConfiguration],
+        profile: WorkspaceAIProfile?
+    ) -> ProviderConfiguration? {
+        guard let preset = modelPreset(for: profile) else { return nil }
         let candidates = enabledProviders.filter {
             $0.kind == preset.providerKind && $0.accessMode == preset.accessMode
         }
@@ -3404,11 +3475,12 @@ final class WorkspaceStore {
 
     private func orderedChatProviders(
         for policy: ProviderRoutingPolicy,
-        from enabledProviders: [ProviderConfiguration]
+        from enabledProviders: [ProviderConfiguration],
+        profile: WorkspaceAIProfile?
     ) -> [ProviderConfiguration] {
         switch policy {
         case .selectedProvider:
-            guard let selectedProvider = selectedProviderRoute(from: enabledProviders) else {
+            guard let selectedProvider = selectedProviderRoute(from: enabledProviders, profile: profile) else {
                 return enabledProviders.sorted(by: localFirstRouteSort)
             }
             let fallbackProviders = enabledProviders
@@ -3426,6 +3498,11 @@ final class WorkspaceStore {
         }
     }
 
+    private func projectProfileAllows(_ provider: ProviderConfiguration, profile: WorkspaceAIProfile?) -> Bool {
+        guard let profile else { return true }
+        return profile.cloudAccessPolicy.allows(provider)
+    }
+
     var preferredProviderConfiguration: ProviderConfiguration? {
         guard let preferredID = preferences.preferredProviderID else { return nil }
         return providerConfigurations.first(where: { $0.id == preferredID })
@@ -3438,6 +3515,15 @@ final class WorkspaceStore {
         }
 
         return modelPresets.first(where: \.isDefault)
+    }
+
+    private func modelPreset(for profile: WorkspaceAIProfile?) -> ModelPreset? {
+        if let presetID = profile?.defaultModelPresetID,
+           let preset = modelPresets.first(where: { $0.id == presetID }) {
+            return preset
+        }
+
+        return defaultModelPreset
     }
 
     func matchingProviders(for preset: ModelPreset) -> [ProviderConfiguration] {
@@ -3614,9 +3700,17 @@ final class WorkspaceStore {
     }
 
     var runnableComparisonProviders: [ProviderConfiguration] {
-        providerConfigurations
-            .filter { isProviderRunnableForChat($0) }
+        let profile = projectAIProfile(for: currentAssistantThread)
+        return providerConfigurations
+            .filter {
+                isProviderRunnableForChat($0)
+                    && projectProfileAllows($0, profile: profile)
+            }
             .sorted { lhs, rhs in
+                if let preferredProjectProviderID = profile?.preferredProviderID {
+                    if lhs.id == preferredProjectProviderID { return true }
+                    if rhs.id == preferredProjectProviderID { return false }
+                }
                 if lhs.id == preferences.preferredProviderID { return true }
                 if rhs.id == preferences.preferredProviderID { return false }
                 if lhs.isLocalPreferred != rhs.isLocalPreferred {
@@ -3635,6 +3729,10 @@ final class WorkspaceStore {
     }
 
     func defaultSystemPrompt(for thread: AssistantThread?, now: Date = .now) -> String? {
+        if let projectPrompt = projectSystemPrompt(for: thread, now: now) {
+            return projectPrompt
+        }
+
         let profile = promptProfiles.first { $0.id == preferences.defaultSystemPromptProfileID }
             ?? promptProfiles.first(where: \.isDefault)
         guard let profile else { return nil }
@@ -3652,7 +3750,7 @@ final class WorkspaceStore {
                 threadPrompt,
                 now: now,
                 thread: targetThread,
-                knowledgeSourceIDs: targetThread?.knowledgeSourceIDs
+                knowledgeSourceIDs: threadKnowledgeSourceIDsForPrompt(targetThread)
             )
             let trimmed = rendered.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? nil : trimmed
@@ -3670,7 +3768,12 @@ final class WorkspaceStore {
         for thread: AssistantThread?,
         now: Date = .now
     ) -> String {
-        renderPromptTemplate(profile.prompt, now: now, thread: thread, knowledgeSourceIDs: thread?.knowledgeSourceIDs)
+        renderPromptTemplate(
+            profile.prompt,
+            now: now,
+            thread: thread,
+            knowledgeSourceIDs: threadKnowledgeSourceIDsForPrompt(thread)
+        )
     }
 
     func renderPromptTemplate(_ template: String, now: Date = .now) -> String {
@@ -3705,6 +3808,51 @@ final class WorkspaceStore {
             rendered.replaceSubrange(replacementRange, with: value)
         }
         return rendered
+    }
+
+    private func projectSystemPrompt(for thread: AssistantThread?, now: Date) -> String? {
+        guard let profile = projectAIProfile(for: thread) else { return nil }
+        let knowledgeSourceIDs = threadKnowledgeSourceIDsForPrompt(thread)
+
+        let customPrompt = profile.customSystemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !customPrompt.isEmpty {
+            let rendered = renderPromptTemplate(
+                customPrompt,
+                now: now,
+                thread: thread,
+                knowledgeSourceIDs: knowledgeSourceIDs
+            )
+            let trimmed = rendered.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+
+        guard let profileID = profile.defaultSystemPromptProfileID,
+              let promptProfile = promptProfiles.first(where: { $0.id == profileID }) else {
+            return nil
+        }
+
+        let rendered = renderPromptTemplate(
+            promptProfile.prompt,
+            now: now,
+            thread: thread,
+            knowledgeSourceIDs: knowledgeSourceIDs
+        )
+        let trimmed = rendered.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func threadKnowledgeSourceIDsForPrompt(_ thread: AssistantThread?) -> [UUID]? {
+        if let thread,
+           !thread.knowledgeSourceIDs.isEmpty {
+            return thread.knowledgeSourceIDs
+        }
+
+        guard let profile = projectAIProfile(for: thread),
+              profile.hasScopedKnowledge else {
+            return thread?.knowledgeSourceIDs
+        }
+
+        return profile.knowledgeSourceIDs
     }
 
     func promptVariableValues(now: Date = .now) -> [String: String] {
@@ -5018,6 +5166,7 @@ final class WorkspaceStore {
         normalizePromptProfileState()
         normalizeChatTemplateState()
         normalizeModelPresetState()
+        normalizeProjectAIProfileState()
         tags = buildTagRegistry()
         pruneChatOrganizationState()
         normalizeLocalMemoryState()
@@ -6174,6 +6323,41 @@ final class WorkspaceStore {
             for index in modelPresets.indices {
                 modelPresets[index].isDefault = index == defaultIndex
             }
+        }
+    }
+
+    private func normalizeProjectAIProfileState() {
+        let providerIDs = Set(providerConfigurations.map(\.id))
+        let promptProfileIDs = Set(promptProfiles.map(\.id))
+        let modelPresetIDs = Set(modelPresets.map(\.id))
+        let knowledgeSourceIDs = Set(knowledgeSources.map(\.id))
+        let toolConfigurationIDs = Set(toolConfigurations.map(\.id))
+
+        for index in projects.indices {
+            projects[index].aiProfile.customSystemPrompt = projects[index].aiProfile.customSystemPrompt
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            projects[index].aiProfile.indexingRuleNotes = projects[index].aiProfile.indexingRuleNotes
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if let providerID = projects[index].aiProfile.preferredProviderID,
+               !providerIDs.contains(providerID) {
+                projects[index].aiProfile.preferredProviderID = nil
+            }
+
+            if let profileID = projects[index].aiProfile.defaultSystemPromptProfileID,
+               !promptProfileIDs.contains(profileID) {
+                projects[index].aiProfile.defaultSystemPromptProfileID = nil
+            }
+
+            if let presetID = projects[index].aiProfile.defaultModelPresetID,
+               !modelPresetIDs.contains(presetID) {
+                projects[index].aiProfile.defaultModelPresetID = nil
+            }
+
+            projects[index].aiProfile.knowledgeSourceIDs = stableUnique(projects[index].aiProfile.knowledgeSourceIDs)
+                .filter { knowledgeSourceIDs.contains($0) }
+            projects[index].aiProfile.toolConfigurationIDs = stableUnique(projects[index].aiProfile.toolConfigurationIDs)
+                .filter { toolConfigurationIDs.contains($0) }
         }
     }
 
