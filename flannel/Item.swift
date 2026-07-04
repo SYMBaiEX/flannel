@@ -1899,6 +1899,7 @@ final class Item {
     var knowledgeSources: [KnowledgeSource]?
     var knowledgeIndexManifests: [KnowledgeIndexManifest]?
     var toolConfigurations: [ToolConfiguration]?
+    var toolConfigurationPresets: [ToolConfigurationPreset]?
     var toolExecutionResults: [LocalToolExecutionResult]?
     var modelComparisonRuns: [ModelComparisonRun]?
     var localDiscoveryResults: [LocalProviderDiscoveryResult]?
@@ -1936,6 +1937,7 @@ final class Item {
         knowledgeSources: [KnowledgeSource] = [],
         knowledgeIndexManifests: [KnowledgeIndexManifest] = [],
         toolConfigurations: [ToolConfiguration] = [],
+        toolConfigurationPresets: [ToolConfigurationPreset] = [],
         toolExecutionResults: [LocalToolExecutionResult] = [],
         modelComparisonRuns: [ModelComparisonRun] = [],
         localDiscoveryResults: [LocalProviderDiscoveryResult] = [],
@@ -1972,6 +1974,7 @@ final class Item {
         self.knowledgeSources = knowledgeSources
         self.knowledgeIndexManifests = knowledgeIndexManifests
         self.toolConfigurations = toolConfigurations
+        self.toolConfigurationPresets = toolConfigurationPresets
         self.toolExecutionResults = toolExecutionResults
         self.modelComparisonRuns = modelComparisonRuns
         self.localDiscoveryResults = localDiscoveryResults

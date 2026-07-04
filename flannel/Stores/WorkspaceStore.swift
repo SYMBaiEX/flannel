@@ -438,6 +438,7 @@ final class WorkspaceStore {
     var knowledgeSources: [KnowledgeSource] = []
     var knowledgeIndexManifests: [KnowledgeIndexManifest] = []
     var toolConfigurations: [ToolConfiguration] = []
+    var toolConfigurationPresets: [ToolConfigurationPreset] = []
     var toolExecutionResults: [LocalToolExecutionResult] = []
     var modelComparisonRuns: [ModelComparisonRun] = []
     var localDiscoveryResults: [LocalProviderDiscoveryResult] = []
@@ -523,6 +524,7 @@ final class WorkspaceStore {
         root.knowledgeSources = knowledgeSources
         root.knowledgeIndexManifests = knowledgeIndexManifests
         root.toolConfigurations = toolConfigurations
+        root.toolConfigurationPresets = toolConfigurationPresets
         root.toolExecutionResults = toolExecutionResults
         root.modelComparisonRuns = modelComparisonRuns
         root.localDiscoveryResults = localDiscoveryResults
@@ -577,6 +579,7 @@ final class WorkspaceStore {
         root.knowledgeSources = []
         root.knowledgeIndexManifests = []
         root.toolConfigurations = []
+        root.toolConfigurationPresets = []
         root.toolExecutionResults = []
         root.modelComparisonRuns = []
         root.localDiscoveryResults = []
@@ -1412,6 +1415,65 @@ final class WorkspaceStore {
             tool.isEnabled
                 && (scopedToolIDs.isEmpty || scopedToolIDs.contains(tool.id))
         }
+    }
+
+    @discardableResult
+    func applyToolConfigurationPreset(_ presetID: UUID) -> Bool {
+        ensureToolMatrix()
+        normalizeToolConfigurationPresetState()
+
+        guard let preset = toolConfigurationPresets.first(where: { $0.id == presetID }) else {
+            return false
+        }
+
+        for entry in preset.entries {
+            guard let index = toolConfigurations.firstIndex(where: { $0.kind == entry.kind }) else {
+                continue
+            }
+            toolConfigurations[index].isEnabled = entry.isEnabled
+            toolConfigurations[index].permissionPolicy = entry.permissionPolicy
+        }
+
+        normalizeProjectAIProfileState()
+        return true
+    }
+
+    @discardableResult
+    func saveCurrentToolConfigurationPreset(
+        title rawTitle: String,
+        detail rawDetail: String = ""
+    ) -> ToolConfigurationPreset? {
+        ensureToolMatrix()
+
+        let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return nil }
+
+        let detail = rawDetail.trimmingCharacters(in: .whitespacesAndNewlines)
+        let preset = ToolConfigurationPreset(
+            title: title,
+            detail: detail.isEmpty ? "Saved from the current workspace tool permissions." : detail,
+            entries: toolConfigurations.map { tool in
+                ToolConfigurationPresetEntry(
+                    kind: tool.kind,
+                    permissionPolicy: tool.permissionPolicy,
+                    isEnabled: tool.isEnabled
+                )
+            }
+        )
+        toolConfigurationPresets.upsert(preset, matching: \.id)
+        normalizeToolConfigurationPresetState()
+        return preset
+    }
+
+    @discardableResult
+    func deleteToolConfigurationPreset(_ presetID: UUID) -> Bool {
+        guard let index = toolConfigurationPresets.firstIndex(where: { $0.id == presetID }),
+              toolConfigurationPresets[index].isBuiltIn == false else {
+            return false
+        }
+
+        toolConfigurationPresets.remove(at: index)
+        return true
     }
 
     func localMemoryPromptContext(
@@ -5595,6 +5657,7 @@ final class WorkspaceStore {
         knowledgeSources = item.knowledgeSources ?? []
         knowledgeIndexManifests = item.knowledgeIndexManifests ?? []
         toolConfigurations = item.toolConfigurations ?? []
+        toolConfigurationPresets = item.toolConfigurationPresets ?? []
         toolExecutionResults = item.toolExecutionResults ?? []
         modelComparisonRuns = item.modelComparisonRuns ?? []
         localDiscoveryResults = item.localDiscoveryResults ?? []
@@ -5617,6 +5680,7 @@ final class WorkspaceStore {
         normalizePromptChainThreadState()
         normalizeModelPresetState()
         normalizeProjectAIProfileState()
+        normalizeToolConfigurationPresetState()
         tags = buildTagRegistry()
         pruneChatOrganizationState()
         normalizeLocalMemoryState()
@@ -5838,6 +5902,7 @@ final class WorkspaceStore {
         }
 
         ensureToolMatrix()
+        ensureToolConfigurationPresets()
     }
 
     private func ensureToolMatrix() {
@@ -5956,6 +6021,92 @@ final class WorkspaceStore {
                 endpoint: XToolService.defaultEndpoint
             )
         ]
+    }
+
+    private func ensureToolConfigurationPresets() {
+        let defaults = Self.defaultToolConfigurationPresets()
+
+        for preset in defaults {
+            if let index = toolConfigurationPresets.firstIndex(where: { $0.id == preset.id }) {
+                let createdAt = toolConfigurationPresets[index].createdAt
+                toolConfigurationPresets[index] = preset
+                toolConfigurationPresets[index].createdAt = createdAt
+            } else {
+                toolConfigurationPresets.append(preset)
+            }
+        }
+    }
+
+    private static func defaultToolConfigurationPresets() -> [ToolConfigurationPreset] {
+        [
+            ToolConfigurationPreset(
+                id: UUID(uuidString: "147FF98D-4CB2-46EF-9F53-546F28C0C844")!,
+                title: "Private Knowledge Only",
+                detail: "Use local workspace search and RAG only. Network, browser, file-write, terminal, and connector tools stay disabled.",
+                entries: toolPresetEntries(
+                    enabled: [
+                        .workspaceSearch: .alwaysAllow,
+                        .ragRetrieval: .alwaysAllow
+                    ],
+                    denied: [.localFileWrite, .terminal, .codeExecution]
+                ),
+                isBuiltIn: true
+            ),
+            ToolConfigurationPreset(
+                id: UUID(uuidString: "66C8D437-06D4-4B96-A7E6-C3F36B05D2D8")!,
+                title: "Coding With Approval",
+                detail: "Enable local read, write, terminal, and code tools behind approval while keeping external network tools off.",
+                entries: toolPresetEntries(
+                    enabled: [
+                        .workspaceSearch: .alwaysAllow,
+                        .ragRetrieval: .alwaysAllow,
+                        .localFileRead: .askEveryTime,
+                        .localFileWrite: .askEveryTime,
+                        .terminal: .askEveryTime,
+                        .codeExecution: .askEveryTime
+                    ],
+                    denied: [.webSearch, .webPageReader, .browserAutomation, .github, .notion, .youtube, .x]
+                ),
+                isBuiltIn: true
+            ),
+            ToolConfigurationPreset(
+                id: UUID(uuidString: "8BBFB2A1-46B7-4E97-A06A-53DD0C47D573")!,
+                title: "Web Research With Approval",
+                detail: "Enable search, page reading, browser opening, and read-only connectors behind approval for research workflows.",
+                entries: toolPresetEntries(
+                    enabled: [
+                        .workspaceSearch: .alwaysAllow,
+                        .ragRetrieval: .alwaysAllow,
+                        .webSearch: .askEveryTime,
+                        .webPageReader: .askEveryTime,
+                        .browserAutomation: .askEveryTime,
+                        .github: .askEveryTime,
+                        .notion: .askEveryTime,
+                        .youtube: .askEveryTime,
+                        .x: .askEveryTime
+                    ],
+                    denied: [.localFileWrite, .terminal, .codeExecution]
+                ),
+                isBuiltIn: true
+            )
+        ]
+    }
+
+    private static func toolPresetEntries(
+        enabled: [AIToolKind: ToolPermissionPolicy],
+        denied: Set<AIToolKind> = []
+    ) -> [ToolConfigurationPresetEntry] {
+        AIToolKind.allCases.map { kind in
+            if let policy = enabled[kind] {
+                return ToolConfigurationPresetEntry(kind: kind, permissionPolicy: policy, isEnabled: true)
+            }
+
+            return ToolConfigurationPresetEntry(
+                kind: kind,
+                permissionPolicy: denied.contains(kind) ? .deny : .askEveryTime,
+                isEnabled: false
+            )
+        }
     }
 
     private func ensureProviderMatrix() {
@@ -6947,6 +7098,44 @@ final class WorkspaceStore {
             projects[index].aiProfile.toolConfigurationIDs = stableUnique(projects[index].aiProfile.toolConfigurationIDs)
                 .filter { toolConfigurationIDs.contains($0) }
         }
+    }
+
+    private func normalizeToolConfigurationPresetState() {
+        var seenPresetIDs = Set<UUID>()
+        let validToolKinds = Set(AIToolKind.allCases)
+
+        toolConfigurationPresets = toolConfigurationPresets.filter { preset in
+            seenPresetIDs.insert(preset.id).inserted
+        }
+
+        for index in toolConfigurationPresets.indices {
+            toolConfigurationPresets[index].title = toolConfigurationPresets[index].title
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if toolConfigurationPresets[index].title.isEmpty {
+                toolConfigurationPresets[index].title = "Tool Set"
+            }
+
+            toolConfigurationPresets[index].detail = toolConfigurationPresets[index].detail
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            var seenKinds = Set<AIToolKind>()
+            toolConfigurationPresets[index].entries = toolConfigurationPresets[index].entries.filter { entry in
+                validToolKinds.contains(entry.kind) && seenKinds.insert(entry.kind).inserted
+            }
+
+            let configuredKinds = Set(toolConfigurationPresets[index].entries.map(\.kind))
+            for missingKind in AIToolKind.allCases where !configuredKinds.contains(missingKind) {
+                toolConfigurationPresets[index].entries.append(
+                    ToolConfigurationPresetEntry(
+                        kind: missingKind,
+                        permissionPolicy: .askEveryTime,
+                        isEnabled: false
+                    )
+                )
+            }
+        }
+
+        ensureToolConfigurationPresets()
     }
 
     private func normalizedPrimaryDestination(_ destination: WorkspaceDestination) -> WorkspaceDestination {

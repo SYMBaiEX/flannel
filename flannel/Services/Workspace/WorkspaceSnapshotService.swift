@@ -42,6 +42,7 @@ struct WorkspaceSnapshot: Codable, Hashable, Sendable {
     var knowledgeSources: [KnowledgeSource]
     var knowledgeIndexManifests: [KnowledgeIndexManifest]
     var toolConfigurations: [ToolConfiguration]
+    var toolConfigurationPresets: [ToolConfigurationPreset]?
     var toolExecutionResults: [LocalToolExecutionResult]
     var modelComparisonRuns: [ModelComparisonRun]
     var localDiscoveryResults: [LocalProviderDiscoveryResult]?
@@ -79,6 +80,7 @@ struct WorkspaceSnapshot: Codable, Hashable, Sendable {
         knowledgeSources: [KnowledgeSource],
         knowledgeIndexManifests: [KnowledgeIndexManifest],
         toolConfigurations: [ToolConfiguration],
+        toolConfigurationPresets: [ToolConfigurationPreset] = [],
         toolExecutionResults: [LocalToolExecutionResult],
         modelComparisonRuns: [ModelComparisonRun],
         localDiscoveryResults: [LocalProviderDiscoveryResult] = [],
@@ -115,6 +117,7 @@ struct WorkspaceSnapshot: Codable, Hashable, Sendable {
         self.knowledgeSources = knowledgeSources
         self.knowledgeIndexManifests = knowledgeIndexManifests
         self.toolConfigurations = toolConfigurations
+        self.toolConfigurationPresets = toolConfigurationPresets
         self.toolExecutionResults = toolExecutionResults
         self.modelComparisonRuns = modelComparisonRuns
         self.localDiscoveryResults = localDiscoveryResults
@@ -175,6 +178,7 @@ struct WorkspaceSnapshotService: Sendable {
             knowledgeSources: store.knowledgeSources,
             knowledgeIndexManifests: store.knowledgeIndexManifests,
             toolConfigurations: store.toolConfigurations,
+            toolConfigurationPresets: store.toolConfigurationPresets,
             toolExecutionResults: store.toolExecutionResults,
             modelComparisonRuns: store.modelComparisonRuns,
             localDiscoveryResults: store.localDiscoveryResults,
@@ -271,6 +275,7 @@ struct WorkspaceSnapshotService: Sendable {
             knowledgeSources: snapshot.knowledgeSources,
             knowledgeIndexManifests: snapshot.knowledgeIndexManifests,
             toolConfigurations: sanitizedToolConfigurations(snapshot.toolConfigurations),
+            toolConfigurationPresets: sanitizedToolConfigurationPresets(snapshot.toolConfigurationPresets ?? []),
             toolExecutionResults: snapshot.toolExecutionResults,
             modelComparisonRuns: snapshot.modelComparisonRuns,
             localDiscoveryResults: snapshot.localDiscoveryResults ?? [],
@@ -299,6 +304,21 @@ struct WorkspaceSnapshotService: Sendable {
             sanitized.isEnabled = false
             sanitized.endpoint = nil
             sanitized.secretReference = nil
+            return sanitized
+        }
+    }
+
+    private func sanitizedToolConfigurationPresets(_ presets: [ToolConfigurationPreset]) -> [ToolConfigurationPreset] {
+        presets.map { preset in
+            var sanitized = preset
+            sanitized.isBuiltIn = false
+            sanitized.entries = preset.entries.map { entry in
+                ToolConfigurationPresetEntry(
+                    kind: entry.kind,
+                    permissionPolicy: .askEveryTime,
+                    isEnabled: false
+                )
+            }
             return sanitized
         }
     }

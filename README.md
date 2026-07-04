@@ -18,6 +18,7 @@ Flannel is released under the MIT License. See [LICENSE](LICENSE).
 - Local knowledge indexing and retrieval for chat grounding.
 - In-app knowledge-source onboarding for folders, files, repos, and web-page references.
 - Tool/policy modeling with visible execution results and approval/blocking state.
+- Reusable tool sets for quickly switching workspace permissions between private knowledge, coding, and web-research postures.
 - Message-level chat actions for pin/unpin, copy, branch-aware retry/regenerate, edit-and-rewrite, and fork, plus store-backed archive/search organization.
 - Current Vercel AI SDK support remains an optional local bridge flow (`aiSDKBridge`) and is intentionally not a native Swift SDK dependency.
 
@@ -135,6 +136,8 @@ Flannel is released under the MIT License. See [LICENSE](LICENSE).
 ## Tool execution, permissions, and results surface
 
 - Tool entries are configured in `ToolConfiguration` and shown in the Tools surface.
+- Reusable `ToolConfigurationPreset` entries can apply saved enablement and permission policies across the tool matrix without touching connector endpoints or Keychain references.
+- Built-in tool sets include Private Knowledge Only, Coding With Approval, and Web Research With Approval; custom sets can be saved from the current workspace tool matrix.
 - Policy modes include:
   - `alwaysAllow`
   - `askEveryTime`
@@ -181,9 +184,9 @@ Flannel is released under the MIT License. See [LICENSE](LICENSE).
 
 - Per-chat exports remain available for single-thread handoff in Markdown, JSON, HTML, and PDF.
 - Workspace-wide backup export/import is implemented by `WorkspaceSnapshotService` as a schema-versioned JSON payload (`schemaVersion: 1`) with stable `.flannelworkspace.json` filenames.
-- Snapshot exports include the local workspace state needed for backups: provider configurations, assistant threads, chat folders, prompt profiles, chat templates, model presets, knowledge sources and manifests, tool configurations and execution results, model comparison runs, pinned messages, archived thread IDs, local memories, and preferences.
+- Snapshot exports include the local workspace state needed for backups: provider configurations, assistant threads, chat folders, prompt profiles, chat templates, model presets, knowledge sources and manifests, tool configurations, tool sets, tool execution results, model comparison runs, pinned messages, archived thread IDs, local memories, and preferences.
 - Imported snapshots reject unsupported schema versions and create a fresh local workspace identity while restoring exported content.
-- Secret values are never exported. Imported snapshots also clear provider/tool Keychain references, disable imported automations, reset tool enablement to off, force local-only privacy, and require credentials plus network/tool permissions to be re-enabled on this Mac before keyed routes or tools can run.
+- Secret values are never exported. Imported snapshots also clear provider/tool Keychain references, disable imported automations, reset tool enablement to off, neutralize imported tool sets, force local-only privacy, and require credentials plus network/tool permissions to be re-enabled on this Mac before keyed routes or tools can run.
 
 ## Local data deletion
 

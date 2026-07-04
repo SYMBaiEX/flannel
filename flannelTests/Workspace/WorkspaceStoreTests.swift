@@ -602,6 +602,50 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Tool configuration presets apply and save workspace tool posture")
+    func toolConfigurationPresetsApplyAndSaveWorkspaceToolPosture() throws {
+        let (_, store) = try makeLoadedStore()
+        let privatePreset = try #require(
+            store.toolConfigurationPresets.first { $0.title == "Private Knowledge Only" }
+        )
+
+        #expect(store.applyToolConfigurationPreset(privatePreset.id))
+        let workspaceSearch = try #require(store.toolConfigurations.first { $0.kind == .workspaceSearch })
+        let ragRetrieval = try #require(store.toolConfigurations.first { $0.kind == .ragRetrieval })
+        let webSearch = try #require(store.toolConfigurations.first { $0.kind == .webSearch })
+        let terminal = try #require(store.toolConfigurations.first { $0.kind == .terminal })
+
+        #expect(workspaceSearch.isEnabled)
+        #expect(workspaceSearch.permissionPolicy == .alwaysAllow)
+        #expect(ragRetrieval.isEnabled)
+        #expect(webSearch.isEnabled == false)
+        #expect(terminal.isEnabled == false)
+        #expect(terminal.permissionPolicy == .deny)
+
+        let terminalIndex = try #require(store.toolConfigurations.firstIndex { $0.kind == .terminal })
+        store.toolConfigurations[terminalIndex].isEnabled = true
+        store.toolConfigurations[terminalIndex].permissionPolicy = .askEveryTime
+
+        let customPreset = try #require(
+            store.saveCurrentToolConfigurationPreset(
+                title: "Terminal Review",
+                detail: "Saved terminal approval posture"
+            )
+        )
+        #expect(customPreset.isBuiltIn == false)
+
+        store.toolConfigurations[terminalIndex].isEnabled = false
+        store.toolConfigurations[terminalIndex].permissionPolicy = .deny
+        #expect(store.applyToolConfigurationPreset(customPreset.id))
+
+        let restoredTerminal = try #require(store.toolConfigurations.first { $0.kind == .terminal })
+        #expect(restoredTerminal.isEnabled)
+        #expect(restoredTerminal.permissionPolicy == .askEveryTime)
+        #expect(store.deleteToolConfigurationPreset(customPreset.id))
+        #expect(store.deleteToolConfigurationPreset(privatePreset.id) == false)
+    }
+
+    @MainActor
     @Test("Chat template upsert preserves valid scoped knowledge sources")
     func chatTemplateUpsertPreservesValidScopedKnowledgeSources() throws {
         let (_, store) = try makeLoadedStore()

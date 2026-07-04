@@ -110,6 +110,25 @@ struct WorkspaceSnapshotServiceTests {
                 secretReference: "flannel.tests.other:terminal-token"
             )
         ]
+        payload.workspace.toolConfigurationPresets = [
+            ToolConfigurationPreset(
+                title: "Imported Remote Admin",
+                detail: "Should require review after import",
+                entries: [
+                    ToolConfigurationPresetEntry(
+                        kind: .terminal,
+                        permissionPolicy: .alwaysAllow,
+                        isEnabled: true
+                    ),
+                    ToolConfigurationPresetEntry(
+                        kind: .webSearch,
+                        permissionPolicy: .alwaysAllow,
+                        isEnabled: true
+                    )
+                ],
+                isBuiltIn: true
+            )
+        ]
         payload.workspace.automations = [
             WorkspaceAutomation(
                 title: "Imported shell",
@@ -133,6 +152,7 @@ struct WorkspaceSnapshotServiceTests {
         let result = try WorkspaceSnapshotService().importWorkspace(from: data, importedAt: importedAt)
         let importedProvider = try #require(result.item.providerConfigurations.first)
         let importedTool = try #require(result.item.toolConfigurations?.first)
+        let importedPreset = try #require(result.item.toolConfigurationPresets?.first)
         let importedAutomation = try #require(result.item.automations?.first)
 
         #expect(result.item.preferences.preferredProviderID == nil)
@@ -149,6 +169,8 @@ struct WorkspaceSnapshotServiceTests {
         #expect(importedTool.isEnabled == false)
         #expect(importedTool.endpoint == nil)
         #expect(importedTool.secretReference == nil)
+        #expect(importedPreset.isBuiltIn == false)
+        #expect(importedPreset.entries.allSatisfy { $0.permissionPolicy == .askEveryTime && $0.isEnabled == false })
         #expect(importedAutomation.isEnabled == false)
         #expect(importedAutomation.requiresConfirmation == true)
         #expect(importedAutomation.nextRunAt == nil)

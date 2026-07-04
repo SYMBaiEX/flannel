@@ -1921,6 +1921,84 @@ struct ToolConfiguration: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+struct ToolConfigurationPresetEntry: Identifiable, Codable, Hashable, Sendable {
+    var kind: AIToolKind
+    var permissionPolicy: ToolPermissionPolicy
+    var isEnabled: Bool
+
+    var id: AIToolKind { kind }
+
+    init(
+        kind: AIToolKind,
+        permissionPolicy: ToolPermissionPolicy,
+        isEnabled: Bool
+    ) {
+        self.kind = kind
+        self.permissionPolicy = permissionPolicy
+        self.isEnabled = isEnabled
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try container.decode(AIToolKind.self, forKey: .kind)
+        permissionPolicy = try container.decode(
+            ToolPermissionPolicy.self,
+            forKey: .permissionPolicy,
+            default: .askEveryTime
+        )
+        isEnabled = try container.decode(Bool.self, forKey: .isEnabled, default: false)
+    }
+}
+
+struct ToolConfigurationPreset: Identifiable, Codable, Hashable, Sendable {
+    var id: UUID
+    var title: String
+    var detail: String
+    var entries: [ToolConfigurationPresetEntry]
+    var isBuiltIn: Bool
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        detail: String,
+        entries: [ToolConfigurationPresetEntry],
+        isBuiltIn: Bool = false,
+        createdAt: Date = .now,
+        updatedAt: Date = .now
+    ) {
+        self.id = id
+        self.title = title
+        self.detail = detail
+        self.entries = entries
+        self.isBuiltIn = isBuiltIn
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id, default: UUID())
+        title = try container.decode(String.self, forKey: .title, default: "Tool Set")
+        detail = try container.decode(String.self, forKey: .detail, default: "")
+        entries = try container.decode([ToolConfigurationPresetEntry].self, forKey: .entries, default: [])
+        isBuiltIn = try container.decode(Bool.self, forKey: .isBuiltIn, default: false)
+        createdAt = try container.decode(Date.self, forKey: .createdAt, default: .now)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt, default: createdAt)
+    }
+
+    var enabledToolKinds: [AIToolKind] {
+        entries
+            .filter(\.isEnabled)
+            .map(\.kind)
+    }
+
+    var enabledToolCount: Int {
+        entries.filter(\.isEnabled).count
+    }
+}
+
 enum LocalToolExecutionStatus: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
     case completed
     case requiresApproval

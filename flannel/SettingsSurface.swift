@@ -73,6 +73,8 @@ struct SettingsSurface: View {
     @State private var newKnowledgeSourceLocation = ""
     @State private var newKnowledgeSourceWatched = true
     @State private var newKnowledgeSourceMessage: String?
+    @State private var newToolPresetTitle = ""
+    @State private var newToolPresetDetail = ""
     @State private var refreshingKnowledgeSourceIDs: Set<UUID> = []
     @State private var knowledgeRefreshMessage: String?
     @State private var resetWorkspaceConfirmation = ""
@@ -1261,6 +1263,50 @@ struct SettingsSurface: View {
 
     private var toolsPane: some View {
         settingsForm {
+            Section("Tool Sets") {
+                if store.toolConfigurationPresets.isEmpty {
+                    EmptySettingsRow(
+                        title: "No saved tool sets",
+                        detail: "Save the current tool matrix as a reusable permission preset."
+                    )
+                } else {
+                    ForEach(store.toolConfigurationPresets) { preset in
+                        ToolConfigurationPresetSettingsRow(
+                            preset: preset,
+                            apply: {
+                                _ = store.applyToolConfigurationPreset(preset.id)
+                                persist()
+                            },
+                            delete: {
+                                _ = store.deleteToolConfigurationPreset(preset.id)
+                                persist()
+                            }
+                        )
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("New tool set name", text: $newToolPresetTitle)
+                    TextField("Description", text: $newToolPresetDetail, axis: .vertical)
+                        .lineLimit(1...3)
+
+                    Button {
+                        if store.saveCurrentToolConfigurationPreset(
+                            title: newToolPresetTitle,
+                            detail: newToolPresetDetail
+                        ) != nil {
+                            newToolPresetTitle = ""
+                            newToolPresetDetail = ""
+                            persist()
+                        }
+                    } label: {
+                        Label("Save Current Tool Set", systemImage: "plus.rectangle.on.rectangle")
+                    }
+                    .disabled(newToolPresetTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .padding(.top, 4)
+            }
+
             Section("Tool Permissions") {
                 if store.toolConfigurations.isEmpty {
                     EmptySettingsRow(
@@ -6320,6 +6366,75 @@ private extension KnowledgeEmbeddingState {
         case .failed:
             "exclamationmark.triangle"
         }
+    }
+}
+
+private struct ToolConfigurationPresetSettingsRow: View {
+    var preset: ToolConfigurationPreset
+    var apply: () -> Void
+    var delete: () -> Void
+
+    private var enabledToolSummary: String {
+        let names = preset.entries
+            .filter(\.isEnabled)
+            .map { $0.kind.settingsTitle }
+
+        guard !names.isEmpty else { return "No tools enabled" }
+        if names.count <= 3 {
+            return names.joined(separator: ", ")
+        }
+
+        return "\(names.prefix(3).joined(separator: ", ")) +\(names.count - 3) more"
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: preset.isBuiltIn ? "shield.lefthalf.filled" : "slider.horizontal.3")
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
+                .frame(width: 22)
+                .padding(.top, 3)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(preset.title)
+                        .font(.headline)
+                    if preset.isBuiltIn {
+                        Text("Built-in")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(.tertiary, in: Capsule())
+                    }
+                }
+
+                Text(preset.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Label("\(preset.enabledToolCount) enabled - \(enabledToolSummary)", systemImage: "wrench.and.screwdriver")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer(minLength: 8)
+
+            Button("Apply", action: apply)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+
+            Button(role: .destructive, action: delete) {
+                Label("Delete Tool Set", systemImage: "trash")
+            }
+            .labelStyle(.iconOnly)
+            .controlSize(.small)
+            .disabled(preset.isBuiltIn)
+            .help(preset.isBuiltIn ? "Built-in tool sets cannot be deleted." : "Delete tool set")
+            .accessibilityLabel("Delete \(preset.title)")
+        }
+        .padding(.vertical, 4)
     }
 }
 
