@@ -37,6 +37,7 @@ struct WorkspaceSnapshot: Codable, Hashable, Sendable {
     var chatFolders: [ChatFolder]
     var promptProfiles: [SystemPromptProfile]
     var chatTemplates: [ChatTemplate]
+    var promptChains: [PromptChain]?
     var modelPresets: [ModelPreset]
     var knowledgeSources: [KnowledgeSource]
     var knowledgeIndexManifests: [KnowledgeIndexManifest]
@@ -73,6 +74,7 @@ struct WorkspaceSnapshot: Codable, Hashable, Sendable {
         chatFolders: [ChatFolder],
         promptProfiles: [SystemPromptProfile],
         chatTemplates: [ChatTemplate],
+        promptChains: [PromptChain] = [],
         modelPresets: [ModelPreset],
         knowledgeSources: [KnowledgeSource],
         knowledgeIndexManifests: [KnowledgeIndexManifest],
@@ -108,6 +110,7 @@ struct WorkspaceSnapshot: Codable, Hashable, Sendable {
         self.chatFolders = chatFolders
         self.promptProfiles = promptProfiles
         self.chatTemplates = chatTemplates
+        self.promptChains = promptChains
         self.modelPresets = modelPresets
         self.knowledgeSources = knowledgeSources
         self.knowledgeIndexManifests = knowledgeIndexManifests
@@ -145,7 +148,7 @@ struct WorkspaceSnapshotService: Sendable {
     func export(store: WorkspaceStore, exportedAt: Date = .now) throws -> Data {
         let snapshot = WorkspaceSnapshot(
             workspaceID: store.workspace?.workspaceID ?? UUID(),
-            sourceSchemaVersion: store.workspace?.schemaVersion ?? 4,
+            sourceSchemaVersion: store.workspace?.schemaVersion ?? 6,
             createdAt: store.workspace?.timestamp ?? exportedAt,
             updatedAt: store.workspace?.updatedAt ?? exportedAt,
             selectedDestination: store.selectedDestination,
@@ -167,6 +170,7 @@ struct WorkspaceSnapshotService: Sendable {
             chatFolders: store.chatFolders,
             promptProfiles: store.promptProfiles,
             chatTemplates: store.chatTemplates,
+            promptChains: store.promptChains,
             modelPresets: store.modelPresets,
             knowledgeSources: store.knowledgeSources,
             knowledgeIndexManifests: store.knowledgeIndexManifests,
@@ -240,7 +244,7 @@ struct WorkspaceSnapshotService: Sendable {
 
         return Item(
             workspaceID: UUID(),
-            schemaVersion: 5,
+            schemaVersion: 6,
             timestamp: importedAt,
             updatedAt: importedAt,
             selectedDestination: snapshot.selectedDestination,
@@ -262,6 +266,7 @@ struct WorkspaceSnapshotService: Sendable {
             chatFolders: snapshot.chatFolders,
             promptProfiles: snapshot.promptProfiles,
             chatTemplates: snapshot.chatTemplates,
+            promptChains: snapshot.promptChains ?? [],
             modelPresets: snapshot.modelPresets,
             knowledgeSources: snapshot.knowledgeSources,
             knowledgeIndexManifests: snapshot.knowledgeIndexManifests,

@@ -59,6 +59,15 @@ struct SettingsSurface: View {
     @State private var newTemplateMode: AssistantMode = .workspaceCopilot
     @State private var newTemplateTags = ""
     @State private var newTemplateIsPinned = false
+    @State private var newPromptChainTitle = ""
+    @State private var newPromptChainDetail = ""
+    @State private var newPromptChainSystemPrompt = ""
+    @State private var newPromptChainStepTitle = "Step 1"
+    @State private var newPromptChainStepInstruction = ""
+    @State private var newPromptChainStepExpectedOutput = ""
+    @State private var newPromptChainMode: AssistantMode = .workspaceCopilot
+    @State private var newPromptChainTags = ""
+    @State private var newPromptChainIsPinned = false
     @State private var newKnowledgeSourceKind: KnowledgeSourceKind = .folder
     @State private var newKnowledgeSourceTitle = ""
     @State private var newKnowledgeSourceLocation = ""
@@ -1460,6 +1469,58 @@ struct SettingsSurface: View {
                 }
             }
 
+            Section("Create Prompt Chain") {
+                TextField("Chain name", text: $newPromptChainTitle)
+                TextField("Short description", text: $newPromptChainDetail)
+                TextField("System prompt", text: $newPromptChainSystemPrompt, axis: .vertical)
+                    .lineLimit(3...8)
+                TextField("First step title", text: $newPromptChainStepTitle)
+                TextField("First step instruction", text: $newPromptChainStepInstruction, axis: .vertical)
+                    .lineLimit(2...6)
+                TextField("Expected output", text: $newPromptChainStepExpectedOutput, axis: .vertical)
+                    .lineLimit(2...5)
+                Picker("Mode", selection: $newPromptChainMode) {
+                    ForEach(AssistantMode.allCases, id: \.self) { mode in
+                        Text(mode.settingsTitle).tag(mode)
+                    }
+                }
+                TextField("Tags", text: $newPromptChainTags, prompt: Text("research, code, local"))
+                Toggle("Pin chain", isOn: $newPromptChainIsPinned)
+                    .toggleStyle(.checkbox)
+
+                Button {
+                    addPromptChain()
+                } label: {
+                    Label("Add Prompt Chain", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                }
+                .disabled(!canAddPromptChain)
+            }
+
+            Section("Prompt Chains") {
+                if store.promptChains.isEmpty {
+                    EmptySettingsRow(
+                        title: "No prompt chains",
+                        detail: "Saved multi-step workflows with provider hints, local knowledge scope, and reusable instructions will appear here."
+                    )
+                } else {
+                    ForEach(store.promptChains.indices, id: \.self) { index in
+                        let chainID = store.promptChains[index].id
+                        PromptChainSettingsRow(
+                            chain: $store.promptChains[index],
+                            providerKinds: LLMProviderKind.allCases,
+                            accessModes: ProviderAccessMode.chatTemplateSelectableCases,
+                            toolKinds: AIToolKind.allCases,
+                            knowledgeSources: store.knowledgeSources,
+                            delete: {
+                                store.deletePromptChain(chainID)
+                                persist()
+                            },
+                            persist: persist
+                        )
+                    }
+                }
+            }
+
             Section("Create Chat Template") {
                 TextField("Template name", text: $newTemplateTitle)
                 TextField("Short description", text: $newTemplateDetail)
@@ -1524,6 +1585,11 @@ struct SettingsSurface: View {
             )
     }
 
+    private var canAddPromptChain: Bool {
+        !newPromptChainTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !newPromptChainStepInstruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private func addPromptProfile() {
         guard canAddPromptProfile else { return }
         let profile = SystemPromptProfile(
@@ -1562,6 +1628,37 @@ struct SettingsSurface: View {
         newTemplateMode = .workspaceCopilot
         newTemplateTags = ""
         newTemplateIsPinned = false
+        persist()
+    }
+
+    private func addPromptChain() {
+        guard canAddPromptChain else { return }
+        store.upsert(
+            PromptChain(
+                title: newPromptChainTitle,
+                detail: newPromptChainDetail,
+                systemPrompt: newPromptChainSystemPrompt,
+                steps: [
+                    PromptChainStep(
+                        title: newPromptChainStepTitle,
+                        instruction: newPromptChainStepInstruction,
+                        expectedOutput: newPromptChainStepExpectedOutput
+                    )
+                ],
+                mode: newPromptChainMode,
+                tagNames: tags(from: newPromptChainTags),
+                isPinned: newPromptChainIsPinned
+            )
+        )
+        newPromptChainTitle = ""
+        newPromptChainDetail = ""
+        newPromptChainSystemPrompt = ""
+        newPromptChainStepTitle = "Step 1"
+        newPromptChainStepInstruction = ""
+        newPromptChainStepExpectedOutput = ""
+        newPromptChainMode = .workspaceCopilot
+        newPromptChainTags = ""
+        newPromptChainIsPinned = false
         persist()
     }
 
@@ -6561,6 +6658,419 @@ private struct PromptSettingsRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+private struct PromptChainSettingsRow: View {
+    @Binding var chain: PromptChain
+    var providerKinds: [LLMProviderKind]
+    var accessModes: [ProviderAccessMode]
+    var toolKinds: [AIToolKind]
+    var knowledgeSources: [KnowledgeSource]
+    var delete: () -> Void
+    var persist: () -> Void
+
+    private var tagsBinding: Binding<String> {
+        Binding(
+            get: { chain.tagNames.joined(separator: ", ") },
+            set: { value in
+                chain.tagNames = editableTags(from: value)
+                touchChain()
+            }
+        )
+    }
+
+    private var toolSummary: String {
+        let names = chain.requiredToolKinds.map(\.settingsTitle)
+        return names.isEmpty ? "No expected tools" : names.joined(separator: ", ")
+    }
+
+    private var availableKnowledgeSources: [KnowledgeSource] {
+        knowledgeSources.sorted {
+            $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
+    }
+
+    private var selectedKnowledgeSourceIDs: Set<UUID> {
+        Set(chain.knowledgeSourceIDs)
+    }
+
+    private var knowledgeSummary: String {
+        let selectedCount = availableKnowledgeSources.filter { selectedKnowledgeSourceIDs.contains($0.id) }.count
+        if selectedCount == 0 {
+            return "Use workspace knowledge defaults"
+        }
+        if selectedCount == 1 {
+            return "1 scoped knowledge source"
+        }
+        return "\(selectedCount) scoped knowledge sources"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: chain.isPinned ? "point.topleft.down.curvedto.point.bottomright.up.fill" : "point.topleft.down.curvedto.point.bottomright.up")
+                    .frame(width: 22)
+                    .foregroundStyle(chain.isPinned ? .indigo : .secondary)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("Chain name", text: Binding(
+                        get: { chain.title },
+                        set: {
+                            chain.title = $0
+                            touchChain()
+                        }
+                    ))
+
+                    TextField("Short description", text: Binding(
+                        get: { chain.detail },
+                        set: {
+                            chain.detail = $0
+                            touchChain()
+                        }
+                    ))
+
+                    TextField("System prompt", text: Binding(
+                        get: { chain.systemPrompt },
+                        set: {
+                            chain.systemPrompt = $0
+                            touchChain()
+                        }
+                    ), axis: .vertical)
+                    .lineLimit(3...8)
+
+                    HStack {
+                        Picker("Mode", selection: Binding(
+                            get: { chain.mode },
+                            set: {
+                                chain.mode = $0
+                                touchChain()
+                            }
+                        )) {
+                            ForEach(AssistantMode.allCases, id: \.self) { mode in
+                                Text(mode.settingsTitle).tag(mode)
+                            }
+                        }
+
+                        Toggle("Pinned", isOn: Binding(
+                            get: { chain.isPinned },
+                            set: {
+                                chain.isPinned = $0
+                                touchChain()
+                            }
+                        ))
+                        .toggleStyle(.checkbox)
+                    }
+
+                    HStack {
+                        Picker("Provider", selection: Binding(
+                            get: { chain.preferredProviderKind },
+                            set: {
+                                chain.preferredProviderKind = $0
+                                touchChain()
+                            }
+                        )) {
+                            Text("Workspace default").tag(Optional<LLMProviderKind>.none)
+                            ForEach(providerKinds) { kind in
+                                Text(kind.title).tag(Optional(kind))
+                            }
+                        }
+
+                        Picker("Access", selection: Binding(
+                            get: { chain.preferredAccessMode },
+                            set: {
+                                chain.preferredAccessMode = $0
+                                touchChain()
+                            }
+                        )) {
+                            Text("Any mode").tag(Optional<ProviderAccessMode>.none)
+                            ForEach(accessModes) { mode in
+                                Text(mode.title).tag(Optional(mode))
+                            }
+                        }
+                    }
+
+                    TextField("Preferred model", text: Binding(
+                        get: { chain.preferredModelIdentifier ?? "" },
+                        set: {
+                            chain.preferredModelIdentifier = $0
+                            touchChain()
+                        }
+                    ), prompt: Text("llama3.1, gpt-5.5, claude-opus-4.7"))
+
+                    TextField("Tags", text: tagsBinding, prompt: Text("research, local"))
+
+                    DisclosureGroup {
+                        VStack(alignment: .leading, spacing: 10) {
+                            if chain.steps.isEmpty {
+                                EmptySettingsRow(
+                                    title: "No steps",
+                                    detail: "Add the first step before launching this chain."
+                                )
+                            } else {
+                                ForEach(Array(chain.steps.enumerated()), id: \.element.id) { offset, step in
+                                    if let binding = stepBinding(for: step.id) {
+                                        PromptChainStepEditorRow(
+                                            stepNumber: offset + 1,
+                                            step: binding,
+                                            canDelete: chain.steps.count > 1,
+                                            canMoveUp: offset > 0,
+                                            canMoveDown: offset < chain.steps.count - 1,
+                                            delete: { deleteStep(step.id) },
+                                            moveUp: { moveStep(step.id, by: -1) },
+                                            moveDown: { moveStep(step.id, by: 1) },
+                                            persist: touchChain
+                                        )
+                                    }
+                                }
+                            }
+
+                            Button {
+                                addStep()
+                            } label: {
+                                Label("Add Step", systemImage: "plus")
+                            }
+                            .controlSize(.small)
+                        }
+                        .padding(.top, 6)
+                    } label: {
+                        Label("\(chain.steps.count) steps", systemImage: "list.number")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    DisclosureGroup {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 150), spacing: 6, alignment: .leading)],
+                            alignment: .leading,
+                            spacing: 6
+                        ) {
+                            ForEach(toolKinds) { toolKind in
+                                Toggle(toolKind.settingsTitle, isOn: Binding(
+                                    get: { chain.requiredToolKinds.contains(toolKind) },
+                                    set: { isOn in
+                                        if isOn {
+                                            chain.requiredToolKinds.append(toolKind)
+                                        } else {
+                                            chain.requiredToolKinds.removeAll { $0 == toolKind }
+                                        }
+                                        touchChain()
+                                    }
+                                ))
+                                .toggleStyle(.checkbox)
+                            }
+                        }
+                        .padding(.top, 6)
+                    } label: {
+                        Label(toolSummary, systemImage: "wrench.and.screwdriver")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    DisclosureGroup {
+                        if availableKnowledgeSources.isEmpty {
+                            Text("Add local files, folders, web pages, repositories, chat history, or workspace notes from Knowledge settings before scoping this chain.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.top, 6)
+                        } else {
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 210), spacing: 6, alignment: .leading)],
+                                alignment: .leading,
+                                spacing: 6
+                            ) {
+                                ForEach(availableKnowledgeSources) { source in
+                                    Toggle(isOn: knowledgeSourceBinding(for: source.id)) {
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(source.title)
+                                                .lineLimit(1)
+                                                .truncationMode(.middle)
+                                            Text("\(source.kind.settingsTitle) - \(source.status.settingsTitle)")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    .toggleStyle(.checkbox)
+                                }
+                            }
+                            .padding(.top, 6)
+                        }
+                    } label: {
+                        Label(knowledgeSummary, systemImage: "books.vertical")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text("\(chain.mode.settingsTitle) - \(chain.routeSummary)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                Button(role: .destructive, action: delete) {
+                    Label("Delete Prompt Chain", systemImage: "trash")
+                }
+                .labelStyle(.iconOnly)
+                .help("Delete prompt chain")
+                .accessibilityLabel("Delete \(chain.title)")
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func touchChain() {
+        chain.updatedAt = .now
+        persist()
+    }
+
+    private func stepBinding(for stepID: UUID) -> Binding<PromptChainStep>? {
+        guard chain.steps.contains(where: { $0.id == stepID }) else { return nil }
+        return Binding(
+            get: {
+                chain.steps.first(where: { $0.id == stepID })
+                    ?? PromptChainStep(title: "Step", instruction: "")
+            },
+            set: { updatedStep in
+                guard let index = chain.steps.firstIndex(where: { $0.id == stepID }) else { return }
+                var copy = updatedStep
+                copy.updatedAt = .now
+                chain.steps[index] = copy
+                touchChain()
+            }
+        )
+    }
+
+    private func addStep() {
+        chain.steps.append(
+            PromptChainStep(
+                title: "Step \(chain.steps.count + 1)",
+                instruction: ""
+            )
+        )
+        touchChain()
+    }
+
+    private func deleteStep(_ stepID: UUID) {
+        guard chain.steps.count > 1 else { return }
+        chain.steps.removeAll { $0.id == stepID }
+        touchChain()
+    }
+
+    private func moveStep(_ stepID: UUID, by offset: Int) {
+        guard let currentIndex = chain.steps.firstIndex(where: { $0.id == stepID }) else { return }
+        let destination = currentIndex + offset
+        guard chain.steps.indices.contains(destination) else { return }
+        let step = chain.steps.remove(at: currentIndex)
+        chain.steps.insert(step, at: destination)
+        touchChain()
+    }
+
+    private func knowledgeSourceBinding(for sourceID: UUID) -> Binding<Bool> {
+        Binding(
+            get: { chain.knowledgeSourceIDs.contains(sourceID) },
+            set: { isSelected in
+                if isSelected {
+                    if !chain.knowledgeSourceIDs.contains(sourceID) {
+                        chain.knowledgeSourceIDs.append(sourceID)
+                    }
+                } else {
+                    chain.knowledgeSourceIDs.removeAll { $0 == sourceID }
+                }
+                chain.knowledgeSourceIDs = availableKnowledgeSources
+                    .map(\.id)
+                    .filter { chain.knowledgeSourceIDs.contains($0) }
+                touchChain()
+            }
+        )
+    }
+}
+
+private struct PromptChainStepEditorRow: View {
+    var stepNumber: Int
+    @Binding var step: PromptChainStep
+    var canDelete: Bool
+    var canMoveUp: Bool
+    var canMoveDown: Bool
+    var delete: () -> Void
+    var moveUp: () -> Void
+    var moveDown: () -> Void
+    var persist: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 8) {
+                Text("\(stepNumber)")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+                    .background(.tertiary, in: Circle())
+
+                TextField("Step title", text: Binding(
+                    get: { step.title },
+                    set: {
+                        step.title = $0
+                        step.updatedAt = .now
+                        persist()
+                    }
+                ))
+
+                Toggle("Enabled", isOn: Binding(
+                    get: { step.isEnabled },
+                    set: {
+                        step.isEnabled = $0
+                        step.updatedAt = .now
+                        persist()
+                    }
+                ))
+                .toggleStyle(.checkbox)
+
+                Button(action: moveUp) {
+                    Label("Move Up", systemImage: "chevron.up")
+                }
+                .labelStyle(.iconOnly)
+                .disabled(!canMoveUp)
+                .help("Move step up")
+
+                Button(action: moveDown) {
+                    Label("Move Down", systemImage: "chevron.down")
+                }
+                .labelStyle(.iconOnly)
+                .disabled(!canMoveDown)
+                .help("Move step down")
+
+                Button(role: .destructive, action: delete) {
+                    Label("Delete Step", systemImage: "minus.circle")
+                }
+                .labelStyle(.iconOnly)
+                .disabled(!canDelete)
+                .help("Delete step")
+            }
+
+            TextField("Instruction", text: Binding(
+                get: { step.instruction },
+                set: {
+                    step.instruction = $0
+                    step.updatedAt = .now
+                    persist()
+                }
+            ), axis: .vertical)
+            .lineLimit(2...6)
+
+            TextField("Expected output", text: Binding(
+                get: { step.expectedOutput },
+                set: {
+                    step.expectedOutput = $0
+                    step.updatedAt = .now
+                    persist()
+                }
+            ), axis: .vertical)
+            .lineLimit(1...4)
+        }
+        .padding(10)
+        .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

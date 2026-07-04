@@ -433,6 +433,7 @@ final class WorkspaceStore {
     var chatFolders: [ChatFolder] = []
     var promptProfiles: [SystemPromptProfile] = []
     var chatTemplates: [ChatTemplate] = []
+    var promptChains: [PromptChain] = []
     var modelPresets: [ModelPreset] = []
     var knowledgeSources: [KnowledgeSource] = []
     var knowledgeIndexManifests: [KnowledgeIndexManifest] = []
@@ -497,7 +498,7 @@ final class WorkspaceStore {
         normalizeWorkspace()
 
         let root = workspace ?? WorkspaceSeed.starterWorkspace()
-        root.schemaVersion = 5
+        root.schemaVersion = 6
         root.selectedDestination = selectedDestination
         root.selectedProjectID = selectedProjectID
         root.selectedDraftID = selectedDraftID
@@ -517,6 +518,7 @@ final class WorkspaceStore {
         root.chatFolders = chatFolders
         root.promptProfiles = promptProfiles
         root.chatTemplates = chatTemplates
+        root.promptChains = promptChains
         root.modelPresets = modelPresets
         root.knowledgeSources = knowledgeSources
         root.knowledgeIndexManifests = knowledgeIndexManifests
@@ -548,7 +550,7 @@ final class WorkspaceStore {
     func resetLocalWorkspace(now: Date = .now) -> UUID {
         let root = workspace ?? Item()
         root.workspaceID = UUID()
-        root.schemaVersion = 5
+        root.schemaVersion = 6
         root.timestamp = now
         root.updatedAt = now
         root.selectedDestination = .home
@@ -570,6 +572,7 @@ final class WorkspaceStore {
         root.chatFolders = []
         root.promptProfiles = []
         root.chatTemplates = []
+        root.promptChains = []
         root.modelPresets = []
         root.knowledgeSources = []
         root.knowledgeIndexManifests = []
@@ -1854,6 +1857,23 @@ final class WorkspaceStore {
         chatTemplates.removeAll { $0.id == templateID }
     }
 
+    func upsert(_ chain: PromptChain) {
+        var updated = chain
+        updated.title = updated.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.detail = updated.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.systemPrompt = updated.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.tagNames = canonicalTags(updated.tagNames)
+        updated.updatedAt = .now
+
+        guard !updated.title.isEmpty else { return }
+        promptChains.upsert(updated, matching: \.id)
+        normalizePromptChainState()
+    }
+
+    func deletePromptChain(_ chainID: UUID) {
+        promptChains.removeAll { $0.id == chainID }
+    }
+
     func upsert(_ profile: SystemPromptProfile) {
         var updated = profile
         updated.title = updated.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1916,6 +1936,88 @@ final class WorkspaceStore {
         return rendered.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : rendered
     }
 
+    func renderPromptChainSystemPrompt(
+        _ chain: PromptChain,
+        for thread: AssistantThread? = nil,
+        now: Date = .now
+    ) -> String {
+        let basePrompt = renderPromptTemplate(
+            chain.systemPrompt,
+            now: now,
+            thread: thread,
+            knowledgeSourceIDs: chain.knowledgeSourceIDs
+        )
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallbackPrompt = defaultSystemPrompt(for: thread, now: now)
+            ?? "You are Flannel, a local-first macOS AI assistant."
+        let planPrompt = renderPromptChainPlanPrompt(chain, for: thread, now: now)
+
+        return [basePrompt.isEmpty ? fallbackPrompt : basePrompt, planPrompt]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .joined(separator: "\n\n")
+    }
+
+    func renderPromptChainStarterPrompt(
+        _ chain: PromptChain,
+        for thread: AssistantThread? = nil,
+        now: Date = .now
+    ) -> String {
+        guard let firstStep = chain.enabledSteps.first else { return "" }
+        let rendered = renderPromptTemplate(
+            firstStep.instruction,
+            now: now,
+            thread: thread,
+            knowledgeSourceIDs: chain.knowledgeSourceIDs
+        )
+        return rendered.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : rendered
+    }
+
+    func renderPromptChainPlanPrompt(
+        _ chain: PromptChain,
+        for thread: AssistantThread? = nil,
+        now: Date = .now
+    ) -> String {
+        let renderedDetail = renderPromptTemplate(
+            chain.detail,
+            now: now,
+            thread: thread,
+            knowledgeSourceIDs: chain.knowledgeSourceIDs
+        )
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        let stepLines = chain.enabledSteps.enumerated().map { offset, step in
+            let renderedInstruction = renderPromptTemplate(
+                step.instruction,
+                now: now,
+                thread: thread,
+                knowledgeSourceIDs: chain.knowledgeSourceIDs
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            let expectedOutput = renderPromptTemplate(
+                step.expectedOutput,
+                now: now,
+                thread: thread,
+                knowledgeSourceIDs: chain.knowledgeSourceIDs
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = step.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let heading = title.isEmpty ? "Step \(offset + 1)" : title
+            if expectedOutput.isEmpty {
+                return "\(offset + 1). \(heading): \(renderedInstruction)"
+            }
+            return "\(offset + 1). \(heading): \(renderedInstruction)\n   Expected output: \(expectedOutput)"
+        }
+        .joined(separator: "\n")
+
+        let objective = renderedDetail.isEmpty ? "" : "\nObjective: \(renderedDetail)"
+        let steps = stepLines.isEmpty ? "No enabled steps are saved yet." : stepLines
+        return """
+        Saved prompt chain: \(chain.title)\(objective)
+        Follow this workflow one step at a time. After each response, identify the next step and wait for the user unless they explicitly ask to continue.
+        Steps:
+        \(steps)
+        """
+    }
+
     @discardableResult
     func createAssistantThread(from template: ChatTemplate? = nil, folderID: UUID? = nil) -> AssistantThread {
         let resolvedFolderID = folderID.flatMap { candidate in
@@ -1948,6 +2050,44 @@ final class WorkspaceStore {
 
         if let template,
            let provider = preferredProvider(for: template) {
+            preferences.preferredProviderID = provider.id
+            preferences.providerRoutingPolicy = .selectedProvider
+        }
+
+        return thread
+    }
+
+    @discardableResult
+    func createAssistantThread(from chain: PromptChain, folderID: UUID? = nil) -> AssistantThread {
+        let resolvedFolderID = folderID.flatMap { candidate in
+            chatFolders.contains(where: { $0.id == candidate }) ? candidate : nil
+        }
+        let title = chain.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let knowledgeSourceIDs = validatedKnowledgeSourceIDs(chain.knowledgeSourceIDs)
+        var thread = AssistantThread(
+            title: title.isEmpty ? "Prompt Chain Chat" : title,
+            mode: chain.mode,
+            messages: [],
+            tagNames: canonicalTags(chain.tagNames + ["prompt-chain"]),
+            knowledgeSourceIDs: knowledgeSourceIDs,
+            folderID: resolvedFolderID,
+            pinnedProjectID: selectedProjectID,
+            pinnedDraftID: selectedDraftID,
+            pinnedAssetID: selectedAssetID,
+            pinnedCalendarEntryID: selectedCalendarEntryID
+        )
+        thread.messages = [
+            AssistantMessage(
+                role: .system,
+                text: renderPromptChainSystemPrompt(chain, for: thread)
+            )
+        ]
+
+        assistantThreads.insert(thread, at: 0)
+        selectedAssistantThreadID = thread.id
+        selectedDestination = .home
+
+        if let provider = preferredProvider(for: chain) {
             preferences.preferredProviderID = provider.id
             preferences.providerRoutingPolicy = .selectedProvider
         }
@@ -3566,19 +3706,39 @@ final class WorkspaceStore {
     }
 
     private func preferredProvider(for template: ChatTemplate) -> ProviderConfiguration? {
+        preferredProvider(
+            kind: template.preferredProviderKind,
+            accessMode: template.preferredAccessMode,
+            modelIdentifier: template.preferredModelIdentifier
+        )
+    }
+
+    private func preferredProvider(for chain: PromptChain) -> ProviderConfiguration? {
+        preferredProvider(
+            kind: chain.preferredProviderKind,
+            accessMode: chain.preferredAccessMode,
+            modelIdentifier: chain.preferredModelIdentifier
+        )
+    }
+
+    private func preferredProvider(
+        kind: LLMProviderKind?,
+        accessMode: ProviderAccessMode?,
+        modelIdentifier: String?
+    ) -> ProviderConfiguration? {
         let candidates = runnableChatProviders.filter { provider in
-            if let kind = template.preferredProviderKind,
+            if let kind,
                provider.kind != kind {
                 return false
             }
-            if let accessMode = template.preferredAccessMode,
+            if let accessMode,
                provider.accessMode != accessMode {
                 return false
             }
             return true
         }
 
-        let requestedModel = template.preferredModelIdentifier?
+        let requestedModel = modelIdentifier?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if let requestedModel,
            !requestedModel.isEmpty,
@@ -5304,6 +5464,7 @@ final class WorkspaceStore {
         chatFolders = item.chatFolders ?? []
         promptProfiles = item.promptProfiles ?? []
         chatTemplates = item.chatTemplates ?? []
+        promptChains = item.promptChains ?? []
         modelPresets = item.modelPresets ?? []
         knowledgeSources = item.knowledgeSources ?? []
         knowledgeIndexManifests = item.knowledgeIndexManifests ?? []
@@ -5326,6 +5487,7 @@ final class WorkspaceStore {
         rebuildProjectReferences()
         normalizePromptProfileState()
         normalizeChatTemplateState()
+        normalizePromptChainState()
         normalizeModelPresetState()
         normalizeProjectAIProfileState()
         tags = buildTagRegistry()
@@ -5421,6 +5583,65 @@ final class WorkspaceStore {
                     starterPrompt: "Review this code, design, or plan. Lead with concrete risks, then suggest the smallest safe implementation path:\n\n",
                     mode: .workspaceCopilot,
                     tagNames: ["coding", "review"],
+                    requiredToolKinds: [.localFileRead, .workspaceSearch, .terminal, .codeExecution]
+                )
+            ]
+        }
+
+        if promptChains.isEmpty {
+            promptChains = [
+                PromptChain(
+                    title: "Private Research Chain",
+                    detail: "Scope the question, retrieve local evidence, synthesize findings, and produce a next-action checklist.",
+                    systemPrompt: "Act as a careful local-first research partner. Use local knowledge first, cite retrieved sources, and ask before external network or file-write actions.",
+                    steps: [
+                        PromptChainStep(
+                            title: "Scope",
+                            instruction: "Clarify the research question, success criteria, constraints, and whether cloud providers or external web search are allowed for this thread.",
+                            expectedOutput: "A concise research brief with assumptions and allowed data boundaries."
+                        ),
+                        PromptChainStep(
+                            title: "Retrieve",
+                            instruction: "Search the selected local knowledge sources for the topic and list the strongest relevant sources with short notes.",
+                            expectedOutput: "A source-backed evidence list with citations or file references."
+                        ),
+                        PromptChainStep(
+                            title: "Synthesize",
+                            instruction: "Turn the evidence into findings, contradictions, unknowns, and a recommendation that preserves the user's privacy mode.",
+                            expectedOutput: "A structured answer with findings, uncertainty, and a safe next step."
+                        )
+                    ],
+                    mode: .research,
+                    tagNames: ["research", "rag", "privacy"],
+                    preferredProviderKind: .ollama,
+                    preferredAccessMode: .localServer,
+                    preferredModelIdentifier: "llama3.1",
+                    requiredToolKinds: [.workspaceSearch, .ragRetrieval],
+                    isPinned: true
+                ),
+                PromptChain(
+                    title: "Code Change Chain",
+                    detail: "Map the code, plan the smallest safe change, implement, then verify with focused tests.",
+                    systemPrompt: "Act as a senior coding assistant. Explain intended edits before writes, keep changes scoped, and run focused validation before summarizing.",
+                    steps: [
+                        PromptChainStep(
+                            title: "Map",
+                            instruction: "Inspect the relevant files and identify the exact ownership boundaries, data flow, and tests for this change.",
+                            expectedOutput: "A short implementation map with concrete files and risks."
+                        ),
+                        PromptChainStep(
+                            title: "Implement",
+                            instruction: "Make the smallest coherent code change that satisfies the request while preserving existing patterns.",
+                            expectedOutput: "Changed files and the behavior each change enables."
+                        ),
+                        PromptChainStep(
+                            title: "Verify",
+                            instruction: "Run the focused build or test commands that prove the changed behavior and report any remaining risk.",
+                            expectedOutput: "Validation commands and pass/fail results."
+                        )
+                    ],
+                    mode: .workspaceCopilot,
+                    tagNames: ["coding", "tools", "verification"],
                     requiredToolKinds: [.localFileRead, .workspaceSearch, .terminal, .codeExecution]
                 )
             ]
@@ -6314,6 +6535,7 @@ final class WorkspaceStore {
         allTags.append(contentsOf: projects.flatMap(\.tagNames))
         allTags.append(contentsOf: promptProfiles.flatMap(\.tags))
         allTags.append(contentsOf: chatTemplates.flatMap(\.tagNames))
+        allTags.append(contentsOf: promptChains.flatMap(\.tagNames))
         allTags.append(contentsOf: localMemories.flatMap(\.tagNames))
 
         for tag in allTags.map(normalizeTag).filter({ !$0.isEmpty }) {
@@ -6449,6 +6671,53 @@ final class WorkspaceStore {
             chatTemplates[index].requiredToolKinds = stableUnique(chatTemplates[index].requiredToolKinds)
             chatTemplates[index].knowledgeSourceIDs = stableUnique(chatTemplates[index].knowledgeSourceIDs)
                 .filter { knowledgeSourceIDs.contains($0) }
+        }
+    }
+
+    private func normalizePromptChainState() {
+        var seenChainIDs = Set<UUID>()
+        promptChains = promptChains.filter { chain in
+            seenChainIDs.insert(chain.id).inserted
+        }
+
+        let knowledgeSourceIDs = Set(knowledgeSources.map(\.id))
+        for index in promptChains.indices {
+            promptChains[index].title = promptChains[index].title
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if promptChains[index].title.isEmpty {
+                promptChains[index].title = "Prompt Chain"
+            }
+
+            promptChains[index].detail = promptChains[index].detail
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            promptChains[index].systemPrompt = promptChains[index].systemPrompt
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            promptChains[index].tagNames = canonicalTags(promptChains[index].tagNames)
+
+            let modelIdentifier = promptChains[index].preferredModelIdentifier?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            promptChains[index].preferredModelIdentifier = modelIdentifier?.isEmpty == false ? modelIdentifier : nil
+
+            promptChains[index].requiredToolKinds = stableUnique(promptChains[index].requiredToolKinds)
+            promptChains[index].knowledgeSourceIDs = stableUnique(promptChains[index].knowledgeSourceIDs)
+                .filter { knowledgeSourceIDs.contains($0) }
+
+            var seenStepIDs = Set<UUID>()
+            promptChains[index].steps = promptChains[index].steps.filter { step in
+                seenStepIDs.insert(step.id).inserted
+            }
+
+            for stepIndex in promptChains[index].steps.indices {
+                promptChains[index].steps[stepIndex].title = promptChains[index].steps[stepIndex].title
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if promptChains[index].steps[stepIndex].title.isEmpty {
+                    promptChains[index].steps[stepIndex].title = "Step \(stepIndex + 1)"
+                }
+                promptChains[index].steps[stepIndex].instruction = promptChains[index].steps[stepIndex].instruction
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                promptChains[index].steps[stepIndex].expectedOutput = promptChains[index].steps[stepIndex].expectedOutput
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }
         }
     }
 
@@ -7299,6 +7568,25 @@ final class WorkspaceStore {
                 Route: \(template.routeSummary)
                 Tools: \(template.requiredToolKinds.map(\.rawValue).joined(separator: ", "))
                 Tags: \(template.tagNames.joined(separator: ", "))
+                """
+            }
+            .joined(separator: "\n\n")
+        )
+
+        sections.append(
+            promptChains.map { chain in
+                let steps = chain.steps.enumerated().map { offset, step in
+                    "\(offset + 1). \(step.title): \(step.instruction)"
+                }
+                .joined(separator: "\n")
+                return """
+                Prompt chain: \(chain.title)
+                Detail: \(chain.detail)
+                Route: \(chain.routeSummary)
+                Tools: \(chain.requiredToolKinds.map(\.rawValue).joined(separator: ", "))
+                Tags: \(chain.tagNames.joined(separator: ", "))
+                Steps:
+                \(steps)
                 """
             }
             .joined(separator: "\n\n")

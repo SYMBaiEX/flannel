@@ -143,6 +143,7 @@ struct ContentView: View {
             searchFocusRequest: sidebarSearchFocusRequest,
             settingsFocusRequest: settingsSidebarFocusRequest,
             newChat: newChat,
+            newPromptChainChat: newPromptChainChat,
             enterSettings: { tab in
                 enterSettingsMode(tab, returnFocus: .sidebarSearch)
             },
@@ -618,6 +619,14 @@ struct ContentView: View {
         let thread = store.createAssistantThread(from: template, folderID: folderID)
         let starterPrompt = template.map { store.renderChatTemplateStarterPrompt($0, for: thread) } ?? ""
         composerText = starterPrompt
+        composerAttachments = []
+        requestComposerFocus()
+        persistQuietly()
+    }
+
+    private func newPromptChainChat(from chain: PromptChain, folderID: UUID? = nil) {
+        let thread = store.createAssistantThread(from: chain, folderID: folderID)
+        composerText = store.renderPromptChainStarterPrompt(chain, for: thread)
         composerAttachments = []
         requestComposerFocus()
         persistQuietly()
@@ -2041,6 +2050,7 @@ private struct AppSidebar: View {
     var searchFocusRequest: Int
     var settingsFocusRequest: Int
     var newChat: (ChatTemplate?, UUID?) -> Void
+    var newPromptChainChat: (PromptChain, UUID?) -> Void
     var enterSettings: (SettingsTab) -> Void
     var exitSettings: () -> Void
     var persist: () -> Void
@@ -2400,7 +2410,7 @@ private struct AppSidebar: View {
 
     @ViewBuilder
     private var newChatControl: some View {
-        if store.chatTemplates.isEmpty {
+        if store.chatTemplates.isEmpty && store.promptChains.isEmpty {
             Button {
                 createChat()
             } label: {
@@ -2424,6 +2434,21 @@ private struct AppSidebar: View {
                             createChat(from: template)
                         } label: {
                             Label(template.title, systemImage: template.isPinned ? "star" : "sparkles")
+                        }
+                    }
+                }
+
+                Section("Prompt Chains") {
+                    ForEach(store.promptChains) { chain in
+                        Button {
+                            createChat(from: chain)
+                        } label: {
+                            Label(
+                                chain.title,
+                                systemImage: chain.isPinned
+                                    ? "point.topleft.down.curvedto.point.bottomright.up.fill"
+                                    : "point.topleft.down.curvedto.point.bottomright.up"
+                            )
                         }
                     }
                 }
@@ -2767,6 +2792,11 @@ private struct AppSidebar: View {
     private func createChat(from template: ChatTemplate? = nil) {
         let folderID = selectedFolderIsAvailable ? selectedFolderID : nil
         newChat(template, folderID)
+    }
+
+    private func createChat(from chain: PromptChain) {
+        let folderID = selectedFolderIsAvailable ? selectedFolderID : nil
+        newPromptChainChat(chain, folderID)
     }
 
     private func openSearchResult(_ result: AssistantChatSearchResult) {

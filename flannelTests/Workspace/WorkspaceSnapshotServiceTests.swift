@@ -27,6 +27,7 @@ struct WorkspaceSnapshotServiceTests {
         #expect(payload.workspace.chatFolders.map(\.title) == ["Research"])
         #expect(payload.workspace.promptProfiles.map(\.title) == ["Careful Local Assistant"])
         #expect(payload.workspace.chatTemplates.map(\.title) == ["Private Research"])
+        #expect(payload.workspace.promptChains?.map(\.title) == ["Private Research Chain"])
         #expect(payload.workspace.modelPresets.map(\.title) == ["Local fast"])
         #expect(payload.workspace.knowledgeSources.map(\.title) == ["Docs"])
         #expect(payload.workspace.toolConfigurations.map(\.kind) == [.ragRetrieval])
@@ -66,6 +67,8 @@ struct WorkspaceSnapshotServiceTests {
         #expect(result.item.toolExecutionResults?.first?.status == .completed)
         #expect(result.item.modelComparisonRuns?.first?.results.first?.providerDisplayName == "OpenAI API")
         #expect(result.item.localDiscoveryResults?.first?.models.map(\.name) == ["llama3.1", "nomic-embed-text"])
+        #expect(result.item.promptChains?.first?.title == "Private Research Chain")
+        #expect(result.item.promptChains?.first?.steps.map(\.title) == ["Scope", "Answer"])
         #expect(result.item.preferences.preferredProviderID == nil)
         #expect(result.item.preferences.allowCloudProviders == false)
         #expect(result.item.preferences.localOnlyMode == true)
@@ -274,6 +277,33 @@ struct WorkspaceSnapshotServiceTests {
                 systemPrompt: "Cite local sources.",
                 starterPrompt: "Search my docs.",
                 mode: .research,
+                knowledgeSourceIDs: [sampleKnowledgeSourceID],
+                isPinned: true
+            )
+        ]
+        store.promptChains = [
+            PromptChain(
+                title: "Private Research Chain",
+                detail: "Scope local evidence before answering.",
+                systemPrompt: "Stay local and cite sources.",
+                steps: [
+                    PromptChainStep(
+                        title: "Scope",
+                        instruction: "Clarify the question and allowed provider modes.",
+                        expectedOutput: "A scoped research plan."
+                    ),
+                    PromptChainStep(
+                        title: "Answer",
+                        instruction: "Answer with local citations and open questions.",
+                        expectedOutput: "A grounded answer."
+                    )
+                ],
+                mode: .research,
+                tagNames: ["research", "local"],
+                preferredProviderKind: .ollama,
+                preferredAccessMode: .localServer,
+                preferredModelIdentifier: "llama3.1",
+                requiredToolKinds: [.ragRetrieval],
                 knowledgeSourceIDs: [sampleKnowledgeSourceID],
                 isPinned: true
             )

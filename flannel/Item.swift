@@ -1874,6 +1874,7 @@ final class Item {
     var chatFolders: [ChatFolder]?
     var promptProfiles: [SystemPromptProfile]?
     var chatTemplates: [ChatTemplate]?
+    var promptChains: [PromptChain]?
     var modelPresets: [ModelPreset]?
     var knowledgeSources: [KnowledgeSource]?
     var knowledgeIndexManifests: [KnowledgeIndexManifest]?
@@ -1888,7 +1889,7 @@ final class Item {
 
     init(
         workspaceID: UUID = UUID(),
-        schemaVersion: Int = 5,
+        schemaVersion: Int = 6,
         timestamp: Date = .now,
         updatedAt: Date = .now,
         selectedDestination: WorkspaceDestination = .home,
@@ -1910,6 +1911,7 @@ final class Item {
         chatFolders: [ChatFolder] = [],
         promptProfiles: [SystemPromptProfile] = [],
         chatTemplates: [ChatTemplate] = [],
+        promptChains: [PromptChain] = [],
         modelPresets: [ModelPreset] = [],
         knowledgeSources: [KnowledgeSource] = [],
         knowledgeIndexManifests: [KnowledgeIndexManifest] = [],
@@ -1945,6 +1947,7 @@ final class Item {
         self.chatFolders = chatFolders
         self.promptProfiles = promptProfiles
         self.chatTemplates = chatTemplates
+        self.promptChains = promptChains
         self.modelPresets = modelPresets
         self.knowledgeSources = knowledgeSources
         self.knowledgeIndexManifests = knowledgeIndexManifests

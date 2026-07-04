@@ -22,6 +22,7 @@ struct WorkspaceStoreTests {
         #expect(store.providerConfigurations.count >= 12)
         #expect(store.promptProfiles.isEmpty == false)
         #expect(store.chatTemplates.isEmpty == false)
+        #expect(store.promptChains.isEmpty == false)
         #expect(store.modelPresets.isEmpty == false)
         #expect(store.knowledgeSources.isEmpty == false)
         #expect(store.toolConfigurations.isEmpty == false)
@@ -87,6 +88,96 @@ struct WorkspaceStoreTests {
         #expect(thread.knowledgeSourceIDs == [secondSourceID, firstSourceID])
         #expect(store.currentAssistantThread?.knowledgeSourceIDs == [secondSourceID, firstSourceID])
         #expect(store.threadKnowledgeSources(for: thread).map(\.id) == [firstSourceID, secondSourceID])
+    }
+
+    @MainActor
+    @Test("Prompt chains create starter chats with ordered workflow context")
+    func promptChainsCreateStarterChatsWithOrderedWorkflowContext() throws {
+        let (_, store) = try makeLoadedStore()
+        let chain = try #require(store.promptChains.first { $0.title == "Private Research Chain" })
+        let folder = try #require(store.addChatFolder(title: "Chain Runs"))
+        let localProvider = try #require(store.providerConfigurations.first {
+            $0.kind == .ollama && $0.accessMode == .localServer
+        })
+        let baselineThreadCount = store.assistantThreads.count
+
+        let thread = store.createAssistantThread(from: chain, folderID: folder.id)
+        let starterPrompt = store.renderPromptChainStarterPrompt(chain, for: thread)
+
+        #expect(store.assistantThreads.count == baselineThreadCount + 1)
+        #expect(store.selectedAssistantThreadID == thread.id)
+        #expect(store.selectedDestination == .home)
+        #expect(thread.title == "Private Research Chain")
+        #expect(thread.mode == .research)
+        #expect(thread.folderID == folder.id)
+        #expect(thread.tagNames.contains("prompt-chain"))
+        #expect(thread.tagNames.contains("research"))
+        #expect(thread.messages.first?.role == .system)
+        #expect(thread.messages.first?.text.contains("Saved prompt chain: Private Research Chain") == true)
+        #expect(thread.messages.first?.text.contains("1. Scope") == true)
+        #expect(thread.messages.first?.text.contains("2. Retrieve") == true)
+        #expect(starterPrompt.contains("Clarify the research question") == true)
+        #expect(store.preferences.preferredProviderID == localProvider.id)
+        #expect(store.preferences.providerRoutingPolicy == .selectedProvider)
+    }
+
+    @MainActor
+    @Test("Prompt chains persist normalized steps metadata and scoped knowledge")
+    func promptChainsPersistNormalizedStepsMetadataAndScopedKnowledge() throws {
+        let container = try ModelContainer(
+            for: Item.self,
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let store = WorkspaceStore()
+        try store.loadOrCreate(in: context)
+        let sourceIDs = Array(store.knowledgeSources.prefix(2).map(\.id))
+        let firstSourceID = try #require(sourceIDs.first)
+        let stepID = UUID()
+        let chain = PromptChain(
+            title: "  Incident Chain  ",
+            detail: "  Triage with local context.  ",
+            systemPrompt: "  Use {{thread_title}}.  ",
+            steps: [
+                PromptChainStep(
+                    id: stepID,
+                    title: "  Scope  ",
+                    instruction: "  Find impact.  ",
+                    expectedOutput: "  Impact summary.  "
+                ),
+                PromptChainStep(
+                    title: " ",
+                    instruction: "  Draft fix plan.  "
+                )
+            ],
+            mode: .research,
+            tagNames: ["Incident", "  Local "],
+            preferredProviderKind: .lmStudio,
+            preferredAccessMode: .localServer,
+            preferredModelIdentifier: "  local-model  ",
+            requiredToolKinds: [.workspaceSearch, .workspaceSearch],
+            knowledgeSourceIDs: [firstSourceID, UUID()]
+        )
+
+        store.upsert(chain)
+        try store.persist(in: context)
+
+        let reloadedStore = WorkspaceStore()
+        try reloadedStore.loadOrCreate(in: context)
+        let restored = try #require(reloadedStore.promptChains.first { $0.id == chain.id })
+
+        #expect(restored.title == "Incident Chain")
+        #expect(restored.detail == "Triage with local context.")
+        #expect(restored.systemPrompt == "Use {{thread_title}}.")
+        #expect(restored.tagNames == ["incident", "local"])
+        #expect(restored.preferredProviderKind == .lmStudio)
+        #expect(restored.preferredAccessMode == .localServer)
+        #expect(restored.preferredModelIdentifier == "local-model")
+        #expect(restored.requiredToolKinds == [.workspaceSearch])
+        #expect(restored.knowledgeSourceIDs == [firstSourceID])
+        #expect(restored.steps.map(\.title) == ["Scope", "Step 2"])
+        #expect(restored.steps.first?.instruction == "Find impact.")
+        #expect(restored.steps.first?.expectedOutput == "Impact summary.")
     }
 
     @MainActor

@@ -1093,6 +1093,136 @@ struct ChatTemplate: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+struct PromptChainStep: Identifiable, Codable, Hashable, Sendable {
+    var id: UUID
+    var title: String
+    var instruction: String
+    var expectedOutput: String
+    var isEnabled: Bool
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        instruction: String,
+        expectedOutput: String = "",
+        isEnabled: Bool = true,
+        createdAt: Date = .now,
+        updatedAt: Date = .now
+    ) {
+        self.id = id
+        self.title = title
+        self.instruction = instruction
+        self.expectedOutput = expectedOutput
+        self.isEnabled = isEnabled
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id, default: UUID())
+        title = try container.decode(String.self, forKey: .title, default: "Prompt Step")
+        instruction = try container.decode(String.self, forKey: .instruction, default: "")
+        expectedOutput = try container.decode(String.self, forKey: .expectedOutput, default: "")
+        isEnabled = try container.decode(Bool.self, forKey: .isEnabled, default: true)
+        createdAt = try container.decode(Date.self, forKey: .createdAt, default: .now)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt, default: createdAt)
+    }
+
+    var hasRunnableInstruction: Bool {
+        !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+struct PromptChain: Identifiable, Codable, Hashable, Sendable {
+    var id: UUID
+    var title: String
+    var detail: String
+    var systemPrompt: String
+    var steps: [PromptChainStep]
+    var mode: AssistantMode
+    var tagNames: [String]
+    var preferredProviderKind: LLMProviderKind?
+    var preferredAccessMode: ProviderAccessMode?
+    var preferredModelIdentifier: String?
+    var requiredToolKinds: [AIToolKind]
+    var knowledgeSourceIDs: [UUID]
+    var isPinned: Bool
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        detail: String,
+        systemPrompt: String = "",
+        steps: [PromptChainStep],
+        mode: AssistantMode = .workspaceCopilot,
+        tagNames: [String] = [],
+        preferredProviderKind: LLMProviderKind? = nil,
+        preferredAccessMode: ProviderAccessMode? = nil,
+        preferredModelIdentifier: String? = nil,
+        requiredToolKinds: [AIToolKind] = [],
+        knowledgeSourceIDs: [UUID] = [],
+        isPinned: Bool = false,
+        createdAt: Date = .now,
+        updatedAt: Date = .now
+    ) {
+        self.id = id
+        self.title = title
+        self.detail = detail
+        self.systemPrompt = systemPrompt
+        self.steps = steps
+        self.mode = mode
+        self.tagNames = tagNames
+        self.preferredProviderKind = preferredProviderKind
+        self.preferredAccessMode = preferredAccessMode
+        self.preferredModelIdentifier = preferredModelIdentifier
+        self.requiredToolKinds = requiredToolKinds
+        self.knowledgeSourceIDs = knowledgeSourceIDs
+        self.isPinned = isPinned
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id, default: UUID())
+        title = try container.decode(String.self, forKey: .title, default: "Prompt Chain")
+        detail = try container.decode(String.self, forKey: .detail, default: "")
+        systemPrompt = try container.decode(String.self, forKey: .systemPrompt, default: "")
+        steps = try container.decode([PromptChainStep].self, forKey: .steps, default: [])
+        mode = try container.decode(AssistantMode.self, forKey: .mode, default: .workspaceCopilot)
+        tagNames = try container.decode([String].self, forKey: .tagNames, default: [])
+        preferredProviderKind = try container.decodeIfPresent(LLMProviderKind.self, forKey: .preferredProviderKind)
+        preferredAccessMode = try container.decodeIfPresent(ProviderAccessMode.self, forKey: .preferredAccessMode)
+        preferredModelIdentifier = try container.decodeIfPresent(String.self, forKey: .preferredModelIdentifier)
+        requiredToolKinds = try container.decode([AIToolKind].self, forKey: .requiredToolKinds, default: [])
+        knowledgeSourceIDs = try container.decode([UUID].self, forKey: .knowledgeSourceIDs, default: [])
+        isPinned = try container.decode(Bool.self, forKey: .isPinned, default: false)
+        createdAt = try container.decode(Date.self, forKey: .createdAt, default: .now)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt, default: createdAt)
+    }
+
+    var enabledSteps: [PromptChainStep] {
+        steps.filter { $0.isEnabled && $0.hasRunnableInstruction }
+    }
+
+    var routeSummary: String {
+        let provider = preferredProviderKind?.title ?? "Workspace default"
+        let mode = preferredAccessMode?.title
+        let model = preferredModelIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return [provider, mode, model]
+            .compactMap { value in
+                guard let value, !value.isEmpty else { return nil }
+                return value
+            }
+            .joined(separator: " - ")
+    }
+}
+
 struct ModelPreset: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var title: String
