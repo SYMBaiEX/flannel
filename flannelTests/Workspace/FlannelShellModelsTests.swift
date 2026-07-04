@@ -35,9 +35,9 @@ struct FlannelShellModelsTests {
         #expect(settingsWidth.ideal > conversationWidth.ideal)
         #expect(settingsWidth.min > conversationWidth.min)
         #expect(settingsWidth.max > conversationWidth.max)
-        #expect(settingsWidth.min >= 448)
-        #expect(settingsWidth.ideal >= 480)
-        #expect(settingsWidth.max >= 620)
+        #expect(settingsWidth.min >= 480)
+        #expect(settingsWidth.ideal >= 520)
+        #expect(settingsWidth.max >= 660)
     }
 
     @Test("Settings sidebar labels stay concise")
@@ -54,6 +54,16 @@ struct FlannelShellModelsTests {
         #expect(SettingsTab.models.sidebarDetail == "Routes, keys, local models")
         #expect(SettingsTab.knowledge.sidebarDetail == "Sources and indexing")
         #expect(SettingsTab.privacy.sidebarDetail == "Network and secrets")
+    }
+
+    @Test("Settings route rows keep fuller descriptions for active settings mode")
+    func settingsRouteRowsKeepFullerDescriptions() {
+        #expect(SettingsTab.models.routeDetail.contains("BYOK keys"))
+        #expect(SettingsTab.models.routeDetail.contains("account CLIs"))
+        #expect(SettingsTab.models.routeDetail.contains("local servers"))
+        #expect(SettingsTab.privacy.routeDetail.contains("local-only mode"))
+        #expect(SettingsTab.prompts.routeDetail.contains("prompt chains"))
+        #expect(SettingsTab.models.routeMinimumHeight >= 76)
     }
 
     @Test("Escape exits settings surface")

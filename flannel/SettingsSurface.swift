@@ -2577,6 +2577,42 @@ enum SettingsTab: String, CaseIterable, Hashable, Identifiable {
         }
     }
 
+    var routeDetail: String {
+        switch self {
+        case .general:
+            "Startup, history, folders, and project defaults."
+        case .models:
+            "Provider routing, BYOK keys, account CLIs, local servers, and model defaults."
+        case .knowledge:
+            "Local sources, indexing state, watched folders, and grounded context."
+        case .memory:
+            "Saved memories, standing context, and local recall controls."
+        case .tools:
+            "Tool permissions, local actions, connectors, and execution results."
+        case .agents:
+            "Workflow defaults, safety controls, and agent trace queues."
+        case .prompts:
+            "Prompt profiles, reusable templates, prompt chains, and variables."
+        case .privacy:
+            "Network access, local-only mode, external confirmations, and secrets."
+        case .storage:
+            "Export paths, backup snapshots, local storage labels, and reset controls."
+        case .advanced:
+            "Automations, developer bridge preferences, and advanced diagnostics."
+        }
+    }
+
+    var routeMinimumHeight: CGFloat {
+        switch self {
+        case .models, .knowledge, .privacy, .storage:
+            76
+        case .general, .tools, .prompts, .advanced:
+            70
+        case .memory, .agents:
+            66
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .general:

@@ -3027,17 +3027,17 @@ private struct SettingsRouteRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
 
-                Text(tab.sidebarDetail)
+                Text(tab.routeDetail)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
             }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(1)
         }
-        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: tab.routeMinimumHeight, alignment: .leading)
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
         .background(rowBackgroundStyle, in: rowShape)
