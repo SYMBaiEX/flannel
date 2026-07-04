@@ -246,11 +246,15 @@ nonisolated struct ChatImportService: Sendable {
             isPinned: thread.isPinned,
             isArchived: false,
             tagNames: importedTags(from: thread.tagNames),
+            knowledgeSourceIDs: thread.knowledgeSourceIDs,
             folderID: nil,
             pinnedProjectID: nil,
             pinnedDraftID: nil,
             pinnedAssetID: nil,
             pinnedCalendarEntryID: nil,
+            promptChainID: thread.promptChainID,
+            activePromptChainStepID: thread.activePromptChainStepID,
+            completedPromptChainStepIDs: thread.completedPromptChainStepIDs,
             createdAt: thread.createdAt,
             updatedAt: importedAt
         )

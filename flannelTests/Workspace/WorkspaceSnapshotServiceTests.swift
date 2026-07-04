@@ -24,6 +24,9 @@ struct WorkspaceSnapshotServiceTests {
         #expect(payload.workspace.providerConfigurations.first?.secretReference == "keychain://openai")
         #expect(payload.workspace.providerConfigurations.first?.secretReference != "fixture-secret-value")
         #expect(payload.workspace.assistantThreads.map(\.title) == ["Local RAG Thread"])
+        #expect(payload.workspace.assistantThreads.first?.promptChainID == samplePromptChainID)
+        #expect(payload.workspace.assistantThreads.first?.activePromptChainStepID == samplePromptChainAnswerStepID)
+        #expect(payload.workspace.assistantThreads.first?.completedPromptChainStepIDs == [samplePromptChainScopeStepID])
         #expect(payload.workspace.chatFolders.map(\.title) == ["Research"])
         #expect(payload.workspace.promptProfiles.map(\.title) == ["Careful Local Assistant"])
         #expect(payload.workspace.chatTemplates.map(\.title) == ["Private Research"])
@@ -60,6 +63,9 @@ struct WorkspaceSnapshotServiceTests {
         #expect(result.item.providerConfigurations.first?.displayName == "OpenAI API")
         #expect(result.item.providerConfigurations.first?.secretReference == nil)
         #expect(result.item.providerConfigurations.first?.connectionStatus == .needsAttention)
+        #expect(result.item.assistantThreads.first?.promptChainID == samplePromptChainID)
+        #expect(result.item.assistantThreads.first?.activePromptChainStepID == samplePromptChainAnswerStepID)
+        #expect(result.item.assistantThreads.first?.completedPromptChainStepIDs == [samplePromptChainScopeStepID])
         #expect(result.item.knowledgeSources?.first?.isWatched == true)
         #expect(result.item.toolConfigurations?.first?.permissionPolicy == .askEveryTime)
         #expect(result.item.toolConfigurations?.first?.isEnabled == false)
@@ -188,6 +194,18 @@ struct WorkspaceSnapshotServiceTests {
         UUID(uuidString: "44444444-4444-4444-4444-444444444444")!
     }
 
+    private var samplePromptChainID: UUID {
+        UUID(uuidString: "66666666-6666-6666-6666-666666666666")!
+    }
+
+    private var samplePromptChainScopeStepID: UUID {
+        UUID(uuidString: "77777777-7777-7777-7777-777777777777")!
+    }
+
+    private var samplePromptChainAnswerStepID: UUID {
+        UUID(uuidString: "88888888-8888-8888-8888-888888888888")!
+    }
+
     private func sampleStore() -> WorkspaceStore {
         let store = WorkspaceStore()
         let now = Date(timeIntervalSince1970: 1_782_730_700)
@@ -226,6 +244,10 @@ struct WorkspaceSnapshotServiceTests {
                 )
             ],
             tagNames: ["research"],
+            knowledgeSourceIDs: [sampleKnowledgeSourceID],
+            promptChainID: samplePromptChainID,
+            activePromptChainStepID: samplePromptChainAnswerStepID,
+            completedPromptChainStepIDs: [samplePromptChainScopeStepID],
             createdAt: now,
             updatedAt: now
         )
@@ -283,16 +305,19 @@ struct WorkspaceSnapshotServiceTests {
         ]
         store.promptChains = [
             PromptChain(
+                id: samplePromptChainID,
                 title: "Private Research Chain",
                 detail: "Scope local evidence before answering.",
                 systemPrompt: "Stay local and cite sources.",
                 steps: [
                     PromptChainStep(
+                        id: samplePromptChainScopeStepID,
                         title: "Scope",
                         instruction: "Clarify the question and allowed provider modes.",
                         expectedOutput: "A scoped research plan."
                     ),
                     PromptChainStep(
+                        id: samplePromptChainAnswerStepID,
                         title: "Answer",
                         instruction: "Answer with local citations and open questions.",
                         expectedOutput: "A grounded answer."

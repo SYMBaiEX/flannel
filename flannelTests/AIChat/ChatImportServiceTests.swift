@@ -50,6 +50,43 @@ struct ChatImportServiceTests {
         #expect(importedAssistantMessage.toolCalls.first?.providerCallID == "call_workspace")
     }
 
+    @Test("JSON chat import preserves prompt-chain scope and progress")
+    func jsonChatImportPreservesPromptChainScopeAndProgress() throws {
+        var source = sampleThread()
+        let chainID = UUID(uuidString: "99A8D160-4993-4590-AD63-DA733C2F9C37")!
+        let completedStepID = UUID(uuidString: "23A85001-FA64-472A-9872-A8FB8586E088")!
+        let activeStepID = UUID(uuidString: "69EA1719-8AF0-4927-A445-75A7E41B826F")!
+        let knowledgeSourceID = UUID(uuidString: "9B24BA12-5E53-428A-8D30-AB4C9E43DD8A")!
+        source.knowledgeSourceIDs = [knowledgeSourceID]
+        source.promptChainID = chainID
+        source.activePromptChainStepID = activeStepID
+        source.completedPromptChainStepIDs = [completedStepID]
+
+        let data = try ChatExportService().export(
+            thread: source,
+            format: .json,
+            exportedAt: Date(timeIntervalSince1970: 1_782_641_200)
+        )
+
+        let imported = try ChatImportService().importThread(
+            from: data,
+            importedAt: Date(timeIntervalSince1970: 1_782_641_500)
+        ).thread
+
+        #expect(imported.id != source.id)
+        #expect(imported.folderID == nil)
+        #expect(imported.pinnedProjectID == nil)
+        #expect(imported.isArchived == false)
+        #expect(imported.knowledgeSourceIDs == [knowledgeSourceID])
+        #expect(imported.promptChainID == chainID)
+        #expect(imported.activePromptChainStepID == activeStepID)
+        #expect(imported.completedPromptChainStepIDs == [completedStepID])
+        let assistant = try #require(imported.messages.first(where: { $0.role == .assistant }))
+        #expect(assistant.providerDisplayName == "Local Ollama")
+        #expect(assistant.runStatus == .completed)
+        #expect(assistant.contextTokenCount == 96)
+    }
+
     @Test("Unsupported chat export schema is rejected")
     func unsupportedSchemaIsRejected() throws {
         let data = Data(

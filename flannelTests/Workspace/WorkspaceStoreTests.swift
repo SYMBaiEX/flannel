@@ -112,6 +112,9 @@ struct WorkspaceStoreTests {
         #expect(thread.folderID == folder.id)
         #expect(thread.tagNames.contains("prompt-chain"))
         #expect(thread.tagNames.contains("research"))
+        #expect(thread.promptChainID == chain.id)
+        #expect(thread.activePromptChainStepID == chain.enabledSteps.first?.id)
+        #expect(thread.completedPromptChainStepIDs.isEmpty)
         #expect(thread.messages.first?.role == .system)
         #expect(thread.messages.first?.text.contains("Saved prompt chain: Private Research Chain") == true)
         #expect(thread.messages.first?.text.contains("1. Scope") == true)
@@ -119,6 +122,59 @@ struct WorkspaceStoreTests {
         #expect(starterPrompt.contains("Clarify the research question") == true)
         #expect(store.preferences.preferredProviderID == localProvider.id)
         #expect(store.preferences.providerRoutingPolicy == .selectedProvider)
+    }
+
+    @MainActor
+    @Test("Prompt chain chats track active step progress")
+    func promptChainChatsTrackActiveStepProgress() throws {
+        let container = try ModelContainer(
+            for: Item.self,
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let store = WorkspaceStore()
+        try store.loadOrCreate(in: context)
+        let chain = try #require(store.promptChains.first { $0.title == "Private Research Chain" })
+        let enabledSteps = chain.enabledSteps
+        let firstStep = try #require(enabledSteps.first)
+        let secondStep = try #require(enabledSteps.dropFirst().first)
+
+        let thread = store.createAssistantThread(from: chain)
+        let initialState = try #require(store.promptChainState(for: thread))
+        let firstPrompt = store.renderActivePromptChainStepPrompt(for: thread)
+
+        #expect(initialState.chain.id == chain.id)
+        #expect(initialState.activeStep?.id == firstStep.id)
+        #expect(initialState.activeStepIndex == 0)
+        #expect(initialState.completedStepIDs.isEmpty)
+        #expect(initialState.progressLabel == "Step 1 of \(enabledSteps.count)")
+        #expect(firstPrompt.contains(firstStep.instruction))
+
+        let secondState = try #require(store.markActivePromptChainStepSubmitted(in: thread.id, stepID: firstStep.id))
+        let updatedThread = try #require(store.assistantThreads.first { $0.id == thread.id })
+        #expect(updatedThread.completedPromptChainStepIDs == [firstStep.id])
+        #expect(updatedThread.activePromptChainStepID == secondStep.id)
+        #expect(secondState.activeStep?.id == secondStep.id)
+        #expect(secondState.activeStepIndex == 1)
+
+        for step in enabledSteps.dropFirst() {
+            _ = store.markActivePromptChainStepSubmitted(in: thread.id, stepID: step.id)
+        }
+        let finalThread = try #require(store.assistantThreads.first { $0.id == thread.id })
+        let finalState = try #require(store.promptChainState(for: finalThread))
+        #expect(finalThread.activePromptChainStepID == nil)
+        #expect(finalThread.completedPromptChainStepIDs == enabledSteps.map(\.id))
+        #expect(finalState.isComplete)
+        #expect(finalState.progressLabel == "Chain complete")
+
+        try store.persist(in: context)
+        let reloadedStore = WorkspaceStore()
+        try reloadedStore.loadOrCreate(in: context)
+        let reloadedThread = try #require(reloadedStore.assistantThreads.first { $0.id == thread.id })
+        #expect(reloadedThread.promptChainID == chain.id)
+        #expect(reloadedThread.activePromptChainStepID == nil)
+        #expect(reloadedThread.completedPromptChainStepIDs == enabledSteps.map(\.id))
+        #expect(reloadedStore.promptChainState(for: reloadedThread)?.isComplete == true)
     }
 
     @MainActor

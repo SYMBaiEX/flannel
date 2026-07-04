@@ -1505,6 +1505,9 @@ nonisolated struct AssistantThread: Identifiable, Codable, Hashable, Sendable {
     var pinnedDraftID: UUID?
     var pinnedAssetID: UUID?
     var pinnedCalendarEntryID: UUID?
+    var promptChainID: UUID?
+    var activePromptChainStepID: UUID?
+    var completedPromptChainStepIDs: [UUID]
     var createdAt: Date
     var updatedAt: Date
 
@@ -1522,6 +1525,9 @@ nonisolated struct AssistantThread: Identifiable, Codable, Hashable, Sendable {
         pinnedDraftID: UUID? = nil,
         pinnedAssetID: UUID? = nil,
         pinnedCalendarEntryID: UUID? = nil,
+        promptChainID: UUID? = nil,
+        activePromptChainStepID: UUID? = nil,
+        completedPromptChainStepIDs: [UUID] = [],
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
@@ -1538,6 +1544,9 @@ nonisolated struct AssistantThread: Identifiable, Codable, Hashable, Sendable {
         self.pinnedDraftID = pinnedDraftID
         self.pinnedAssetID = pinnedAssetID
         self.pinnedCalendarEntryID = pinnedCalendarEntryID
+        self.promptChainID = promptChainID
+        self.activePromptChainStepID = activePromptChainStepID
+        self.completedPromptChainStepIDs = completedPromptChainStepIDs
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -1557,6 +1566,13 @@ nonisolated struct AssistantThread: Identifiable, Codable, Hashable, Sendable {
         pinnedDraftID = try container.decodeIfPresent(UUID.self, forKey: .pinnedDraftID)
         pinnedAssetID = try container.decodeIfPresent(UUID.self, forKey: .pinnedAssetID)
         pinnedCalendarEntryID = try container.decodeIfPresent(UUID.self, forKey: .pinnedCalendarEntryID)
+        promptChainID = try container.decodeIfPresent(UUID.self, forKey: .promptChainID)
+        activePromptChainStepID = try container.decodeIfPresent(UUID.self, forKey: .activePromptChainStepID)
+        completedPromptChainStepIDs = try container.decode(
+            [UUID].self,
+            forKey: .completedPromptChainStepIDs,
+            default: []
+        )
         createdAt = try container.decode(Date.self, forKey: .createdAt, default: .now)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt, default: createdAt)
     }

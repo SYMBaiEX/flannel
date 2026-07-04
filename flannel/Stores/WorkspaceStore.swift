@@ -1802,6 +1802,7 @@ final class WorkspaceStore {
         assistantThreads.insert(thread, at: 0)
         selectedAssistantThreadID = thread.id
         selectedDestination = .home
+        normalizePromptChainThreadState()
 
         for message in thread.messages where message.isPinned {
             pinnedMessages.insert(
@@ -1972,6 +1973,80 @@ final class WorkspaceStore {
         return rendered.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : rendered
     }
 
+    func promptChainState(for thread: AssistantThread? = nil) -> PromptChainThreadState? {
+        guard let thread = thread ?? currentAssistantThread,
+              let chainID = thread.promptChainID,
+              let chain = promptChains.first(where: { $0.id == chainID }) else {
+            return nil
+        }
+
+        let enabledSteps = chain.enabledSteps
+        guard !enabledSteps.isEmpty else { return nil }
+
+        let enabledStepIDs = Set(enabledSteps.map(\.id))
+        let completedStepIDs = stableUnique(thread.completedPromptChainStepIDs)
+            .filter { enabledStepIDs.contains($0) }
+        let completedSet = Set(completedStepIDs)
+        let activeIndex = thread.activePromptChainStepID.flatMap { activeStepID in
+            enabledSteps.firstIndex { $0.id == activeStepID && !completedSet.contains($0.id) }
+        } ?? enabledSteps.firstIndex { !completedSet.contains($0.id) }
+        let activeStep = activeIndex.map { enabledSteps[$0] }
+
+        return PromptChainThreadState(
+            chain: chain,
+            enabledSteps: enabledSteps,
+            completedStepIDs: completedStepIDs,
+            activeStep: activeStep,
+            activeStepIndex: activeIndex
+        )
+    }
+
+    func renderActivePromptChainStepPrompt(
+        for thread: AssistantThread? = nil,
+        now: Date = .now
+    ) -> String {
+        let resolvedThread = thread ?? currentAssistantThread
+        guard let state = promptChainState(for: resolvedThread),
+              let activeStep = state.activeStep else {
+            return ""
+        }
+
+        let rendered = renderPromptTemplate(
+            activeStep.instruction,
+            now: now,
+            thread: resolvedThread,
+            knowledgeSourceIDs: state.chain.knowledgeSourceIDs
+        )
+        return rendered.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : rendered
+    }
+
+    @discardableResult
+    func markActivePromptChainStepSubmitted(
+        in threadID: UUID? = nil,
+        stepID: UUID? = nil
+    ) -> PromptChainThreadState? {
+        guard let resolvedThreadID = threadID ?? selectedAssistantThreadID,
+              let threadIndex = assistantThreads.firstIndex(where: { $0.id == resolvedThreadID }),
+              let state = promptChainState(for: assistantThreads[threadIndex]) else {
+            return nil
+        }
+
+        let enabledStepIDs = Set(state.enabledSteps.map(\.id))
+        let submittedStepID = stepID ?? state.activeStep?.id
+        if let submittedStepID,
+           enabledStepIDs.contains(submittedStepID),
+           !assistantThreads[threadIndex].completedPromptChainStepIDs.contains(submittedStepID) {
+            assistantThreads[threadIndex].completedPromptChainStepIDs.append(submittedStepID)
+        }
+
+        let completedSet = Set(assistantThreads[threadIndex].completedPromptChainStepIDs)
+        let nextStep = state.enabledSteps.first { !completedSet.contains($0.id) }
+        assistantThreads[threadIndex].activePromptChainStepID = nextStep?.id
+        assistantThreads[threadIndex].updatedAt = .now
+        normalizePromptChainThreadState()
+        return promptChainState(for: assistantThreads[threadIndex])
+    }
+
     func renderPromptChainPlanPrompt(
         _ chain: PromptChain,
         for thread: AssistantThread? = nil,
@@ -2074,7 +2149,9 @@ final class WorkspaceStore {
             pinnedProjectID: selectedProjectID,
             pinnedDraftID: selectedDraftID,
             pinnedAssetID: selectedAssetID,
-            pinnedCalendarEntryID: selectedCalendarEntryID
+            pinnedCalendarEntryID: selectedCalendarEntryID,
+            promptChainID: chain.id,
+            activePromptChainStepID: chain.enabledSteps.first?.id
         )
         thread.messages = [
             AssistantMessage(
@@ -2110,6 +2187,9 @@ final class WorkspaceStore {
             pinnedDraftID: sourceThread.pinnedDraftID,
             pinnedAssetID: sourceThread.pinnedAssetID,
             pinnedCalendarEntryID: sourceThread.pinnedCalendarEntryID,
+            promptChainID: sourceThread.promptChainID,
+            activePromptChainStepID: sourceThread.activePromptChainStepID,
+            completedPromptChainStepIDs: sourceThread.completedPromptChainStepIDs,
             createdAt: .now,
             updatedAt: .now
         )
@@ -2139,6 +2219,9 @@ final class WorkspaceStore {
             pinnedDraftID: sourceThread.pinnedDraftID,
             pinnedAssetID: sourceThread.pinnedAssetID,
             pinnedCalendarEntryID: sourceThread.pinnedCalendarEntryID,
+            promptChainID: sourceThread.promptChainID,
+            activePromptChainStepID: sourceThread.activePromptChainStepID,
+            completedPromptChainStepIDs: sourceThread.completedPromptChainStepIDs,
             createdAt: .now,
             updatedAt: .now
         )
@@ -5488,6 +5571,7 @@ final class WorkspaceStore {
         normalizePromptProfileState()
         normalizeChatTemplateState()
         normalizePromptChainState()
+        normalizePromptChainThreadState()
         normalizeModelPresetState()
         normalizeProjectAIProfileState()
         tags = buildTagRegistry()
@@ -6718,6 +6802,37 @@ final class WorkspaceStore {
                 promptChains[index].steps[stepIndex].expectedOutput = promptChains[index].steps[stepIndex].expectedOutput
                     .trimmingCharacters(in: .whitespacesAndNewlines)
             }
+        }
+    }
+
+    private func normalizePromptChainThreadState() {
+        let chainsByID = Dictionary(uniqueKeysWithValues: promptChains.map { ($0.id, $0) })
+        for index in assistantThreads.indices {
+            guard let chainID = assistantThreads[index].promptChainID,
+                  let chain = chainsByID[chainID] else {
+                assistantThreads[index].promptChainID = nil
+                assistantThreads[index].activePromptChainStepID = nil
+                assistantThreads[index].completedPromptChainStepIDs = []
+                continue
+            }
+
+            let enabledSteps = chain.enabledSteps
+            let enabledStepIDs = Set(enabledSteps.map(\.id))
+            assistantThreads[index].completedPromptChainStepIDs = stableUnique(
+                assistantThreads[index].completedPromptChainStepIDs
+            )
+            .filter { enabledStepIDs.contains($0) }
+
+            let completedStepIDs = Set(assistantThreads[index].completedPromptChainStepIDs)
+            if let activeStepID = assistantThreads[index].activePromptChainStepID,
+               enabledStepIDs.contains(activeStepID),
+               !completedStepIDs.contains(activeStepID) {
+                continue
+            }
+
+            assistantThreads[index].activePromptChainStepID = enabledSteps
+                .first { !completedStepIDs.contains($0.id) }?
+                .id
         }
     }
 

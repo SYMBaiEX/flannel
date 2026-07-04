@@ -37,6 +37,8 @@ struct ContentView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var composerText = ""
     @State private var composerAttachments: [AIChatAttachment] = []
+    @State private var pendingPromptChainThreadID: UUID?
+    @State private var pendingPromptChainStepID: UUID?
     @State private var isDiscoveringModels = false
     @State private var lastLocalDiscoveryStartedAt: Date?
     @State private var localProviderAutoDiscoveryTask: Task<Void, Never>?
@@ -194,6 +196,7 @@ struct ContentView: View {
             sendMessage: sendMessage,
             cancelStreaming: cancelStreaming,
             compareCurrentPrompt: compareCurrentPrompt,
+            continuePromptChain: continuePromptChain,
             runComparison: runModelComparison,
             cancelComparison: cancelModelComparison,
             toggleMessagePin: toggleMessagePin,
@@ -620,6 +623,8 @@ struct ContentView: View {
         let starterPrompt = template.map { store.renderChatTemplateStarterPrompt($0, for: thread) } ?? ""
         composerText = starterPrompt
         composerAttachments = []
+        pendingPromptChainThreadID = nil
+        pendingPromptChainStepID = nil
         requestComposerFocus()
         persistQuietly()
     }
@@ -628,8 +633,30 @@ struct ContentView: View {
         let thread = store.createAssistantThread(from: chain, folderID: folderID)
         composerText = store.renderPromptChainStarterPrompt(chain, for: thread)
         composerAttachments = []
+        pendingPromptChainThreadID = thread.id
+        pendingPromptChainStepID = thread.activePromptChainStepID
         requestComposerFocus()
         persistQuietly()
+    }
+
+    private func continuePromptChain() {
+        guard let thread = store.currentAssistantThread,
+              let state = store.promptChainState(for: thread),
+              let activeStep = state.activeStep else { return }
+
+        let prompt = store.renderActivePromptChainStepPrompt(for: thread)
+        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        if composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            composerText = prompt
+        } else {
+            composerText += "\n\n\(prompt)"
+        }
+
+        pendingPromptChainThreadID = thread.id
+        pendingPromptChainStepID = activeStep.id
+        requestComposerFocus()
+        announce("Loaded prompt chain \(state.progressLabel): \(activeStep.title)")
     }
 
     private func sendMessage() {
@@ -641,6 +668,15 @@ struct ContentView: View {
         let messageText = prompt.isEmpty ? "Review the attached files." : prompt
         store.appendAssistantMessage(messageText, role: .user, attachments: outgoingAttachments)
         guard let sourceThreadID = store.selectedAssistantThreadID else { return }
+        if pendingPromptChainThreadID == sourceThreadID,
+           let pendingPromptChainStepID {
+            _ = store.markActivePromptChainStepSubmitted(
+                in: sourceThreadID,
+                stepID: pendingPromptChainStepID
+            )
+        }
+        pendingPromptChainThreadID = nil
+        pendingPromptChainStepID = nil
         composerText = ""
         composerAttachments = []
 
@@ -3846,6 +3882,7 @@ private struct MainSurface: View {
     var sendMessage: () -> Void
     var cancelStreaming: () -> Void
     var compareCurrentPrompt: () -> Void
+    var continuePromptChain: () -> Void
     var runComparison: () -> Void
     var cancelComparison: () -> Void
     var toggleMessagePin: (AssistantMessage) -> Void
@@ -3880,6 +3917,7 @@ private struct MainSurface: View {
                         sendMessage: sendMessage,
                         cancelStreaming: cancelStreaming,
                         compareCurrentPrompt: compareCurrentPrompt,
+                        continuePromptChain: continuePromptChain,
                         toggleMessagePin: toggleMessagePin,
                         copyMessage: copyMessage,
                         retryFromMessage: retryFromMessage,
@@ -4071,6 +4109,7 @@ private struct ChatSurface: View {
     var sendMessage: () -> Void
     var cancelStreaming: () -> Void
     var compareCurrentPrompt: () -> Void
+    var continuePromptChain: () -> Void
     var toggleMessagePin: (AssistantMessage) -> Void
     var copyMessage: (AssistantMessage) -> Void
     var retryFromMessage: (AssistantMessage) -> Void
@@ -4179,6 +4218,7 @@ private struct ChatSurface: View {
 
                             Composer(
                                 contextBudget: composerContextBudget,
+                                promptChainState: store.promptChainState(),
                                 text: $composerText,
                                 attachments: $composerAttachments,
                                 isStreamingResponse: isStreamingResponse,
@@ -4188,7 +4228,8 @@ private struct ChatSurface: View {
                                     sendMessage()
                                 },
                                 cancel: cancelStreaming,
-                                compare: compareCurrentPrompt
+                                compare: compareCurrentPrompt,
+                                continuePromptChain: continuePromptChain
                             )
                             .frame(maxWidth: Self.chatContentMaxWidth)
                             .padding(12)
@@ -5575,6 +5616,7 @@ private struct ChatExportMenu: View {
 
 private struct Composer: View {
     var contextBudget: ChatContextBudget?
+    var promptChainState: PromptChainThreadState?
     @Binding var text: String
     @Binding var attachments: [AIChatAttachment]
     var isStreamingResponse: Bool
@@ -5582,6 +5624,7 @@ private struct Composer: View {
     var send: () -> Void
     var cancel: () -> Void
     var compare: () -> Void
+    var continuePromptChain: () -> Void
     @State private var isFileImporterPresented = false
     @State private var isDropTargeted = false
     @State private var attachmentImportError: String?
@@ -5593,6 +5636,12 @@ private struct Composer: View {
 
     private var canComparePrompt: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var canContinuePromptChain: Bool {
+        !isStreamingResponse
+            && promptChainState?.activeStep != nil
+            && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var editorHeight: CGFloat {
@@ -5670,6 +5719,7 @@ private struct Composer: View {
             HStack(alignment: .center, spacing: 8) {
                 ComposerStatusStrip(
                     contextBudget: contextBudget,
+                    promptChainState: promptChainState,
                     attachmentCount: attachments.count,
                     isStreamingResponse: isStreamingResponse
                 )
@@ -5691,6 +5741,25 @@ private struct Composer: View {
                 .help(attachHelpText)
                 .accessibilityLabel("Attach files")
                 .accessibilityHint(attachHelpText)
+
+                if canContinuePromptChain {
+                    Button {
+                        continuePromptChain()
+                    } label: {
+                        Image(systemName: "play.fill")
+                            .font(.body)
+                            .frame(width: 30, height: 28)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.regular)
+                    .flannelGlassCapsule(.clear, interactive: true)
+                    .keyboardShortcut("]", modifiers: [.command, .shift])
+                    .disabled(!canContinuePromptChain)
+                    .help(promptChainHelpText)
+                    .accessibilityLabel("Continue prompt chain")
+                    .accessibilityHint(promptChainHelpText)
+                }
 
                 Button {
                     compare()
@@ -5782,6 +5851,19 @@ private struct Composer: View {
         return canComparePrompt ? "Compare the current prompt across multiple runnable models." : "Type a prompt before comparing models."
     }
 
+    private var promptChainHelpText: String {
+        guard let state = promptChainState else {
+            return "No prompt chain is active in this chat."
+        }
+        guard let activeStep = state.activeStep else {
+            return "This prompt chain is complete."
+        }
+        if isStreamingResponse {
+            return "Wait for the current response to finish before loading \(activeStep.title)."
+        }
+        return "Load \(activeStep.title) into the composer. Keyboard shortcut Command Shift Right Bracket."
+    }
+
     private var primaryActionLabel: String {
         isStreamingResponse ? "Stop response" : "Send message"
     }
@@ -5826,6 +5908,7 @@ private struct Composer: View {
 
 private struct ComposerStatusStrip: View {
     var contextBudget: ChatContextBudget?
+    var promptChainState: PromptChainThreadState?
     var attachmentCount: Int
     var isStreamingResponse: Bool
 
@@ -5843,6 +5926,12 @@ private struct ComposerStatusStrip: View {
                 )
                 .help(contextBudget.detail)
                 .accessibilityLabel(contextBudget.accessibilityLabel)
+            }
+
+            if let promptChainState {
+                CapsuleLabel(promptChainState.progressLabel, icon: "list.bullet.clipboard")
+                    .help(promptChainState.detail)
+                    .accessibilityLabel(promptChainState.detail)
             }
 
             if attachmentCount > 0 {

@@ -1223,6 +1223,42 @@ struct PromptChain: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+struct PromptChainThreadState: Hashable, Sendable {
+    var chain: PromptChain
+    var enabledSteps: [PromptChainStep]
+    var completedStepIDs: [UUID]
+    var activeStep: PromptChainStep?
+    var activeStepIndex: Int?
+
+    var completedStepCount: Int {
+        completedStepIDs.count
+    }
+
+    var totalStepCount: Int {
+        enabledSteps.count
+    }
+
+    var isComplete: Bool {
+        activeStep == nil && totalStepCount > 0 && completedStepCount >= totalStepCount
+    }
+
+    var progressLabel: String {
+        if isComplete {
+            return "Chain complete"
+        }
+
+        let nextStepNumber = activeStepIndex.map { $0 + 1 } ?? min(completedStepCount + 1, totalStepCount)
+        return "Step \(nextStepNumber) of \(totalStepCount)"
+    }
+
+    var detail: String {
+        if let activeStep {
+            return "\(chain.title): \(progressLabel), \(activeStep.title)"
+        }
+        return "\(chain.title): \(progressLabel)"
+    }
+}
+
 struct ModelPreset: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var title: String
