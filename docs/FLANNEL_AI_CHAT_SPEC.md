@@ -29,7 +29,7 @@ These references keep Flannel's provider and macOS architecture vocabulary align
 - Anthropic: official hosted integration is the Messages API. Claude subscription-style use must remain a Claude Code CLI print-mode route when configured, not an Anthropic API-key mode.
 - Ollama: native local integration is the loopback `/api/*` surface for model list, running models, chat streaming, pull/delete, show, and embeddings.
 - LM Studio: local integration should prefer the native local server model list when available and keep the OpenAI-compatible `/v1/*` routes as the chat/embedding compatibility surface.
-- Vercel AI SDK: keep the bridge external and version-neutral. The current public AI SDK docs identify Version 6 as the latest documentation line, so Flannel should not hardcode a v7 dependency claim until upstream docs actually support it.
+- Vercel AI SDK: keep the bridge external to Swift. Current AI SDK 7 documentation supports `streamText`, custom stream events, tool streaming, and tool approval semantics that fit Flannel's local bridge contract without requiring an embedded native SDK dependency.
 
 ## 3. Provider mode truth
 
@@ -280,6 +280,7 @@ These references keep Flannel's provider and macOS architecture vocabulary align
   - `KnowledgeSourceWatchService` starts debounced FSEvents streams for watched folder and code-repository roots, queues changed sources, and rebuilds affected local manifests through `WorkspaceStore.rebuildKnowledgeIndexManifests(onlyQueued:)`.
   - User-triggered web-page capture via `WebPageCaptureService`, storing readable page text in a local `TranscriptRecord`.
   - Web references do not index placeholder metadata before capture; captured page body text is what enters retrieval.
+  - Opt-in scheduled watched web-page refresh through `WatchedWebPageRefreshSchedule` and `WorkspaceStore.runScheduledWatchedWebPageRefresh`; due startup refreshes queue stale captures, fetch through `WebPageCaptureService`, rebuild local indexes, record last-run state, and skip network work while local-only mode is active.
   - `KnowledgeIndexManifest` persistence with source bookkeeping, fingerprints, and vector counts.
   - `LocalKnowledgeIndexingService` deterministic chunking, local scoring, snippet/citation support.
   - `LocalEmbeddingService` support for Ollama `/api/embed` and OpenAI-compatible `/v1/embeddings` request/response.
@@ -291,7 +292,6 @@ These references keep Flannel's provider and macOS architecture vocabulary align
 - Chat/history grounding:
   - `chatHistory` and `workspaceNotes` are first-class knowledge source kinds.
 - Not implemented in this phase:
-  - durable scheduled URL refresh jobs
   - provider-backed embedding generation scheduling
   - learned reranking
 
@@ -455,7 +455,6 @@ Future milestones:
 - Add richer browser session automation or DOM inspection only behind a separate explicit capability and stronger approval model.
 - Upgrade approved tool-result follow-up from transcript-grounded continuation prompts to provider-native tool-result roles where the selected transport supports them.
 - Add an operator/runbook and reference Node service for the local AI SDK bridge endpoint.
-- Add scheduled URL refresh jobs for production RAG refresh.
 - Add learned reranking on top of deterministic provider routing policies.
 
 ## 17. Known implementation limits
