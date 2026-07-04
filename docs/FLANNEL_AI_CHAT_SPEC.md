@@ -282,10 +282,10 @@ These references keep Flannel's provider and macOS architecture vocabulary align
   - Web references do not index placeholder metadata before capture; captured page body text is what enters retrieval.
   - Opt-in scheduled watched web-page refresh through `WatchedWebPageRefreshSchedule` and `WorkspaceStore.runScheduledWatchedWebPageRefresh`; due startup refreshes queue stale captures, fetch through `WebPageCaptureService`, rebuild local indexes, record last-run state, and skip network work while local-only mode is active.
   - `KnowledgeIndexManifest` persistence with source bookkeeping, fingerprints, and vector counts.
-  - `LocalKnowledgeIndexingService` deterministic chunking, local scoring, snippet/citation support.
+  - `LocalKnowledgeIndexingService` deterministic chunking, local scoring, source-diversity reranking, matched-term novelty boosts, and snippet/citation support.
   - `LocalEmbeddingService` support for Ollama `/api/embed` and OpenAI-compatible `/v1/embeddings` request/response.
   - `LocalKnowledgeVectorStore` persisted JSON vectors with fingerprint checks.
-  - `WorkspaceStore.localKnowledgeRetrievalPacket(for:)` hybrid keyword/vector retrieval for chat grounding.
+  - `WorkspaceStore.localKnowledgeRetrievalPacket(for:)` hybrid keyword/vector retrieval for chat grounding, with reranking applied after configured embedding vector groups are merged.
   - `AssistantThread.knowledgeSourceIDs` stores an optional per-thread knowledge-source scope. Chat templates can seed it, the inspector can edit it, and chat/model-comparison/tool retrieval passes it through so cited context only comes from the selected local sources.
   - chat-time prompt injection via `retrievalPacket.promptContext`.
   - source-backed citations/`Sources` rendering in responses, comparison runs, and the Artifacts inspector with resolved source/manifest status, location, chunk, vector, and match metadata.
@@ -293,7 +293,7 @@ These references keep Flannel's provider and macOS architecture vocabulary align
   - `chatHistory` and `workspaceNotes` are first-class knowledge source kinds.
 - Not implemented in this phase:
   - provider-backed embedding generation scheduling
-  - learned reranking
+  - learned/provider-assisted reranking
 
 ## 13. Chat actions and organization
 
@@ -455,7 +455,7 @@ Future milestones:
 - Add richer browser session automation or DOM inspection only behind a separate explicit capability and stronger approval model.
 - Upgrade approved tool-result follow-up from transcript-grounded continuation prompts to provider-native tool-result roles where the selected transport supports them.
 - Add an operator/runbook and reference Node service for the local AI SDK bridge endpoint.
-- Add learned reranking on top of deterministic provider routing policies.
+- Add learned/provider-assisted reranking on top of deterministic local retrieval reranking.
 
 ## 17. Known implementation limits
 

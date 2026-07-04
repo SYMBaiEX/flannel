@@ -199,15 +199,15 @@ Flannel is released under the MIT License. See [LICENSE](LICENSE).
   - Local PDF text extraction through PDFKit for searchable document snippets.
   - User-initiated web-page capture that fetches readable HTML text, stores it as a local transcript, previews the captured body, and indexes only captured page text instead of placeholder metadata.
   - Opt-in scheduled watched web-page refresh: Knowledge settings stores refresh interval/batch preferences, startup runs due refreshes, local-only mode blocks network capture, and refreshed captures rebuild local indexes.
-  - `LocalKnowledgeIndexingService` with deterministic chunking and local ranking.
+  - `LocalKnowledgeIndexingService` with deterministic chunking, local ranking, and post-score reranking for source diversity and matched-term novelty.
   - `LocalKnowledgeVectorStore` with persisted JSON vector records.
-  - `WorkspaceStore.localKnowledgeRetrievalPacket(for:)` hybrid keyword/vector packet generation.
+  - `WorkspaceStore.localKnowledgeRetrievalPacket(for:)` hybrid keyword/vector packet generation with the same reranked context order used by configured embedding retrieval.
   - Thread-scoped retrieval via `AssistantThread.knowledgeSourceIDs`, so scoped chats only retrieve and cite selected knowledge sources while unscoped chats continue to use the full workspace knowledge set.
   - Command palette actions for opening Knowledge settings, rebuilding queued/stale/unindexed sources, and rebuilding every local source without adding more top-level sidebar tabs.
   - Citation block construction (`Sources`) and source-backed `AssistantMessage.citations` rendering with resolved knowledge source, manifest, status, location, chunk, vector, and match metadata in chat, comparison, and Artifacts panels.
 - `KnowledgeSource.chatHistory` is seeded so local chat context can be re-grounded.
 - Remaining:
-  - learned reranking and remote-operator connector upgrades
+  - learned/provider-assisted reranking and remote-operator connector upgrades
 
 ## Run and verification commands
 
