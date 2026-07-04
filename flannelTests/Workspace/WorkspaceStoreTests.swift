@@ -5162,7 +5162,7 @@ struct WorkspaceStoreTests {
             connectionStatus: .ready,
             supportsStreaming: true
         )
-        let cloudProvider = ProviderConfiguration(
+        var cloudProvider = ProviderConfiguration(
             id: UUID(uuidString: "d31f6f20-9f58-4e7b-b6b7-0cf2f0db4f8a")!,
             kind: .openAI,
             accessMode: .apiKey,
@@ -5170,11 +5170,20 @@ struct WorkspaceStoreTests {
             displayName: "Snapshot cloud",
             endpoint: "https://api.openai.com/v1",
             modelIdentifier: "gpt-4.1-mini",
-            secretReference: "flannel.tests:snapshot-openai-key",
             isEnabled: true,
             connectionStatus: .ready,
             supportsStreaming: true
         )
+        let cloudReference = try #require(ProviderSetupService.shared.canonicalSecretReference(for: cloudProvider))
+        _ = try KeychainSecretStore().save(
+            "fixture-model-comparison-key",
+            account: cloudReference.account,
+            service: cloudReference.service
+        )
+        defer {
+            try? KeychainSecretStore().delete(cloudReference)
+        }
+        cloudProvider.secretReference = cloudReference.rawValue
         store.providerConfigurations = [localProvider, cloudProvider]
         #expect(store.isProviderRunnableForChat(localProvider))
         #expect(store.isProviderRunnableForChat(cloudProvider))

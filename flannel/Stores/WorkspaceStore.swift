@@ -717,11 +717,14 @@ final class WorkspaceStore {
                     named: providerConfigurations[index].modelIdentifier,
                     in: result.models
                 ) {
+                    let currentModelWasPreviouslyDiscovered = previousDiscoveredModelNames
+                        .contains(providerConfigurations[index].modelIdentifier)
                     applySelectedLocalModelRuntime(
                         selectedModel,
                         allDiscoveredModels: result.models,
                         toProviderAt: index,
-                        preserveExistingContextWhenMissing: true
+                        preserveExistingContextWhenMissing: true,
+                        preserveExistingContextValue: currentModelWasPreviouslyDiscovered
                     )
                 } else {
                     providerConfigurations[index].capabilities = Array(Set(providerConfigurations[index].capabilities + discoveredCapabilities))
@@ -972,7 +975,8 @@ final class WorkspaceStore {
         _ model: LocalModelDescriptor,
         allDiscoveredModels: [LocalModelDescriptor],
         toProviderAt index: Int,
-        preserveExistingContextWhenMissing: Bool
+        preserveExistingContextWhenMissing: Bool,
+        preserveExistingContextValue: Bool = false
     ) {
         let providerSupportsEmbeddings = if allDiscoveredModels.isEmpty {
             providerConfigurations[index].supportsEmbeddings
@@ -992,7 +996,8 @@ final class WorkspaceStore {
         providerConfigurations[index].supportsVision = model.capabilities.contains(.vision)
         providerConfigurations[index].supportsStructuredOutput = model.capabilities.contains(.structuredOutput)
 
-        if let contextWindowTokens = model.contextWindowTokens {
+        if let contextWindowTokens = model.contextWindowTokens,
+           !preserveExistingContextValue || providerConfigurations[index].contextWindowTokens == nil {
             providerConfigurations[index].contextWindowTokens = contextWindowTokens
         } else if !preserveExistingContextWhenMissing {
             providerConfigurations[index].contextWindowTokens = nil
