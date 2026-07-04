@@ -15,6 +15,7 @@ Icon?
 
 # Swift Package Manager / build output
 .build/
+.swiftpm/
 Build/
 build/
 DerivedData/
@@ -33,6 +34,11 @@ xcuserdata/
 *.xcarchive
 
 # App signing, provisioning, and export products
+*.app/
+*.ipa
+*.pkg
+*.dmg
+*.zip
 *.mobileprovision
 *.provisionprofile
 *.p8
@@ -44,6 +50,8 @@ xcuserdata/
 *.keystore
 *.developerprofile
 ExportOptions.plist
+*.entitlements.local
+*.notarization-profile
 
 # Local runtime data and logs
 *.log
@@ -59,6 +67,7 @@ Application Support/
 Containers/
 
 # Flannel private exports and local handoff artifacts
+.flannel/
 *.flannelworkspace.json
 *-chat-export.json
 *-chat-export.md
@@ -81,6 +90,9 @@ Exports/
 *.secret
 *.auth.json
 *.credentials.json
+credentials.json
+service-account*.json
+*service-account*.json
 .netrc
 secrets/
 private/
