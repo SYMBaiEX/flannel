@@ -5169,7 +5169,7 @@ private struct MessageBubble: View {
                     }
                 }
 
-                if !message.metadataChips.isEmpty {
+                if message.hasRunDetailDisclosure {
                     MessageMetadataSummaryStrip(
                         chips: visibleRunSummaryChips,
                         overflowCount: hiddenRunSummaryChipCount
@@ -5177,9 +5177,15 @@ private struct MessageBubble: View {
                     .padding(.top, 2)
 
                     DisclosureGroup(isExpanded: $showsDetails) {
-                        FlowLayout(spacing: 6) {
-                            ForEach(message.metadataChips, id: \.self) { chip in
-                                CapsuleLabel(chip.title, icon: chip.icon)
+                        VStack(alignment: .leading, spacing: 8) {
+                            MessageRunDetailsCard(message: message)
+
+                            if !message.metadataChips.isEmpty {
+                                FlowLayout(spacing: 6) {
+                                    ForEach(message.metadataChips, id: \.self) { chip in
+                                        CapsuleLabel(chip.title, icon: chip.icon)
+                                    }
+                                }
                             }
                         }
                         .padding(.top, 6)
@@ -5279,6 +5285,66 @@ private struct MessageMetadataSummaryStrip: View {
         let visible = chips.map(\.title).joined(separator: ", ")
         guard overflowCount > 0 else { return "Message run details: \(visible)" }
         return "Message run details: \(visible), \(overflowCount) more"
+    }
+}
+
+private struct MessageRunDetailsCard: View {
+    var message: AssistantMessage
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            if let contextUsage = message.contextUsageSummary,
+               let fraction = contextUsage.fraction {
+                VStack(alignment: .leading, spacing: 4) {
+                    Gauge(value: fraction, in: 0...1) {
+                        Label("Context", systemImage: "gauge.with.dots.needle.33percent")
+                    } currentValueLabel: {
+                        Text(contextUsage.percentText ?? "")
+                    }
+                    .gaugeStyle(.accessoryLinear)
+                    .tint(contextUsage.isNearLimit ? .orange : .accentColor)
+
+                    Text(contextUsage.displayText)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(contextUsage.accessibilityLabel)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(visibleRows, id: \.self) { row in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Label(row.title, systemImage: row.systemImage)
+                            .labelStyle(.titleAndIcon)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 86, alignment: .leading)
+                        Text(row.value)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(row.title). \(row.value)")
+                }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(.secondary.opacity(0.14), lineWidth: 0.5)
+        }
+    }
+
+    private var visibleRows: [AssistantMessageRunDetailRow] {
+        if message.contextUsageSummary?.fraction != nil {
+            return message.runDetailRows.filter { $0.title != "Context" }
+        }
+        return message.runDetailRows
     }
 }
 
