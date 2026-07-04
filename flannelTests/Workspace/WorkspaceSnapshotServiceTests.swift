@@ -57,11 +57,93 @@ struct WorkspaceSnapshotServiceTests {
         #expect(result.item.assistantThreads.first?.id == sampleThreadID)
         #expect(result.item.selectedAssistantThreadID == sampleThreadID)
         #expect(result.item.providerConfigurations.first?.displayName == "OpenAI API")
-        #expect(result.item.providerConfigurations.first?.secretReference == "keychain://openai")
+        #expect(result.item.providerConfigurations.first?.secretReference == nil)
+        #expect(result.item.providerConfigurations.first?.connectionStatus == .needsAttention)
         #expect(result.item.knowledgeSources?.first?.isWatched == true)
+        #expect(result.item.toolConfigurations?.first?.permissionPolicy == .askEveryTime)
+        #expect(result.item.toolConfigurations?.first?.isEnabled == false)
+        #expect(result.item.toolConfigurations?.first?.secretReference == nil)
         #expect(result.item.toolExecutionResults?.first?.status == .completed)
         #expect(result.item.modelComparisonRuns?.first?.results.first?.providerDisplayName == "OpenAI API")
         #expect(result.item.localDiscoveryResults?.first?.models.map(\.name) == ["llama3.1", "nomic-embed-text"])
+        #expect(result.item.preferences.preferredProviderID == nil)
+        #expect(result.item.preferences.allowCloudProviders == false)
+        #expect(result.item.preferences.localOnlyMode == true)
+        #expect(result.item.preferences.confirmBeforeExternalActions == true)
+    }
+
+    @Test("Workspace snapshot import neutralizes untrusted execution and credential state")
+    func workspaceSnapshotImportNeutralizesUntrustedExecutionState() throws {
+        let exportedData = try WorkspaceSnapshotService().export(store: sampleStore())
+        var payload = try JSONDecoder.flannelSnapshot.decode(WorkspaceSnapshotPayload.self, from: exportedData)
+        let importedAt = Date(timeIntervalSince1970: 1_782_731_300)
+
+        payload.workspace.preferences.preferredProviderID = sampleProviderID
+        payload.workspace.preferences.providerRoutingPolicy = .selectedProvider
+        payload.workspace.preferences.allowCloudProviders = true
+        payload.workspace.preferences.localOnlyMode = false
+        payload.workspace.preferences.confirmBeforeExternalActions = false
+        payload.workspace.preferences.safeMode = false
+        payload.workspace.preferences.automationsEnabled = true
+        payload.workspace.providerConfigurations[0].secretReference = "flannel.tests.other:borrowed-openai-key"
+        payload.workspace.providerConfigurations[0].connectionStatus = .ready
+        payload.workspace.providerConfigurations[0].lastValidatedAt = importedAt
+        payload.workspace.providerConfigurations[0].lastErrorMessage = nil
+        payload.workspace.toolConfigurations = [
+            ToolConfiguration(
+                kind: .terminal,
+                title: "Terminal",
+                detail: "Imported terminal",
+                permissionPolicy: .alwaysAllow,
+                isEnabled: true,
+                canModifyFiles: true,
+                endpoint: "https://tools.example.invalid/run",
+                secretReference: "flannel.tests.other:terminal-token"
+            )
+        ]
+        payload.workspace.automations = [
+            WorkspaceAutomation(
+                title: "Imported shell",
+                detail: "Should not run after import",
+                cadence: .hourly,
+                isEnabled: true,
+                requiresConfirmation: false,
+                linkedDestination: .home,
+                actionKind: .runTool,
+                action: WorkspaceAutomationAction(
+                    kind: .runTool,
+                    toolKind: .terminal,
+                    query: "echo imported"
+                ),
+                lastRunState: .queued,
+                nextRunAt: importedAt
+            )
+        ]
+
+        let data = try JSONEncoder.flannelSnapshot.encode(payload)
+        let result = try WorkspaceSnapshotService().importWorkspace(from: data, importedAt: importedAt)
+        let importedProvider = try #require(result.item.providerConfigurations.first)
+        let importedTool = try #require(result.item.toolConfigurations?.first)
+        let importedAutomation = try #require(result.item.automations?.first)
+
+        #expect(result.item.preferences.preferredProviderID == nil)
+        #expect(result.item.preferences.allowCloudProviders == false)
+        #expect(result.item.preferences.localOnlyMode == true)
+        #expect(result.item.preferences.confirmBeforeExternalActions == true)
+        #expect(result.item.preferences.safeMode == true)
+        #expect(result.item.preferences.automationsEnabled == false)
+        #expect(importedProvider.secretReference == nil)
+        #expect(importedProvider.connectionStatus == .needsAttention)
+        #expect(importedProvider.lastValidatedAt == nil)
+        #expect(importedProvider.lastErrorMessage?.contains("Imported workspace") == true)
+        #expect(importedTool.permissionPolicy == .askEveryTime)
+        #expect(importedTool.isEnabled == false)
+        #expect(importedTool.endpoint == nil)
+        #expect(importedTool.secretReference == nil)
+        #expect(importedAutomation.isEnabled == false)
+        #expect(importedAutomation.requiresConfirmation == true)
+        #expect(importedAutomation.nextRunAt == nil)
+        #expect(importedAutomation.lastRunState == .idle)
     }
 
     @Test("Workspace snapshot import rejects unsupported schemas")

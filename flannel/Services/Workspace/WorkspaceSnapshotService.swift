@@ -213,6 +213,13 @@ struct WorkspaceSnapshotService: Sendable {
     private func makeLocalWorkspaceCopy(from snapshot: WorkspaceSnapshot, importedAt: Date) -> Item {
         var preferences = snapshot.preferences
         preferences.lastOpenedAt = importedAt
+        preferences.preferredProviderID = nil
+        preferences.providerRoutingPolicy = .selectedProvider
+        preferences.allowCloudProviders = false
+        preferences.localOnlyMode = true
+        preferences.safeMode = true
+        preferences.confirmBeforeExternalActions = true
+        preferences.automationsEnabled = false
 
         return Item(
             workspaceID: UUID(),
@@ -226,13 +233,13 @@ struct WorkspaceSnapshotService: Sendable {
             selectedCalendarEntryID: snapshot.calendarEntries.contains(where: { $0.id == snapshot.selectedCalendarEntryID }) ? snapshot.selectedCalendarEntryID : nil,
             selectedAssistantThreadID: snapshot.assistantThreads.contains(where: { $0.id == snapshot.selectedAssistantThreadID }) ? snapshot.selectedAssistantThreadID : snapshot.assistantThreads.first?.id,
             accounts: snapshot.accounts,
-            providerConfigurations: snapshot.providerConfigurations,
+            providerConfigurations: sanitizedProviderConfigurations(snapshot.providerConfigurations),
             libraryAssets: snapshot.libraryAssets,
             projects: snapshot.projects,
             drafts: snapshot.drafts,
             calendarEntries: snapshot.calendarEntries,
             assistantThreads: snapshot.assistantThreads,
-            automations: snapshot.automations,
+            automations: sanitizedAutomations(snapshot.automations),
             localActionHistory: snapshot.localActionHistory,
             tags: snapshot.tags,
             chatFolders: snapshot.chatFolders,
@@ -241,7 +248,7 @@ struct WorkspaceSnapshotService: Sendable {
             modelPresets: snapshot.modelPresets,
             knowledgeSources: snapshot.knowledgeSources,
             knowledgeIndexManifests: snapshot.knowledgeIndexManifests,
-            toolConfigurations: snapshot.toolConfigurations,
+            toolConfigurations: sanitizedToolConfigurations(snapshot.toolConfigurations),
             toolExecutionResults: snapshot.toolExecutionResults,
             modelComparisonRuns: snapshot.modelComparisonRuns,
             localDiscoveryResults: snapshot.localDiscoveryResults ?? [],
@@ -250,6 +257,40 @@ struct WorkspaceSnapshotService: Sendable {
             localMemories: snapshot.localMemories,
             preferences: preferences
         )
+    }
+
+    private func sanitizedProviderConfigurations(_ providers: [ProviderConfiguration]) -> [ProviderConfiguration] {
+        providers.map { provider in
+            var sanitized = provider
+            sanitized.secretReference = nil
+            sanitized.lastValidatedAt = nil
+            sanitized.connectionStatus = provider.accessMode == .localServer ? .disconnected : .needsAttention
+            sanitized.lastErrorMessage = "Imported workspace: recheck this route and save credentials on this Mac before chat can use it."
+            return sanitized
+        }
+    }
+
+    private func sanitizedToolConfigurations(_ tools: [ToolConfiguration]) -> [ToolConfiguration] {
+        tools.map { tool in
+            var sanitized = tool
+            sanitized.permissionPolicy = .askEveryTime
+            sanitized.isEnabled = false
+            sanitized.endpoint = nil
+            sanitized.secretReference = nil
+            return sanitized
+        }
+    }
+
+    private func sanitizedAutomations(_ automations: [WorkspaceAutomation]) -> [WorkspaceAutomation] {
+        automations.map { automation in
+            var sanitized = automation
+            sanitized.isEnabled = false
+            sanitized.requiresConfirmation = true
+            sanitized.nextRunAt = nil
+            sanitized.lastRunState = .idle
+            sanitized.lastResultMessage = "Imported workspace: review and re-enable this automation before it can run."
+            return sanitized
+        }
     }
 
     private static let encoder: JSONEncoder = {

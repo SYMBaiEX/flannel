@@ -1842,7 +1842,7 @@ struct WorkspaceStoreTests {
         store.toolConfigurations[webSearchIndex].isEnabled = true
         store.toolConfigurations[webSearchIndex].permissionPolicy = .alwaysAllow
         store.toolConfigurations[webSearchIndex].endpoint = WebSearchService.defaultEndpoint
-        store.toolConfigurations[webSearchIndex].secretReference = "flannel.test:web-search"
+        let webSearchReference = try installCanonicalToolSecretReference(store, kind: .webSearch)
         store.preferences.localOnlyMode = false
         let recorder = ToolRequestRecorder()
         let service = WebSearchService { request in
@@ -1874,7 +1874,7 @@ struct WorkspaceStoreTests {
             webPageCaptureService: WebPageCaptureService(),
             webSearchService: service,
             secretReader: { reference in
-                #expect(reference.rawValue == "flannel.test:web-search")
+                #expect(reference.rawValue == webSearchReference)
                 return "test-brave-key"
             }
         )
@@ -1900,7 +1900,7 @@ struct WorkspaceStoreTests {
         store.toolConfigurations[webSearchIndex].isEnabled = true
         store.toolConfigurations[webSearchIndex].permissionPolicy = .alwaysAllow
         store.toolConfigurations[webSearchIndex].endpoint = WebSearchService.perplexityEndpoint
-        store.toolConfigurations[webSearchIndex].secretReference = "flannel.test:perplexity-search"
+        let webSearchReference = try installCanonicalToolSecretReference(store, kind: .webSearch)
         store.preferences.localOnlyMode = false
         let recorder = ToolRequestRecorder()
         let service = WebSearchService { request in
@@ -1939,7 +1939,7 @@ struct WorkspaceStoreTests {
             webPageCaptureService: WebPageCaptureService(),
             webSearchService: service,
             secretReader: { reference in
-                #expect(reference.rawValue == "flannel.test:perplexity-search")
+                #expect(reference.rawValue == webSearchReference)
                 return "test-perplexity-key"
             }
         )
@@ -1964,7 +1964,7 @@ struct WorkspaceStoreTests {
         let webSearchIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .webSearch }))
         store.toolConfigurations[webSearchIndex].isEnabled = true
         store.toolConfigurations[webSearchIndex].permissionPolicy = .askEveryTime
-        store.toolConfigurations[webSearchIndex].secretReference = "flannel.test:web-search"
+        try installCanonicalToolSecretReference(store, kind: .webSearch)
         store.preferences.localOnlyMode = false
         let service = WebSearchService { request in
             let payload = """
@@ -2072,7 +2072,7 @@ struct WorkspaceStoreTests {
         let githubIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .github }))
         store.toolConfigurations[githubIndex].isEnabled = true
         store.toolConfigurations[githubIndex].permissionPolicy = .alwaysAllow
-        store.toolConfigurations[githubIndex].secretReference = "flannel.test:github"
+        let githubReference = try installCanonicalToolSecretReference(store, kind: .github)
         store.preferences.localOnlyMode = false
         let recorder = ToolRequestRecorder()
         let service = GitHubToolService { request in
@@ -2106,7 +2106,7 @@ struct WorkspaceStoreTests {
             webPageCaptureService: WebPageCaptureService(),
             gitHubToolService: service,
             secretReader: { reference in
-                #expect(reference.rawValue == "flannel.test:github")
+                #expect(reference.rawValue == githubReference)
                 return "ghp_test_token"
             }
         )
@@ -2209,7 +2209,7 @@ struct WorkspaceStoreTests {
         let notionIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .notion }))
         store.toolConfigurations[notionIndex].isEnabled = true
         store.toolConfigurations[notionIndex].permissionPolicy = .alwaysAllow
-        store.toolConfigurations[notionIndex].secretReference = "flannel.test:notion"
+        let notionReference = try installCanonicalToolSecretReference(store, kind: .notion)
         store.preferences.localOnlyMode = false
         let recorder = ToolRequestRecorder()
         let service = NotionToolService { request in
@@ -2253,7 +2253,7 @@ struct WorkspaceStoreTests {
             webPageCaptureService: WebPageCaptureService(),
             notionToolService: service,
             secretReader: { reference in
-                #expect(reference.rawValue == "flannel.test:notion")
+                #expect(reference.rawValue == notionReference)
                 return "secret_notion_token"
             }
         )
@@ -2280,7 +2280,7 @@ struct WorkspaceStoreTests {
         let notionIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .notion }))
         store.toolConfigurations[notionIndex].isEnabled = true
         store.toolConfigurations[notionIndex].permissionPolicy = .alwaysAllow
-        store.toolConfigurations[notionIndex].secretReference = "flannel.test:notion"
+        try installCanonicalToolSecretReference(store, kind: .notion)
         store.preferences.localOnlyMode = false
         let recorder = ToolRequestRecorder()
         let service = NotionToolService { request in
@@ -2327,7 +2327,7 @@ struct WorkspaceStoreTests {
         let notionIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .notion }))
         store.toolConfigurations[notionIndex].isEnabled = true
         store.toolConfigurations[notionIndex].permissionPolicy = .alwaysAllow
-        store.toolConfigurations[notionIndex].secretReference = "flannel.test:notion"
+        try installCanonicalToolSecretReference(store, kind: .notion)
         store.preferences.localOnlyMode = false
         let recorder = ToolRequestRecorder()
         let service = NotionToolService { request in
@@ -2389,7 +2389,7 @@ struct WorkspaceStoreTests {
         let notionIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .notion }))
         store.toolConfigurations[notionIndex].isEnabled = true
         store.toolConfigurations[notionIndex].permissionPolicy = .askEveryTime
-        store.toolConfigurations[notionIndex].secretReference = "flannel.test:notion"
+        try installCanonicalToolSecretReference(store, kind: .notion)
         store.preferences.localOnlyMode = false
         let service = NotionToolService { request in
             let payload = """
@@ -2451,8 +2451,8 @@ struct WorkspaceStoreTests {
         let youTubeIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .youtube }))
         store.toolConfigurations[youTubeIndex].isEnabled = true
         store.toolConfigurations[youTubeIndex].permissionPolicy = .alwaysAllow
-        store.toolConfigurations[youTubeIndex].secretReference = "flannel.test:youtube"
         store.toolConfigurations[youTubeIndex].endpoint = YouTubeToolService.defaultEndpoint
+        let youTubeReference = try installCanonicalToolSecretReference(store, kind: .youtube)
         store.preferences.localOnlyMode = false
         let service = YouTubeToolService { _ in
             Issue.record("YouTube should not use network transport when API key is unavailable.")
@@ -2465,7 +2465,7 @@ struct WorkspaceStoreTests {
             webPageCaptureService: WebPageCaptureService(),
             youTubeToolService: service,
             secretReader: { reference in
-                #expect(reference.rawValue == "flannel.test:youtube")
+                #expect(reference.rawValue == youTubeReference)
                 return ""
             }
         )
@@ -2482,8 +2482,8 @@ struct WorkspaceStoreTests {
         let youTubeIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .youtube }))
         store.toolConfigurations[youTubeIndex].isEnabled = true
         store.toolConfigurations[youTubeIndex].permissionPolicy = .alwaysAllow
-        store.toolConfigurations[youTubeIndex].secretReference = "flannel.test:youtube"
         store.toolConfigurations[youTubeIndex].endpoint = YouTubeToolService.defaultEndpoint
+        try installCanonicalToolSecretReference(store, kind: .youtube)
         store.preferences.localOnlyMode = false
         let recorder = ToolRequestRecorder()
         let service = YouTubeToolService { request in
@@ -2541,8 +2541,8 @@ struct WorkspaceStoreTests {
         let youTubeIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .youtube }))
         store.toolConfigurations[youTubeIndex].isEnabled = true
         store.toolConfigurations[youTubeIndex].permissionPolicy = .alwaysAllow
-        store.toolConfigurations[youTubeIndex].secretReference = "flannel.test:youtube"
         store.toolConfigurations[youTubeIndex].endpoint = YouTubeToolService.defaultEndpoint
+        try installCanonicalToolSecretReference(store, kind: .youtube)
         store.preferences.localOnlyMode = false
         let recorder = ToolRequestRecorder()
         let service = YouTubeToolService { request in
@@ -2606,8 +2606,8 @@ struct WorkspaceStoreTests {
         let youTubeIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .youtube }))
         store.toolConfigurations[youTubeIndex].isEnabled = true
         store.toolConfigurations[youTubeIndex].permissionPolicy = .askEveryTime
-        store.toolConfigurations[youTubeIndex].secretReference = "flannel.test:youtube"
         store.toolConfigurations[youTubeIndex].endpoint = YouTubeToolService.defaultEndpoint
+        try installCanonicalToolSecretReference(store, kind: .youtube)
         store.preferences.localOnlyMode = false
         let service = YouTubeToolService { request in
             let payload = """
@@ -2669,8 +2669,8 @@ struct WorkspaceStoreTests {
         let xIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .x }))
         store.toolConfigurations[xIndex].isEnabled = true
         store.toolConfigurations[xIndex].permissionPolicy = .alwaysAllow
-        store.toolConfigurations[xIndex].secretReference = "flannel.test:x"
         store.toolConfigurations[xIndex].endpoint = XToolService.defaultEndpoint
+        let xReference = try installCanonicalToolSecretReference(store, kind: .x)
         store.preferences.localOnlyMode = false
         let service = XToolService { _ in
             Issue.record("X should not use network transport when bearer token is unavailable.")
@@ -2683,7 +2683,7 @@ struct WorkspaceStoreTests {
             webPageCaptureService: WebPageCaptureService(),
             xToolService: service,
             secretReader: { reference in
-                #expect(reference.rawValue == "flannel.test:x")
+                #expect(reference.rawValue == xReference)
                 return ""
             }
         )
@@ -2699,8 +2699,8 @@ struct WorkspaceStoreTests {
         let xIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .x }))
         store.toolConfigurations[xIndex].isEnabled = true
         store.toolConfigurations[xIndex].permissionPolicy = .alwaysAllow
-        store.toolConfigurations[xIndex].secretReference = "flannel.test:x"
         store.toolConfigurations[xIndex].endpoint = XToolService.defaultEndpoint
+        try installCanonicalToolSecretReference(store, kind: .x)
         store.preferences.localOnlyMode = false
         let recorder = ToolRequestRecorder()
         let service = XToolService { request in
@@ -2767,8 +2767,8 @@ struct WorkspaceStoreTests {
         let xIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .x }))
         store.toolConfigurations[xIndex].isEnabled = true
         store.toolConfigurations[xIndex].permissionPolicy = .alwaysAllow
-        store.toolConfigurations[xIndex].secretReference = "flannel.test:x"
         store.toolConfigurations[xIndex].endpoint = XToolService.defaultEndpoint
+        try installCanonicalToolSecretReference(store, kind: .x)
         store.preferences.localOnlyMode = false
         let recorder = ToolRequestRecorder()
         let service = XToolService { request in
@@ -2832,8 +2832,8 @@ struct WorkspaceStoreTests {
             let xIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .x }))
             store.toolConfigurations[xIndex].isEnabled = true
             store.toolConfigurations[xIndex].permissionPolicy = .alwaysAllow
-            store.toolConfigurations[xIndex].secretReference = "flannel.test:x"
             store.toolConfigurations[xIndex].endpoint = XToolService.defaultEndpoint
+            try installCanonicalToolSecretReference(store, kind: .x)
             store.preferences.localOnlyMode = false
             let recorder = ToolRequestRecorder()
             let service = XToolService { request in
@@ -2881,8 +2881,8 @@ struct WorkspaceStoreTests {
         let xIndex = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == .x }))
         store.toolConfigurations[xIndex].isEnabled = true
         store.toolConfigurations[xIndex].permissionPolicy = .askEveryTime
-        store.toolConfigurations[xIndex].secretReference = "flannel.test:x"
         store.toolConfigurations[xIndex].endpoint = XToolService.defaultEndpoint
+        try installCanonicalToolSecretReference(store, kind: .x)
         store.preferences.localOnlyMode = false
         let service = XToolService { request in
             let payload = """
@@ -5726,6 +5726,31 @@ struct WorkspaceStoreTests {
                 && $0.tagNames == ["privacy"]
                 && $0.detail.contains("no required login")
         })
+    }
+
+    @MainActor
+    @discardableResult
+    private func installCanonicalToolSecretReference(
+        _ store: WorkspaceStore,
+        kind: AIToolKind
+    ) throws -> String {
+        let index = try #require(store.toolConfigurations.firstIndex(where: { $0.kind == kind }))
+        let reference = canonicalToolSecretReference(for: store.toolConfigurations[index])
+        store.toolConfigurations[index].secretReference = reference
+        return reference
+    }
+
+    private func canonicalToolSecretReference(for tool: ToolConfiguration) -> String {
+        let endpointHost = tool.endpoint
+            .flatMap { URL(string: $0.trimmingCharacters(in: .whitespacesAndNewlines))?.host }
+            ?? "default"
+        let normalizedHost = endpointHost
+            .lowercased()
+            .filter { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" }
+        return KeychainSecretReference(
+            service: KeychainSecretStore.defaultService,
+            account: "tool/\(tool.kind.rawValue)/\(normalizedHost.isEmpty ? "default" : normalizedHost)"
+        ).rawValue
     }
 
     @MainActor

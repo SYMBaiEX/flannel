@@ -7327,7 +7327,7 @@ final class WorkspaceStore {
         let endpoint = tool.endpoint?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedEndpoint = endpoint?.isEmpty == false ? endpoint! : NotionToolService.defaultEndpoint
 
-        guard let secretReference = toolSecretReference(from: tool.secretReference) else {
+        guard let secretReference = trustedToolSecretReference(for: tool) else {
             return LocalToolExecutionResult(
                 toolID: tool.id,
                 toolKind: tool.kind,
@@ -7456,7 +7456,7 @@ final class WorkspaceStore {
         let endpoint = tool.endpoint?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedEndpoint = endpoint?.isEmpty == false ? endpoint! : XToolService.defaultEndpoint
 
-        guard let secretReference = toolSecretReference(from: tool.secretReference) else {
+        guard let secretReference = trustedToolSecretReference(for: tool) else {
             return LocalToolExecutionResult(
                 toolID: tool.id,
                 toolKind: tool.kind,
@@ -7525,7 +7525,7 @@ final class WorkspaceStore {
         let endpoint = tool.endpoint?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedEndpoint = endpoint?.isEmpty == false ? endpoint! : YouTubeToolService.defaultEndpoint
 
-        guard let secretReference = toolSecretReference(from: tool.secretReference) else {
+        guard let secretReference = trustedToolSecretReference(for: tool) else {
             return LocalToolExecutionResult(
                 toolID: tool.id,
                 toolKind: tool.kind,
@@ -7594,7 +7594,7 @@ final class WorkspaceStore {
         let endpoint = tool.endpoint?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedEndpoint = endpoint?.isEmpty == false ? endpoint! : WebSearchService.defaultEndpoint
 
-        guard let secretReference = toolSecretReference(from: tool.secretReference) else {
+        guard let secretReference = trustedToolSecretReference(for: tool) else {
             return LocalToolExecutionResult(
                 toolID: tool.id,
                 toolKind: tool.kind,
@@ -7664,7 +7664,7 @@ final class WorkspaceStore {
         let resolvedEndpoint = endpoint?.isEmpty == false ? endpoint! : GitHubToolService.defaultEndpoint
 
         let token: String?
-        if let secretReference = toolSecretReference(from: tool.secretReference) {
+        if let secretReference = trustedToolSecretReference(for: tool) {
             do {
                 token = try secretReader(secretReference).trimmingCharacters(in: .whitespacesAndNewlines)
             } catch {
@@ -7758,8 +7758,12 @@ final class WorkspaceStore {
         )
     }
 
-    private func toolSecretReference(from rawValue: String?) -> KeychainSecretReference? {
-        ProviderSetupService.shared.parseSecretReference(rawValue)
+    private func trustedToolSecretReference(for tool: ToolConfiguration) -> KeychainSecretReference? {
+        guard let storedReference = ProviderSetupService.shared.parseSecretReference(tool.secretReference),
+              storedReference == canonicalToolSecretReference(for: tool) else {
+            return nil
+        }
+        return storedReference
     }
 
     private func toolExecutionContext(

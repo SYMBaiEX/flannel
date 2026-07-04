@@ -45,6 +45,16 @@ ExportOptions.plist
 *.store
 *.trace
 
+# Flannel private exports and local handoff artifacts
+*.flannelworkspace.json
+*-chat-export.json
+*-chat-export.md
+*-chat-export.html
+*-chat-export.pdf
+flannel-chat-export.*
+Flannel-Exports/
+Exports/
+
 # Environment files and plaintext credential material
 .env
 .env.*
