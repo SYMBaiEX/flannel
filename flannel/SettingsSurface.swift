@@ -5383,42 +5383,7 @@ private struct LocalDiscoverySettingsRow: View {
     }
 
     private func modelDetail(_ model: LocalModelDescriptor) -> String {
-        var metadata = [
-            model.publisher,
-            model.family,
-            model.parameterSize,
-            model.quantization,
-            model.format
-        ].compactMap { value in
-            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return trimmed.isEmpty ? nil : trimmed
-        }
-        if let contextWindowTokens = model.contextWindowTokens {
-            metadata.append("\(contextWindowTokens.formatted()) context")
-        }
-        if let loadedInstanceCount = model.loadedInstanceCount,
-           loadedInstanceCount > 0 {
-            metadata.append("\(loadedInstanceCount) loaded")
-        }
-        if let sizeBytes = model.sizeBytes {
-            metadata.append(ByteCountFormatter.string(fromByteCount: sizeBytes, countStyle: .binary))
-        }
-        if let sizeVRAMBytes = model.sizeVRAMBytes {
-            metadata.append("\(ByteCountFormatter.string(fromByteCount: sizeVRAMBytes, countStyle: .binary)) VRAM")
-        }
-        if let selectedVariant = model.selectedVariant,
-           selectedVariant != model.name {
-            metadata.append(selectedVariant)
-        }
-        if model.effectiveDiscoverySource != .unknown {
-            metadata.append(model.effectiveDiscoverySource.title)
-        }
-        if model.effectiveMetadataCompleteness != .complete,
-           model.effectiveMetadataCompleteness != .unknown {
-            metadata.append(model.effectiveMetadataCompleteness.title)
-        }
-        let capabilities = model.capabilities.map(\.title).joined(separator: ", ")
-        return (metadata + [capabilities]).filter { !$0.isEmpty }.joined(separator: " - ")
+        model.localModelPickerDetail
     }
 
     private func humanized(_ rawValue: String) -> String {

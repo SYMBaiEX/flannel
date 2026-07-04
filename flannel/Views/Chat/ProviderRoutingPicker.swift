@@ -159,7 +159,11 @@ struct ProviderRoutingPicker: View {
                     if lhsLoaded != rhsLoaded {
                         return lhsLoaded > rhsLoaded
                     }
-                    return (lhs.displayName ?? lhs.name).localizedCaseInsensitiveCompare(rhs.displayName ?? rhs.name) == .orderedAscending
+                    let titleComparison = lhs.localModelPickerDisplayName.localizedCaseInsensitiveCompare(rhs.localModelPickerDisplayName)
+                    if titleComparison != .orderedSame {
+                        return titleComparison == .orderedAscending
+                    }
+                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
                 }
             guard !chatModels.isEmpty else { return nil }
 
@@ -230,10 +234,11 @@ struct ProviderRoutingPicker: View {
                             select(model)
                         } label: {
                             Label(
-                                localModelMenuTitle(model),
+                                model.localModelPickerMenuTitle,
                                 systemImage: isSelected(model) ? "checkmark" : localModelMenuIcon(model)
                             )
                         }
+                        .help(model.localModelPickerHelpText)
                     }
                 }
             }
@@ -449,18 +454,6 @@ struct ProviderRoutingPicker: View {
             return "circle.inset.filled"
         }
         return "memorychip"
-    }
-
-    private func localModelMenuTitle(_ model: LocalModelDescriptor) -> String {
-        var parts = [model.providerKind.title]
-        if let parameterSize = model.parameterSize {
-            parts.append(parameterSize)
-        }
-        if (model.loadedInstanceCount ?? 0) > 0 {
-            parts.append("Loaded")
-        }
-        let title = model.displayName ?? model.name
-        return "\(title) - \(parts.joined(separator: " - "))"
     }
 
     private func localModelMenuIcon(_ model: LocalModelDescriptor) -> String {
@@ -792,7 +785,7 @@ private struct LocalModelRoutingMenuRow: View {
                 .foregroundStyle(isSelected ? Color.accentColor : .secondary)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(model.displayName ?? model.name)
+                Text(model.localModelPickerDisplayName)
                 Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -812,38 +805,13 @@ private struct LocalModelRoutingMenuRow: View {
     }
 
     private var detail: String {
-        var parts: [String] = []
-        if (model.loadedInstanceCount ?? 0) > 0 {
-            parts.append("Loaded")
-        }
-        if let contextWindowTokens = model.contextWindowTokens {
-            parts.append("\(contextWindowTokens.formatted()) context")
-        }
-        if let parameterSize = model.parameterSize {
-            parts.append(parameterSize)
-        }
-        if let quantization = model.quantization {
-            parts.append(quantization)
-        }
-        if model.capabilities.contains(.toolCalling) {
-            parts.append("Tools")
-        }
-        if model.capabilities.contains(.vision) {
-            parts.append("Vision")
-        }
-        if model.capabilities.contains(.reasoning) {
-            parts.append("Reasoning")
-        }
-        return parts.isEmpty ? "\(model.providerKind.title) local chat model" : parts.joined(separator: " - ")
+        model.localModelPickerDetail
     }
 
     private var subtitle: String {
-        var parts = [model.providerKind.title]
-        if let displayName = model.displayName,
-           displayName.localizedCaseInsensitiveCompare(model.name) != .orderedSame {
-            parts.append(model.name)
-        }
-        parts.append(detail.replacingOccurrences(of: " - ", with: " • "))
-        return parts.joined(separator: " • ")
+        [
+            model.providerKind.title,
+            detail.replacingOccurrences(of: " - ", with: " • ")
+        ].joined(separator: " • ")
     }
 }

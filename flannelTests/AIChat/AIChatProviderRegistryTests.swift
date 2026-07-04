@@ -526,6 +526,55 @@ struct AIChatProviderRegistryTests {
         #expect(claudeCLI.providerPickerAccessibilityLabel.contains("Claude Code CLI, Account CLI"))
     }
 
+    @Test("Local model picker copy exposes discovery provenance and metadata completeness")
+    func localModelPickerCopyExposesDiscoveryProvenance() {
+        let nativeModel = LocalModelDescriptor(
+            name: "google/gemma-4-26b-a4b",
+            displayName: "Gemma 4 26B A4B",
+            publisher: "google",
+            providerKind: .lmStudio,
+            endpoint: "http://localhost:1234",
+            family: "gemma4",
+            parameterSize: "26B-A4B",
+            quantization: "Q4_K_M",
+            format: "gguf",
+            contextWindowTokens: 262_144,
+            loadedInstanceCount: 1,
+            sizeBytes: 17_990_911_801,
+            selectedVariant: "google/gemma-4-26b-a4b@q4_k_m",
+            discoverySource: .lmStudioNative,
+            metadataCompleteness: .complete,
+            capabilities: [.chat, .streaming, .toolCalling, .vision, .reasoning]
+        )
+        let fallbackModel = LocalModelDescriptor(
+            name: "local-compatible-model",
+            providerKind: .lmStudio,
+            endpoint: "http://localhost:1234/v1",
+            discoverySource: .openAICompatibleFallback,
+            metadataCompleteness: .compatibilityOnly,
+            capabilities: [.chat, .streaming]
+        )
+
+        #expect(nativeModel.localModelPickerMenuTitle.contains("Gemma 4 26B A4B"))
+        #expect(nativeModel.localModelPickerMenuTitle.contains("LM Studio native"))
+        #expect(nativeModel.localModelPickerMenuTitle.contains("26B-A4B"))
+        #expect(nativeModel.localModelPickerMenuTitle.contains("Loaded"))
+        #expect(nativeModel.localModelPickerMenuTitle.contains("Complete metadata") == false)
+        #expect(nativeModel.localModelPickerDetail.contains("google/gemma-4-26b-a4b"))
+        #expect(nativeModel.localModelPickerDetail.contains("262,144 context"))
+        #expect(nativeModel.localModelPickerDetail.contains("Tools"))
+        #expect(nativeModel.localModelPickerDetail.contains("Vision"))
+        #expect(nativeModel.localModelPickerHelpText.contains("Complete metadata"))
+        #expect(nativeModel.localModelPickerHelpText.contains("Native local discovery supplied model capabilities"))
+
+        #expect(fallbackModel.localModelPickerMenuTitle.contains("OpenAI-compatible fallback"))
+        #expect(fallbackModel.localModelPickerMenuTitle.contains("Compatibility metadata"))
+        #expect(fallbackModel.localModelPickerDetail.contains("OpenAI-compatible fallback"))
+        #expect(fallbackModel.localModelPickerDetail.contains("Compatibility metadata"))
+        #expect(fallbackModel.localModelPickerHelpText.contains("OpenAI-compatible fallback model list"))
+        #expect(fallbackModel.localModelPickerHelpText.contains("native local runtime metadata may be unavailable"))
+    }
+
     @MainActor
     @Test("Provider route wording uses explicit route-oriented language")
     func providerRouteWordingUsesExplicitRouteLanguage() throws {

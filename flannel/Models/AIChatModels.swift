@@ -801,6 +801,162 @@ struct LocalModelDescriptor: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+extension LocalModelDescriptor {
+    var localModelPickerDisplayName: String {
+        let display = displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !display.isEmpty {
+            return display
+        }
+
+        let canonical = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return canonical.isEmpty ? "Unnamed local model" : canonical
+    }
+
+    var localModelPickerMenuTitle: String {
+        let metadata = localModelPickerMenuMetadata
+        guard !metadata.isEmpty else {
+            return localModelPickerDisplayName
+        }
+
+        return "\(localModelPickerDisplayName) - \(metadata.joined(separator: " - "))"
+    }
+
+    var localModelPickerDetail: String {
+        let metadata = localModelPickerDetailMetadata
+        guard !metadata.isEmpty else {
+            return "\(providerKind.title) local chat model"
+        }
+
+        return metadata.joined(separator: " - ")
+    }
+
+    var localModelPickerHelpText: String {
+        var sentences = [
+            "Use \(localModelPickerDisplayName) through \(providerKind.title) at \(endpoint)."
+        ]
+
+        let source = effectiveDiscoverySource
+        let completeness = effectiveMetadataCompleteness
+        if source != .unknown || completeness != .unknown {
+            sentences.append("\(source.title); \(completeness.title).")
+        }
+
+        if let canonicalName = localModelPickerCanonicalName {
+            sentences.append("Canonical model identifier: \(canonicalName).")
+        }
+
+        let detail = localModelPickerDetail
+        if !detail.isEmpty {
+            sentences.append(detail)
+        }
+
+        switch completeness {
+        case .complete:
+            sentences.append("Native local discovery supplied model capabilities and sizing metadata.")
+        case .partial:
+            sentences.append("Native local discovery supplied partial metadata; run model inspection for richer details when available.")
+        case .compatibilityOnly:
+            sentences.append("This came from an OpenAI-compatible fallback model list, so native local runtime metadata may be unavailable.")
+        case .unknown:
+            break
+        }
+
+        return sentences.joined(separator: " ")
+    }
+
+    private var localModelPickerCanonicalName: String? {
+        let canonical = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !canonical.isEmpty,
+              canonical.localizedCaseInsensitiveCompare(localModelPickerDisplayName) != .orderedSame else {
+            return nil
+        }
+
+        return canonical
+    }
+
+    private var localModelPickerMenuMetadata: [String] {
+        var metadata = [providerKind.title]
+
+        let source = effectiveDiscoverySource
+        if source != .unknown {
+            metadata.append(source.title)
+        }
+
+        let completeness = effectiveMetadataCompleteness
+        if completeness != .complete,
+           completeness != .unknown {
+            metadata.append(completeness.title)
+        }
+
+        if let parameterSize = trimmedMetadataValue(parameterSize) {
+            metadata.append(parameterSize)
+        }
+
+        if let loadedInstanceCount,
+           loadedInstanceCount > 0 {
+            metadata.append(loadedInstanceCount == 1 ? "Loaded" : "\(loadedInstanceCount) loaded")
+        }
+
+        return metadata
+    }
+
+    private var localModelPickerDetailMetadata: [String] {
+        var metadata = [
+            publisher,
+            localModelPickerCanonicalName,
+            family,
+            parameterSize,
+            quantization,
+            format
+        ].compactMap(trimmedMetadataValue)
+
+        if let contextWindowTokens {
+            metadata.append("\(contextWindowTokens.formatted()) context")
+        }
+
+        if let loadedInstanceCount,
+           loadedInstanceCount > 0 {
+            metadata.append(loadedInstanceCount == 1 ? "1 loaded instance" : "\(loadedInstanceCount) loaded instances")
+        }
+
+        if let sizeBytes {
+            metadata.append(ByteCountFormatter.string(fromByteCount: sizeBytes, countStyle: .binary))
+        }
+
+        if let sizeVRAMBytes {
+            metadata.append("\(ByteCountFormatter.string(fromByteCount: sizeVRAMBytes, countStyle: .binary)) VRAM")
+        }
+
+        if let selectedVariant = trimmedMetadataValue(selectedVariant),
+           selectedVariant.localizedCaseInsensitiveCompare(name) != .orderedSame {
+            metadata.append(selectedVariant)
+        }
+
+        let source = effectiveDiscoverySource
+        if source != .unknown {
+            metadata.append(source.title)
+        }
+
+        let completeness = effectiveMetadataCompleteness
+        if completeness != .complete,
+           completeness != .unknown {
+            metadata.append(completeness.title)
+        }
+
+        let capabilitySummary = capabilities.map(\.title).joined(separator: ", ")
+        if !capabilitySummary.isEmpty {
+            metadata.append(capabilitySummary)
+        }
+
+        return metadata
+    }
+
+    private func trimmedMetadataValue(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
 struct ChatFolder: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var parentID: UUID?
