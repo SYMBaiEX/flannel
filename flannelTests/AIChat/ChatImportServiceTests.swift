@@ -61,6 +61,9 @@ struct ChatImportServiceTests {
         source.promptChainID = chainID
         source.activePromptChainStepID = activeStepID
         source.completedPromptChainStepIDs = [completedStepID]
+        if let userIndex = source.messages.firstIndex(where: { $0.role == .user }) {
+            source.messages[userIndex].promptChainStepID = completedStepID
+        }
 
         let data = try ChatExportService().export(
             thread: source,
@@ -81,6 +84,8 @@ struct ChatImportServiceTests {
         #expect(imported.promptChainID == chainID)
         #expect(imported.activePromptChainStepID == activeStepID)
         #expect(imported.completedPromptChainStepIDs == [completedStepID])
+        let user = try #require(imported.messages.first(where: { $0.role == .user }))
+        #expect(user.promptChainStepID == completedStepID)
         let assistant = try #require(imported.messages.first(where: { $0.role == .assistant }))
         #expect(assistant.providerDisplayName == "Local Ollama")
         #expect(assistant.runStatus == .completed)

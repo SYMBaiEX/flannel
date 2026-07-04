@@ -1385,6 +1385,7 @@ nonisolated struct AssistantMessage: Identifiable, Codable, Hashable, Sendable {
     var updatedAt: Date?
     var isPinned: Bool
     var referencedEntityIDs: [UUID]
+    var promptChainStepID: UUID?
     var citations: [AIChatCitation]
     var providerDisplayName: String?
     var modelIdentifier: String?
@@ -1413,6 +1414,7 @@ nonisolated struct AssistantMessage: Identifiable, Codable, Hashable, Sendable {
         updatedAt: Date? = nil,
         isPinned: Bool = false,
         referencedEntityIDs: [UUID] = [],
+        promptChainStepID: UUID? = nil,
         citations: [AIChatCitation] = [],
         providerDisplayName: String? = nil,
         modelIdentifier: String? = nil,
@@ -1440,6 +1442,7 @@ nonisolated struct AssistantMessage: Identifiable, Codable, Hashable, Sendable {
         self.updatedAt = updatedAt
         self.isPinned = isPinned
         self.referencedEntityIDs = referencedEntityIDs
+        self.promptChainStepID = promptChainStepID
         self.citations = citations
         self.providerDisplayName = providerDisplayName
         self.modelIdentifier = modelIdentifier
@@ -1470,6 +1473,7 @@ nonisolated struct AssistantMessage: Identifiable, Codable, Hashable, Sendable {
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         isPinned = try container.decode(Bool.self, forKey: .isPinned, default: false)
         referencedEntityIDs = try container.decode([UUID].self, forKey: .referencedEntityIDs, default: [])
+        promptChainStepID = try container.decodeIfPresent(UUID.self, forKey: .promptChainStepID)
         citations = try container.decode([AIChatCitation].self, forKey: .citations, default: [])
         providerDisplayName = try container.decodeIfPresent(String.self, forKey: .providerDisplayName)
         modelIdentifier = try container.decodeIfPresent(String.self, forKey: .modelIdentifier)

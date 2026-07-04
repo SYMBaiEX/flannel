@@ -1224,7 +1224,8 @@ final class WorkspaceStore {
         role: AssistantRole,
         attachments: [AIChatAttachment] = [],
         citations: [AIChatCitation] = [],
-        extraReferencedEntityIDs: [UUID] = []
+        extraReferencedEntityIDs: [UUID] = [],
+        promptChainStepID: UUID? = nil
     ) -> UUID {
         var thread = currentAssistantThread ?? AssistantThread(title: "Workspace Copilot")
         thread.pinnedProjectID = selectedProjectID
@@ -1241,6 +1242,7 @@ final class WorkspaceStore {
                 selectedAssetID,
                 selectedCalendarEntryID
             ].compactMap { $0 } + extraReferencedEntityIDs,
+            promptChainStepID: promptChainStepID,
             citations: citations
         )
         thread.messages.append(message)
@@ -1263,7 +1265,8 @@ final class WorkspaceStore {
         in threadID: UUID,
         attachments: [AIChatAttachment] = [],
         citations: [AIChatCitation] = [],
-        extraReferencedEntityIDs: [UUID] = []
+        extraReferencedEntityIDs: [UUID] = [],
+        promptChainStepID: UUID? = nil
     ) -> UUID? {
         guard let threadIndex = assistantThreads.firstIndex(where: { $0.id == threadID }) else {
             return nil
@@ -1280,6 +1283,7 @@ final class WorkspaceStore {
                 thread.pinnedAssetID,
                 thread.pinnedCalendarEntryID
             ].compactMap { $0 } + extraReferencedEntityIDs,
+            promptChainStepID: promptChainStepID,
             citations: citations
         )
         assistantThreads[threadIndex].messages.append(message)
@@ -1715,7 +1719,7 @@ final class WorkspaceStore {
     func rewindThreadForRetry(
         from messageID: UUID,
         in threadID: UUID? = nil
-    ) -> (prompt: String, attachments: [AIChatAttachment])? {
+    ) -> (prompt: String, attachments: [AIChatAttachment], promptChainStepID: UUID?)? {
         guard let location = resolveMessageLocation(messageID, in: threadID) else { return nil }
         let thread = assistantThreads[location.threadIndex]
         let retryMessageIndex: Int
@@ -1741,12 +1745,30 @@ final class WorkspaceStore {
         guard !prompt.isEmpty || !retryMessage.attachments.isEmpty else { return nil }
 
         assistantThreads[location.threadIndex].messages = Array(thread.messages.prefix(retryMessageIndex))
+        reopenPromptChainStepForRetry(retryMessage, inThreadAt: location.threadIndex)
         assistantThreads[location.threadIndex].updatedAt = .now
         selectedAssistantThreadID = thread.id
         selectedDestination = .home
         normalizeWorkspace()
 
-        return (prompt, retryMessage.attachments)
+        return (prompt, retryMessage.attachments, retryMessage.promptChainStepID)
+    }
+
+    private func reopenPromptChainStepForRetry(_ retryMessage: AssistantMessage, inThreadAt threadIndex: Int) {
+        guard let promptChainStepID = retryMessage.promptChainStepID,
+              let promptChainID = assistantThreads[threadIndex].promptChainID,
+              let chain = promptChains.first(where: { $0.id == promptChainID }) else {
+            return
+        }
+
+        let enabledStepIDs = chain.enabledSteps.map(\.id)
+        guard let stepIndex = enabledStepIDs.firstIndex(of: promptChainStepID) else { return }
+
+        let reopenedStepIDs = Set(enabledStepIDs[stepIndex...])
+        assistantThreads[threadIndex].completedPromptChainStepIDs.removeAll {
+            reopenedStepIDs.contains($0)
+        }
+        assistantThreads[threadIndex].activePromptChainStepID = promptChainStepID
     }
 
     @discardableResult
@@ -2208,6 +2230,7 @@ final class WorkspaceStore {
         let forkedMessages = sourceThread.messages
             .prefix(location.messageIndex + 1)
             .map { Self.copyMessageForNewThread($0) }
+        let promptChainProgress = promptChainProgress(for: forkedMessages, sourceThread: sourceThread)
         let forkedThread = AssistantThread(
             title: "Fork: \(Self.threadTitle(from: sourceMessage.text.isEmpty ? sourceThread.title : sourceMessage.text))",
             mode: sourceThread.mode,
@@ -2220,8 +2243,8 @@ final class WorkspaceStore {
             pinnedAssetID: sourceThread.pinnedAssetID,
             pinnedCalendarEntryID: sourceThread.pinnedCalendarEntryID,
             promptChainID: sourceThread.promptChainID,
-            activePromptChainStepID: sourceThread.activePromptChainStepID,
-            completedPromptChainStepIDs: sourceThread.completedPromptChainStepIDs,
+            activePromptChainStepID: promptChainProgress.activeStepID,
+            completedPromptChainStepIDs: promptChainProgress.completedStepIDs,
             createdAt: .now,
             updatedAt: .now
         )
@@ -2230,6 +2253,26 @@ final class WorkspaceStore {
         selectedAssistantThreadID = forkedThread.id
         selectedDestination = .home
         return forkedThread
+    }
+
+    private func promptChainProgress(
+        for messages: [AssistantMessage],
+        sourceThread: AssistantThread
+    ) -> (activeStepID: UUID?, completedStepIDs: [UUID]) {
+        guard let promptChainID = sourceThread.promptChainID,
+              let chain = promptChains.first(where: { $0.id == promptChainID }) else {
+            return (sourceThread.activePromptChainStepID, sourceThread.completedPromptChainStepIDs)
+        }
+
+        let enabledStepIDs = chain.enabledSteps.map(\.id)
+        guard !enabledStepIDs.isEmpty else { return (nil, []) }
+        let enabledStepIDSet = Set(enabledStepIDs)
+        let sourceCompletedStepIDSet = Set(sourceThread.completedPromptChainStepIDs)
+        let branchCompletedStepIDs = stableUnique(messages.compactMap(\.promptChainStepID))
+            .filter { enabledStepIDSet.contains($0) && sourceCompletedStepIDSet.contains($0) }
+        let branchCompletedSet = Set(branchCompletedStepIDs)
+        let activeStepID = enabledStepIDs.first { !branchCompletedSet.contains($0) }
+        return (activeStepID, branchCompletedStepIDs)
     }
 
     @discardableResult
@@ -8828,6 +8871,7 @@ final class WorkspaceStore {
             updatedAt: message.updatedAt,
             isPinned: false,
             referencedEntityIDs: message.referencedEntityIDs,
+            promptChainStepID: message.promptChainStepID,
             citations: message.citations,
             providerDisplayName: message.providerDisplayName,
             modelIdentifier: message.modelIdentifier,

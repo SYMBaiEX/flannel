@@ -102,10 +102,45 @@ struct CommandPaletteTests {
         #expect(commands.first { $0.id == .sendMessage }?.isEnabled == false)
         #expect(commands.first { $0.id == .stopStreaming }?.isEnabled == true)
         #expect(commands.first { $0.id == .findInChat }?.isEnabled == false)
+        #expect(commands.first { $0.id == .continuePromptChainStep }?.isEnabled == false)
         #expect(commands.first { $0.id == .comparePrompt }?.isEnabled == false)
         #expect(commands.first { $0.id == .discoverModels }?.isEnabled == false)
         #expect(commands.first { $0.id == .exportMarkdown }?.isEnabled == false)
         #expect(commands.first { $0.id == .showInspector }?.isEnabled == true)
+    }
+
+    @Test("Prompt-chain continuation command reflects active chat state")
+    func promptChainContinuationCommandReflectsActiveChatState() throws {
+        let enabledContext = FlannelCommandContext(
+            hasCurrentThread: true,
+            canSendMessage: false,
+            isStreaming: false,
+            canContinuePromptChainStep: true,
+            isDiscoveringModels: false,
+            canCompareCurrentPrompt: false,
+            canRunComparison: false,
+            localOnlyMode: true,
+            inspectorVisible: true
+        )
+        let disabledContext = FlannelCommandContext(
+            hasCurrentThread: true,
+            canSendMessage: true,
+            isStreaming: false,
+            canContinuePromptChainStep: false,
+            isDiscoveringModels: false,
+            canCompareCurrentPrompt: true,
+            canRunComparison: false,
+            localOnlyMode: true,
+            inspectorVisible: true
+        )
+
+        let enabledCommand = try #require(FlannelCommand.defaultCommand(.continuePromptChainStep, context: enabledContext))
+        let disabledCommand = try #require(FlannelCommand.defaultCommand(.continuePromptChainStep, context: disabledContext))
+
+        #expect(enabledCommand.isEnabled)
+        #expect(enabledCommand.keyEquivalent == "⇧⌘]")
+        #expect(enabledCommand.matches("continue chain workflow"))
+        #expect(disabledCommand.isEnabled == false)
     }
 
     @Test("Knowledge rebuild commands reflect RAG source state")
@@ -361,6 +396,7 @@ struct CommandPaletteTests {
         let importCommand = try #require(FlannelCommand.defaultCommand(.importChat, context: visibleInspectorContext))
         let paletteCommand = try #require(FlannelCommand.defaultCommand(.openCommandPalette, context: visibleInspectorContext))
         let findCommand = try #require(FlannelCommand.defaultCommand(.findInChat, context: visibleInspectorContext))
+        let continueChainCommand = try #require(FlannelCommand.defaultCommand(.continuePromptChainStep, context: visibleInspectorContext))
         let settingsCommand = try #require(FlannelCommand.defaultCommand(.openSettings, context: visibleInspectorContext))
         let localOnlyCommand = try #require(FlannelCommand.defaultCommand(.toggleLocalOnly, context: visibleInspectorContext))
         let cloudProviderCommand = try #require(FlannelCommand.defaultCommand(.toggleCloudProviders, context: visibleInspectorContext))
@@ -374,6 +410,9 @@ struct CommandPaletteTests {
         #expect(paletteCommand.matches("keyboard actions"))
         #expect(findCommand.keyEquivalent == "⌘F")
         #expect(findCommand.matches("search transcript"))
+        #expect(continueChainCommand.keyEquivalent == "⇧⌘]")
+        #expect(continueChainCommand.matches("prompt chain step"))
+        #expect(continueChainCommand.isEnabled == false)
         #expect(settingsCommand.keyEquivalent == "⌘,")
         #expect(settingsCommand.title == "Open General Settings")
         #expect(settingsCommand.matches("preferences workspace"))

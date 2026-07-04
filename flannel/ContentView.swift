@@ -330,11 +330,18 @@ struct ContentView: View {
             && !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var canContinuePromptChainFromCommand: Bool {
+        !isStreamingResponse
+            && composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && store.promptChainState()?.activeStep != nil
+    }
+
     private var commandContext: FlannelCommandContext {
         FlannelCommandContext(
             hasCurrentThread: store.currentAssistantThread != nil,
             canSendMessage: canSendMessageFromCommand,
             isStreaming: isStreamingResponse,
+            canContinuePromptChainStep: canContinuePromptChainFromCommand,
             isDiscoveringModels: isDiscoveringModels,
             canCompareCurrentPrompt: canCompareCurrentPromptFromCommand,
             canRunComparison: canRunComparisonFromCommand,
@@ -448,6 +455,9 @@ struct ContentView: View {
             sendMessage()
         case .stopStreaming:
             cancelStreaming()
+        case .continuePromptChainStep:
+            openConversationShell(focusComposer: true)
+            continuePromptChain()
         case .comparePrompt:
             compareCurrentPrompt()
         case .runComparison:
@@ -666,13 +676,21 @@ struct ContentView: View {
         guard !prompt.isEmpty || !outgoingAttachments.isEmpty else { return }
 
         let messageText = prompt.isEmpty ? "Review the attached files." : prompt
-        store.appendAssistantMessage(messageText, role: .user, attachments: outgoingAttachments)
+        let sourceThreadIDBeforeSend = store.selectedAssistantThreadID
+        let submittedPromptChainStepID = pendingPromptChainThreadID == sourceThreadIDBeforeSend && !prompt.isEmpty
+            ? pendingPromptChainStepID
+            : nil
+        store.appendAssistantMessage(
+            messageText,
+            role: .user,
+            attachments: outgoingAttachments,
+            promptChainStepID: submittedPromptChainStepID
+        )
         guard let sourceThreadID = store.selectedAssistantThreadID else { return }
-        if pendingPromptChainThreadID == sourceThreadID,
-           let pendingPromptChainStepID {
+        if let submittedPromptChainStepID {
             _ = store.markActivePromptChainStepSubmitted(
                 in: sourceThreadID,
-                stepID: pendingPromptChainStepID
+                stepID: submittedPromptChainStepID
             )
         }
         pendingPromptChainThreadID = nil
@@ -1550,6 +1568,8 @@ struct ContentView: View {
         guard let draft = store.rewindThreadForRetry(from: message.id, in: store.selectedAssistantThreadID) else { return }
         composerText = draft.prompt
         composerAttachments = draft.attachments
+        pendingPromptChainThreadID = draft.promptChainStepID == nil ? nil : store.selectedAssistantThreadID
+        pendingPromptChainStepID = draft.promptChainStepID
         persistQuietly()
         sendMessage()
     }
@@ -1558,6 +1578,8 @@ struct ContentView: View {
         guard let draft = store.rewindThreadForRetry(from: message.id, in: store.selectedAssistantThreadID) else { return }
         composerText = draft.prompt
         composerAttachments = draft.attachments
+        pendingPromptChainThreadID = draft.promptChainStepID == nil ? nil : store.selectedAssistantThreadID
+        pendingPromptChainStepID = draft.promptChainStepID
         persistQuietly()
     }
 

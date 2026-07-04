@@ -15,6 +15,7 @@ enum FlannelCommandID: String, CaseIterable, Identifiable, Sendable {
     case findInChat
     case sendMessage
     case stopStreaming
+    case continuePromptChainStep
     case comparePrompt
     case runComparison
     case discoverModels
@@ -60,7 +61,7 @@ enum FlannelCommandID: String, CaseIterable, Identifiable, Sendable {
         case .setRoutingFastest:
             .fastest
         case .newChat, .importChat, .openCommandPalette, .findInChat, .sendMessage, .stopStreaming,
-             .comparePrompt, .runComparison, .discoverModels, .toggleLocalOnly,
+             .continuePromptChainStep, .comparePrompt, .runComparison, .discoverModels, .toggleLocalOnly,
              .toggleCloudProviders,
              .openChat, .openHistory, .openCompare, .openModels, .openKnowledge,
              .rebuildQueuedKnowledge, .rebuildAllKnowledge, .openTools, .openAgents,
@@ -91,6 +92,7 @@ struct FlannelCommandContext: Hashable, Sendable {
     var hasCurrentThread: Bool
     var canSendMessage: Bool
     var isStreaming: Bool
+    var canContinuePromptChainStep: Bool
     var isDiscoveringModels: Bool
     var canCompareCurrentPrompt: Bool
     var canRunComparison: Bool
@@ -106,6 +108,7 @@ struct FlannelCommandContext: Hashable, Sendable {
         hasCurrentThread: Bool,
         canSendMessage: Bool,
         isStreaming: Bool,
+        canContinuePromptChainStep: Bool = false,
         isDiscoveringModels: Bool,
         canCompareCurrentPrompt: Bool,
         canRunComparison: Bool,
@@ -120,6 +123,7 @@ struct FlannelCommandContext: Hashable, Sendable {
         self.hasCurrentThread = hasCurrentThread
         self.canSendMessage = canSendMessage
         self.isStreaming = isStreaming
+        self.canContinuePromptChainStep = canContinuePromptChainStep
         self.isDiscoveringModels = isDiscoveringModels
         self.canCompareCurrentPrompt = canCompareCurrentPrompt
         self.canRunComparison = canRunComparison
@@ -136,6 +140,7 @@ struct FlannelCommandContext: Hashable, Sendable {
         hasCurrentThread: false,
         canSendMessage: false,
         isStreaming: false,
+        canContinuePromptChainStep: false,
         isDiscoveringModels: false,
         canCompareCurrentPrompt: false,
         canRunComparison: false,
@@ -257,6 +262,16 @@ struct FlannelCommand: Identifiable, Hashable, Sendable {
                 keywords: ["cancel", "halt", "stream"],
                 keyEquivalent: "Esc",
                 isEnabled: context.isStreaming
+            ),
+            FlannelCommand(
+                id: .continuePromptChainStep,
+                title: "Continue Prompt Chain Step",
+                subtitle: context.canContinuePromptChainStep ? "Load the next saved prompt-chain step into the composer." : "Open a prompt-chain chat with an empty composer before continuing.",
+                category: "Chat",
+                systemImage: "play.fill",
+                keywords: ["prompt", "chain", "step", "workflow", "continue", "template"],
+                keyEquivalent: "⇧⌘]",
+                isEnabled: context.canContinuePromptChainStep
             ),
             FlannelCommand(
                 id: .comparePrompt,

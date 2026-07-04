@@ -269,6 +269,7 @@ nonisolated struct ChatImportService: Sendable {
             updatedAt: message.updatedAt,
             isPinned: message.isPinned,
             referencedEntityIDs: [],
+            promptChainStepID: message.promptChainStepID,
             citations: message.citations,
             providerDisplayName: message.providerDisplayName,
             modelIdentifier: message.modelIdentifier,

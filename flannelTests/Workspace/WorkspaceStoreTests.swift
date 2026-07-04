@@ -178,6 +178,105 @@ struct WorkspaceStoreTests {
     }
 
     @MainActor
+    @Test("Prompt-chain retry reopens the submitted step")
+    func promptChainRetryReopensSubmittedStep() throws {
+        let container = try ModelContainer(
+            for: Item.self,
+            configurations: ModelConfiguration(UUID().uuidString, isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let store = WorkspaceStore()
+        try store.loadOrCreate(in: context)
+        let chain = try #require(store.promptChains.first { $0.title == "Private Research Chain" })
+        let enabledSteps = chain.enabledSteps
+        let firstStep = try #require(enabledSteps.first)
+        let secondStep = try #require(enabledSteps.dropFirst().first)
+        let thread = store.createAssistantThread(from: chain)
+
+        let firstMessageID = store.appendAssistantMessage(
+            firstStep.instruction,
+            role: .user,
+            promptChainStepID: firstStep.id
+        )
+        _ = store.markActivePromptChainStepSubmitted(in: thread.id, stepID: firstStep.id)
+        _ = store.appendAssistantMessage("First answer.", role: .assistant)
+        let secondMessageID = store.appendAssistantMessage(
+            secondStep.instruction,
+            role: .user,
+            promptChainStepID: secondStep.id
+        )
+        _ = store.markActivePromptChainStepSubmitted(in: thread.id, stepID: secondStep.id)
+        let staleAnswerID = store.appendAssistantMessage("Stale second answer.", role: .assistant)
+
+        let completedThread = try #require(store.assistantThreads.first { $0.id == thread.id })
+        #expect(completedThread.activePromptChainStepID != firstStep.id)
+        #expect(completedThread.completedPromptChainStepIDs.contains(firstStep.id))
+        #expect(completedThread.completedPromptChainStepIDs.contains(secondStep.id))
+
+        let draft = try #require(store.rewindThreadForRetry(from: staleAnswerID, in: thread.id))
+        let rewoundThread = try #require(store.assistantThreads.first { $0.id == thread.id })
+
+        #expect(draft.prompt == secondStep.instruction)
+        #expect(rewoundThread.messages.contains { $0.id == firstMessageID })
+        #expect(rewoundThread.messages.contains { $0.id == secondMessageID } == false)
+        #expect(rewoundThread.messages.contains { $0.id == staleAnswerID } == false)
+        #expect(rewoundThread.activePromptChainStepID == secondStep.id)
+        #expect(rewoundThread.completedPromptChainStepIDs == [firstStep.id])
+        #expect(store.promptChainState(for: rewoundThread)?.activeStep?.id == secondStep.id)
+
+        try store.persist(in: context)
+        let reloadedStore = WorkspaceStore()
+        try reloadedStore.loadOrCreate(in: context)
+        let reloadedThread = try #require(reloadedStore.assistantThreads.first { $0.id == thread.id })
+        #expect(reloadedThread.activePromptChainStepID == secondStep.id)
+        #expect(reloadedThread.completedPromptChainStepIDs == [firstStep.id])
+    }
+
+    @MainActor
+    @Test("Prompt-chain edit reopens the submitted step with attachments")
+    func promptChainEditReopensSubmittedStepWithAttachments() throws {
+        let (_, store) = try makeLoadedStore()
+        let chain = try #require(store.promptChains.first { $0.title == "Private Research Chain" })
+        let firstStep = try #require(chain.enabledSteps.first)
+        let secondStep = try #require(chain.enabledSteps.dropFirst().first)
+        let thread = store.createAssistantThread(from: chain)
+        let attachment = AIChatAttachment(
+            kind: .document,
+            title: "chain-evidence.md",
+            mimeType: "text/markdown",
+            localPath: "/tmp/chain-evidence.md",
+            excerpt: "Evidence for the second chain step."
+        )
+
+        _ = store.appendAssistantMessage(
+            firstStep.instruction,
+            role: .user,
+            promptChainStepID: firstStep.id
+        )
+        _ = store.markActivePromptChainStepSubmitted(in: thread.id, stepID: firstStep.id)
+        _ = store.appendAssistantMessage("First answer.", role: .assistant)
+        let secondMessageID = store.appendAssistantMessage(
+            secondStep.instruction,
+            role: .user,
+            attachments: [attachment],
+            promptChainStepID: secondStep.id
+        )
+        _ = store.markActivePromptChainStepSubmitted(in: thread.id, stepID: secondStep.id)
+        let discardedAssistantID = store.appendAssistantMessage("Discard this second answer.", role: .assistant)
+
+        let draft = try #require(store.rewindThreadForRetry(from: secondMessageID, in: thread.id))
+        let rewoundThread = try #require(store.assistantThreads.first { $0.id == thread.id })
+
+        #expect(draft.prompt == secondStep.instruction)
+        #expect(draft.attachments.first?.localPath == "/tmp/chain-evidence.md")
+        #expect(draft.promptChainStepID == secondStep.id)
+        #expect(rewoundThread.messages.contains { $0.id == secondMessageID } == false)
+        #expect(rewoundThread.messages.contains { $0.id == discardedAssistantID } == false)
+        #expect(rewoundThread.activePromptChainStepID == secondStep.id)
+        #expect(rewoundThread.completedPromptChainStepIDs == [firstStep.id])
+    }
+
+    @MainActor
     @Test("Prompt chains persist normalized steps metadata and scoped knowledge")
     func promptChainsPersistNormalizedStepsMetadataAndScopedKnowledge() throws {
         let container = try ModelContainer(
@@ -5251,6 +5350,45 @@ struct WorkspaceStoreTests {
         #expect(Set(fork.messages.map(\.id)).isDisjoint(with: Set(sourceThread.messages.map(\.id))))
         #expect(fork.folderID == folder.id)
         #expect(store.selectedAssistantThreadID == fork.id)
+    }
+
+    @MainActor
+    @Test("Prompt-chain fork and duplicate preserve workflow message provenance")
+    func promptChainForkAndDuplicatePreserveWorkflowMessageProvenance() throws {
+        let (_, store) = try makeLoadedStore()
+        let chain = try #require(store.promptChains.first { $0.title == "Private Research Chain" })
+        let firstStep = try #require(chain.enabledSteps.first)
+        let secondStep = try #require(chain.enabledSteps.dropFirst().first)
+        let thread = store.createAssistantThread(from: chain)
+        let userMessageID = store.appendAssistantMessage(
+            firstStep.instruction,
+            role: .user,
+            promptChainStepID: firstStep.id
+        )
+        _ = store.markActivePromptChainStepSubmitted(in: thread.id, stepID: firstStep.id)
+        let firstAssistantID = store.appendAssistantMessage("Scoped answer.", role: .assistant)
+        _ = store.appendAssistantMessage(
+            secondStep.instruction,
+            role: .user,
+            promptChainStepID: secondStep.id
+        )
+        _ = store.markActivePromptChainStepSubmitted(in: thread.id, stepID: secondStep.id)
+        _ = store.appendAssistantMessage("Second answer.", role: .assistant)
+
+        let duplicate = try #require(store.duplicateThread(from: userMessageID, in: thread.id))
+        let duplicatedUserMessage = try #require(duplicate.messages.first { $0.role == .user })
+        #expect(duplicate.promptChainID == chain.id)
+        #expect(duplicate.activePromptChainStepID == chain.enabledSteps.dropFirst(2).first?.id)
+        #expect(duplicate.completedPromptChainStepIDs == [firstStep.id, secondStep.id])
+        #expect(duplicatedUserMessage.promptChainStepID == firstStep.id)
+
+        let fork = try #require(store.forkThread(from: firstAssistantID, in: thread.id))
+        let forkedUserMessage = try #require(fork.messages.first { $0.role == .user })
+        #expect(fork.promptChainID == chain.id)
+        #expect(fork.completedPromptChainStepIDs == [firstStep.id])
+        #expect(fork.activePromptChainStepID == secondStep.id)
+        #expect(fork.messages.map(\.text).contains(secondStep.instruction) == false)
+        #expect(forkedUserMessage.promptChainStepID == firstStep.id)
     }
 
     @MainActor

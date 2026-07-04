@@ -81,6 +81,8 @@ private struct FlannelAppCommands: Commands {
                 .keyboardShortcut("k", modifiers: [.command])
             commandButton(.findInChat)
                 .keyboardShortcut("f", modifiers: [.command])
+            commandButton(.continuePromptChainStep)
+                .keyboardShortcut("]", modifiers: [.command, .shift])
 
             Divider()
 
