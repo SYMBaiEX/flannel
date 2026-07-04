@@ -1081,9 +1081,9 @@ struct AIChatProviderRegistryTests {
         #expect(claudeCLI.cliContract?.statusCommandArguments == ["auth", "status", "--text"])
         #expect(claudeCLI.cliContract?.supportsPromptViaStdin == false)
         #expect(claudeCLI.capabilities == [ModelCapability.chat, .streaming])
-        #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("code.claude.com/docs/en/cli-reference") }))
-        #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("code.claude.com/docs/en/iam") }))
-        #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("code.claude.com/docs/en/data-usage") }))
+        #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("docs.anthropic.com/en/docs/claude-code/cli-reference") }))
+        #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("docs.anthropic.com/en/docs/claude-code/iam") }))
+        #expect(claudeCLI.sourceReferences.contains(where: { $0.url.contains("docs.anthropic.com/en/docs/claude-code/data-usage") }))
     }
 
     @Test("Known provider catalog exposes setup mode guides")
@@ -1099,11 +1099,15 @@ struct AIChatProviderRegistryTests {
         #expect(openAIAPI.modeGuide.credentialBoundary.contains("macOS Keychain"))
         #expect(openAIAPI.modeGuide.credentialBoundary.contains("Subscription sign-in") == true)
         #expect(openAIAPI.modeGuide.requestBoundary.contains("hosted provider API"))
+        #expect(openAIAPI.modeGuide.verifiedIntegrationPath.contains("official API"))
+        #expect(openAIAPI.modeGuide.verifiedIntegrationPath.contains("Consumer subscription sign-in"))
         #expect(openAIAPI.modeGuide.command == nil)
 
         #expect(chatGPTCLI.modeGuide.credentialPath == .localAccountCLI)
         #expect(chatGPTCLI.modeGuide.credentialBoundary.contains("local CLI"))
         #expect(chatGPTCLI.modeGuide.credentialBoundary.contains("does not store a provider API key"))
+        #expect(chatGPTCLI.modeGuide.verifiedIntegrationPath.contains("Codex CLI supports ChatGPT sign-in"))
+        #expect(chatGPTCLI.modeGuide.verifiedIntegrationPath.contains("unofficial ChatGPT subscription API"))
         #expect(chatGPTCLI.modeGuide.command == "codex exec --json -")
         #expect(chatGPTCLI.modeGuide.promptTransport?.contains("stdin") == true)
         #expect(chatGPTCLI.modeGuide.outputContract?.contains("JSONL") == true)
@@ -1111,9 +1115,12 @@ struct AIChatProviderRegistryTests {
 
         #expect(anthropicAPI.modeGuide.credentialPath == .officialAPIKey)
         #expect(anthropicAPI.modeGuide.credentialBoundary.contains("provider API key"))
+        #expect(anthropicAPI.modeGuide.verifiedIntegrationPath.contains("official API"))
         #expect(anthropicAPI.modeGuide.command == nil)
 
         #expect(claudeCLI.modeGuide.credentialPath == .localAccountCLI)
+        #expect(claudeCLI.modeGuide.verifiedIntegrationPath.contains("Claude Code print mode"))
+        #expect(claudeCLI.modeGuide.verifiedIntegrationPath.contains("Anthropic API key"))
         #expect(claudeCLI.modeGuide.command == "claude -p --output-format stream-json --verbose")
         #expect(claudeCLI.modeGuide.promptTransport?.contains("print-mode") == true)
         #expect(claudeCLI.modeGuide.outputContract?.contains("stream-json") == true)
@@ -1121,8 +1128,10 @@ struct AIChatProviderRegistryTests {
 
         #expect(ollama.modeGuide.credentialPath == .noCredential)
         #expect(ollama.modeGuide.requestBoundary.contains("local server"))
+        #expect(ollama.modeGuide.verifiedIntegrationPath.contains("local server APIs"))
 
         #expect(customEndpoint.modeGuide.credentialPath == .optionalEndpointKey)
+        #expect(customEndpoint.modeGuide.verifiedIntegrationPath.contains("OpenAI-compatible endpoint contract"))
         #expect(customEndpoint.modeGuide.setupSummary.contains("base URL"))
     }
 

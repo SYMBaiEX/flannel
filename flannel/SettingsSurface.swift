@@ -3618,6 +3618,7 @@ private struct ProviderModeGuideCallout: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 guideFact("Request boundary", detail: guide.requestBoundary)
+                guideFact("Verified path", detail: guide.verifiedIntegrationPath)
                 guideFact("Setup", detail: guide.setupSummary)
                 guideFact("Readiness", detail: guide.verificationSummary)
                 if let command = guide.command {
@@ -3660,6 +3661,7 @@ private struct ProviderModeGuideCallout: View {
             guide.credentialPath.title,
             guide.credentialBoundary,
             guide.requestBoundary,
+            guide.verifiedIntegrationPath,
             guide.setupSummary,
             guide.verificationSummary
         ].joined(separator: ". ")

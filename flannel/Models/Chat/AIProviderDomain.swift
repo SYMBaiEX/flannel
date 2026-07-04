@@ -463,6 +463,7 @@ struct AIProviderModeGuide: Identifiable, Hashable, Sendable {
     var title: String
     var credentialBoundary: String
     var requestBoundary: String
+    var verifiedIntegrationPath: String
     var setupSummary: String
     var verificationSummary: String
     var command: String?
@@ -559,6 +560,7 @@ struct AIProviderCatalogEntry: Identifiable, Hashable, Sendable {
             title: "\(displayName) route contract",
             credentialBoundary: credentialBoundaryGuide(credentialPath: credentialPath),
             requestBoundary: requestBoundary,
+            verifiedIntegrationPath: verifiedIntegrationPathGuide(credentialPath: credentialPath),
             setupSummary: setupGuide(credentialPath: credentialPath),
             verificationSummary: verificationGuide(credentialPath: credentialPath),
             command: command,
@@ -645,6 +647,30 @@ struct AIProviderCatalogEntry: Identifiable, Hashable, Sendable {
             "Requests leave this Mac for the configured hosted provider API."
         case .localBridge:
             "Requests go to the configured local bridge endpoint, and the bridge owns downstream provider calls."
+        }
+    }
+
+    nonisolated private func verifiedIntegrationPathGuide(
+        credentialPath: AIProviderCredentialPath
+    ) -> String {
+        switch credentialPath {
+        case .noCredential:
+            return "Verified local path: Flannel calls the provider's local server APIs and model-discovery endpoints directly."
+        case .officialAPIKey:
+            return "Verified API path: Flannel uses the provider's official API with a user-supplied Keychain API key. Consumer subscription sign-in is not treated as API access."
+        case .optionalEndpointKey:
+            return "Verified endpoint path: Flannel uses the configured OpenAI-compatible endpoint contract, with an optional endpoint key when that server requires one."
+        case .localAccountCLI:
+            switch providerKind {
+            case .chatGPTCLI:
+                return "Verified CLI path: Codex CLI supports ChatGPT sign-in for subscription access or API-key auth; Flannel invokes the local CLI and does not call an unofficial ChatGPT subscription API."
+            case .claudeCodeCLI:
+                return "Verified CLI path: Claude Code print mode supports local account authentication; Flannel invokes `claude -p` and does not treat Claude subscription login as an Anthropic API key."
+            default:
+                return "Verified CLI path: Flannel invokes the locally authenticated command and keeps CLI account auth separate from app API keys."
+            }
+        case .localBridge:
+            return "Verified bridge path: Flannel talks to the local bridge service, and the bridge owns any downstream provider credential flow."
         }
     }
 
@@ -1000,9 +1026,9 @@ enum AIKnownProviderCatalog {
                 supportsPromptPlaceholderArguments: true
             ),
             sourceReferences: [
-                AIProviderSourceReference(label: "Claude Code CLI reference", url: "https://code.claude.com/docs/en/cli-reference"),
-                AIProviderSourceReference(label: "Claude Code authentication", url: "https://code.claude.com/docs/en/iam"),
-                AIProviderSourceReference(label: "Claude Code data usage", url: "https://code.claude.com/docs/en/data-usage")
+                AIProviderSourceReference(label: "Claude Code CLI reference", url: "https://docs.anthropic.com/en/docs/claude-code/cli-reference"),
+                AIProviderSourceReference(label: "Claude Code authentication", url: "https://docs.anthropic.com/en/docs/claude-code/iam"),
+                AIProviderSourceReference(label: "Claude Code data usage", url: "https://docs.anthropic.com/en/docs/claude-code/data-usage")
             ]
         ),
         AIProviderCatalogEntry(
