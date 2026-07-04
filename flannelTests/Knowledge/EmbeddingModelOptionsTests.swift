@@ -36,6 +36,24 @@ struct EmbeddingModelOptionsTests {
     }
 
     @MainActor
+    @Test("Mistral and Perplexity catalog embedding models are selectable")
+    func mistralAndPerplexityCatalogEmbeddingModelsAreSelectable() throws {
+        let (_, store) = try makeLoadedStore()
+        let mistralProvider = try #require(store.providerConfigurations.first { $0.kind == .mistral && $0.accessMode == .apiKey })
+        let perplexityProvider = try #require(store.providerConfigurations.first { $0.kind == .perplexity && $0.accessMode == .apiKey })
+
+        #expect(mistralProvider.supportsEmbeddings)
+        #expect(perplexityProvider.supportsEmbeddings)
+        #expect(mistralProvider.capabilities.contains(.embeddings))
+        #expect(perplexityProvider.capabilities.contains(.embeddings))
+        #expect(store.embeddingModelOptions.contains("mistral-embed"))
+        #expect(store.embeddingModelOptions.contains("pplx-embed-v1-0.6b"))
+        #expect(store.embeddingModelOptions.contains("pplx-embed-v1-4b"))
+        #expect(store.embeddingModelOptions.contains(mistralProvider.modelIdentifier) == false)
+        #expect(store.embeddingModelOptions.contains(perplexityProvider.modelIdentifier) == false)
+    }
+
+    @MainActor
     @Test("Provider backed indexing can use OpenAI catalog embedding model")
     func providerBackedIndexingCanUseOpenAICatalogEmbeddingModel() async throws {
         let (_, store) = try makeLoadedStore()

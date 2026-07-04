@@ -60,13 +60,16 @@ nonisolated struct LocalEmbeddingService: Sendable {
         case .ollama:
             return try makeOllamaRequest(provider: request.provider, model: model, inputs: request.inputs)
 
-        case .lmStudio, .customOpenAICompatible, .openAI, .groq, .openRouter:
+        case .lmStudio, .customOpenAICompatible, .openAI, .mistral, .groq, .openRouter:
             return try makeOpenAICompatibleRequest(provider: request.provider, model: model, inputs: request.inputs)
 
         case .gemini:
             return try makeGeminiRequest(provider: request.provider, model: model, inputs: request.inputs)
 
-        case .anthropic, .chatGPTCLI, .claudeCodeCLI, .xAI, .mistral, .perplexity, .vercelAISDKBridge:
+        case .perplexity:
+            return try makePerplexityRequest(provider: request.provider, model: model, inputs: request.inputs)
+
+        case .anthropic, .chatGPTCLI, .claudeCodeCLI, .xAI, .vercelAISDKBridge:
             throw LocalEmbeddingError.unsupportedProvider(request.provider.displayName)
         }
     }
@@ -104,7 +107,7 @@ nonisolated struct LocalEmbeddingService: Sendable {
                 vectors: payload.embeddings
             )
 
-        case .lmStudio, .customOpenAICompatible, .openAI, .groq, .openRouter:
+        case .lmStudio, .customOpenAICompatible, .openAI, .mistral, .groq, .openRouter:
             let payload = try JSONDecoder().decode(OpenAICompatibleEmbeddingResponse.self, from: data)
             let vectors = payload.data.sorted { $0.index < $1.index }.map(\.embedding)
             return LocalEmbeddingResult(modelIdentifier: modelIdentifier, vectors: vectors)
@@ -125,7 +128,17 @@ nonisolated struct LocalEmbeddingService: Sendable {
             }
             return LocalEmbeddingResult(modelIdentifier: modelIdentifier, vectors: [])
 
-        case .anthropic, .chatGPTCLI, .claudeCodeCLI, .xAI, .mistral, .perplexity, .vercelAISDKBridge:
+        case .perplexity:
+            let payload = try JSONDecoder().decode(PerplexityEmbeddingResponse.self, from: data)
+            let vectors = try payload.data.sorted { $0.index < $1.index }.map { item in
+                try item.embedding.vectorValues()
+            }
+            return LocalEmbeddingResult(
+                modelIdentifier: payload.model ?? modelIdentifier,
+                vectors: vectors
+            )
+
+        case .anthropic, .chatGPTCLI, .claudeCodeCLI, .xAI, .vercelAISDKBridge:
             throw LocalEmbeddingError.unsupportedProvider(provider.displayName)
         }
     }
@@ -173,18 +186,47 @@ nonisolated struct LocalEmbeddingService: Sendable {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        if provider.privacyScope == .externalAPI || provider.accessMode == .apiKey {
-            guard let secretReference = ProviderSetupService.shared.trustedSecretReference(for: provider) else {
-                throw LocalEmbeddingError.missingKeychainReference(provider.displayName)
-            }
-            let apiKey = try keychain.read(secretReference)
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        }
+        try applyBearerAuthorizationIfRequired(to: &request, provider: provider)
 
         request.httpBody = try JSONEncoder().encode(
             OpenAICompatibleEmbeddingRequestPayload(model: model, input: inputs)
         )
         return request
+    }
+
+    private func makePerplexityRequest(
+        provider: ProviderConfiguration,
+        model: String,
+        inputs: [String]
+    ) throws -> URLRequest {
+        let url = try endpoint(provider.endpoint, appending: ["embeddings"], ensuringVersionPath: "v1")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try applyBearerAuthorizationIfRequired(to: &request, provider: provider)
+        request.httpBody = try JSONEncoder().encode(
+            PerplexityEmbeddingRequestPayload(
+                model: model,
+                input: inputs,
+                encodingFormat: "base64_int8"
+            )
+        )
+        return request
+    }
+
+    private func applyBearerAuthorizationIfRequired(
+        to request: inout URLRequest,
+        provider: ProviderConfiguration
+    ) throws {
+        guard provider.privacyScope == .externalAPI || provider.accessMode == .apiKey else {
+            return
+        }
+
+        guard let secretReference = ProviderSetupService.shared.trustedSecretReference(for: provider) else {
+            throw LocalEmbeddingError.missingKeychainReference(provider.displayName)
+        }
+        let apiKey = try keychain.read(secretReference)
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
     }
 
     private func makeGeminiRequest(
@@ -373,6 +415,18 @@ nonisolated private struct GeminiEmbeddingPart: Encodable {
     var text: String
 }
 
+nonisolated private struct PerplexityEmbeddingRequestPayload: Encodable {
+    var model: String
+    var input: [String]
+    var encodingFormat: String
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case input
+        case encodingFormat = "encoding_format"
+    }
+}
+
 nonisolated private struct OllamaEmbeddingResponse: Decodable {
     var model: String?
     var embeddings: [[Double]]
@@ -387,6 +441,16 @@ nonisolated private struct OpenAICompatibleEmbeddingResponse: Decodable {
     var data: [DataItem]
 }
 
+nonisolated private struct PerplexityEmbeddingResponse: Decodable {
+    nonisolated struct DataItem: Decodable {
+        var index: Int
+        var embedding: PerplexityEmbeddingVector
+    }
+
+    var model: String?
+    var data: [DataItem]
+}
+
 nonisolated private struct GeminiEmbeddingResponse: Decodable {
     nonisolated struct Embedding: Decodable {
         var values: [Double]
@@ -394,6 +458,38 @@ nonisolated private struct GeminiEmbeddingResponse: Decodable {
 
     var embeddings: [Embedding]?
     var embedding: Embedding?
+}
+
+nonisolated private enum PerplexityEmbeddingVector: Decodable {
+    case values([Double])
+    case base64Int8(String)
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let values = try? container.decode([Double].self) {
+            self = .values(values)
+            return
+        }
+        let value = try container.decode(String.self)
+        self = .base64Int8(value)
+    }
+
+    func vectorValues() throws -> [Double] {
+        switch self {
+        case .values(let values):
+            return values
+        case .base64Int8(let value):
+            guard let data = Data(base64Encoded: value) else {
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(
+                        codingPath: [],
+                        debugDescription: "Perplexity returned an embedding that is not valid base64_int8."
+                    )
+                )
+            }
+            return data.map { Double(Int8(bitPattern: $0)) }
+        }
+    }
 }
 
 nonisolated private extension String {

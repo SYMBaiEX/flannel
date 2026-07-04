@@ -662,7 +662,8 @@ enum AIKnownProviderCatalog {
             endpoint: "https://api.mistral.ai/v1",
             defaultModelIdentifier: "mistral-large-latest",
             recommendedModelIdentifiers: ["mistral-large-latest", "codestral-latest"],
-            capabilities: [.chat, .streaming, .toolCalling, .openAICompatible],
+            embeddingModelIdentifiers: ["mistral-embed"],
+            capabilities: [.chat, .streaming, .toolCalling, .embeddings, .openAICompatible],
             credentialRequirement: .requiredAPIKey,
             modelDiscoveryStrategy: .openAICompatibleModels,
             requestBoundary: .externalAPI,
@@ -670,7 +671,9 @@ enum AIKnownProviderCatalog {
             supportedRuntimeInterfaces: [.openAICompatible],
             discoveryCapabilities: [.openAICompatibleModelList],
             cliContract: nil,
-            sourceReferences: []
+            sourceReferences: [
+                AIProviderSourceReference(label: "Mistral embeddings", url: "https://docs.mistral.ai/api/endpoint/embeddings")
+            ]
         ),
         AIProviderCatalogEntry(
             providerKind: .groq,
@@ -719,7 +722,8 @@ enum AIKnownProviderCatalog {
             endpoint: "https://api.perplexity.ai",
             defaultModelIdentifier: "sonar-pro",
             recommendedModelIdentifiers: ["sonar-pro", "sonar"],
-            capabilities: [.chat, .streaming, .webSearch, .openAICompatible],
+            embeddingModelIdentifiers: ["pplx-embed-v1-0.6b", "pplx-embed-v1-4b"],
+            capabilities: [.chat, .streaming, .webSearch, .embeddings, .openAICompatible],
             credentialRequirement: .requiredAPIKey,
             modelDiscoveryStrategy: .openAICompatibleModels,
             requestBoundary: .externalAPI,
@@ -727,7 +731,10 @@ enum AIKnownProviderCatalog {
             supportedRuntimeInterfaces: [.openAICompatible],
             discoveryCapabilities: [.openAICompatibleModelList],
             cliContract: nil,
-            sourceReferences: []
+            sourceReferences: [
+                AIProviderSourceReference(label: "Perplexity embeddings", url: "https://docs.perplexity.ai/docs/embeddings/quickstart"),
+                AIProviderSourceReference(label: "Perplexity create embeddings", url: "https://docs.perplexity.ai/api-reference/embeddings-post")
+            ]
         ),
         AIProviderCatalogEntry(
             providerKind: .customOpenAICompatible,

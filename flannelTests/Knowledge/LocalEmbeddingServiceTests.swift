@@ -95,6 +95,75 @@ struct LocalEmbeddingServiceTests {
         #expect(parts.first?["text"] as? String == "first private chunk")
     }
 
+    @Test("Mistral embeddings use OpenAI-compatible endpoint")
+    func mistralEmbeddingsUseOpenAICompatibleEndpoint() throws {
+        let keychain = KeychainSecretStore()
+        var provider = ProviderConfiguration(
+            kind: .mistral,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "Mistral API",
+            endpoint: "https://api.mistral.ai/v1",
+            modelIdentifier: "mistral-embed",
+            capabilities: [.chat, .streaming, .embeddings, .openAICompatible],
+            supportsEmbeddings: true
+        )
+        let reference = try #require(ProviderSetupService.shared.canonicalSecretReference(for: provider))
+        _ = try keychain.save(
+            "fixture-mistral-embedding-key",
+            account: reference.account,
+            service: reference.service
+        )
+        defer { try? keychain.delete(reference) }
+        provider.secretReference = reference.rawValue
+
+        let request = try LocalEmbeddingService(keychain: keychain).makeURLRequest(
+            for: LocalEmbeddingRequest(provider: provider, inputs: ["mistral rag"])
+        )
+        let body = try #require(request.httpBody)
+        let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+
+        #expect(request.url?.absoluteString == "https://api.mistral.ai/v1/embeddings")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer fixture-mistral-embedding-key")
+        #expect(json["model"] as? String == "mistral-embed")
+        #expect(json["input"] as? [String] == ["mistral rag"])
+    }
+
+    @Test("Perplexity embeddings use first-party endpoint and compact int8 encoding")
+    func perplexityEmbeddingsUseFirstPartyEndpointAndCompactInt8Encoding() throws {
+        let keychain = KeychainSecretStore()
+        var provider = ProviderConfiguration(
+            kind: .perplexity,
+            accessMode: .apiKey,
+            privacyScope: .externalAPI,
+            displayName: "Perplexity API",
+            endpoint: "https://api.perplexity.ai",
+            modelIdentifier: "pplx-embed-v1-4b",
+            capabilities: [.chat, .streaming, .webSearch, .embeddings, .openAICompatible],
+            supportsEmbeddings: true
+        )
+        let reference = try #require(ProviderSetupService.shared.canonicalSecretReference(for: provider))
+        _ = try keychain.save(
+            "fixture-perplexity-embedding-key",
+            account: reference.account,
+            service: reference.service
+        )
+        defer { try? keychain.delete(reference) }
+        provider.secretReference = reference.rawValue
+
+        let request = try LocalEmbeddingService(keychain: keychain).makeURLRequest(
+            for: LocalEmbeddingRequest(provider: provider, inputs: ["searchable note", "rag chunk"])
+        )
+        let body = try #require(request.httpBody)
+        let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+
+        #expect(request.url?.absoluteString == "https://api.perplexity.ai/v1/embeddings")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer fixture-perplexity-embedding-key")
+        #expect(json["model"] as? String == "pplx-embed-v1-4b")
+        #expect(json["input"] as? [String] == ["searchable note", "rag chunk"])
+        #expect(json["encoding_format"] as? String == "base64_int8")
+    }
+
     @Test("Remote embeddings reject noncanonical Keychain references")
     func remoteEmbeddingsRejectNoncanonicalKeychainReferences() throws {
         let keychain = KeychainSecretStore()
@@ -122,7 +191,7 @@ struct LocalEmbeddingServiceTests {
         #expect(try keychain.read(reference) == "borrowed-embedding-key")
     }
 
-    @Test("Embedding parsers decode Ollama, Gemini, and OpenAI-compatible vectors")
+    @Test("Embedding parsers decode Ollama, Gemini, Perplexity, and OpenAI-compatible vectors")
     func embeddingParsersDecodeProviderVectors() throws {
         let service = LocalEmbeddingService()
         let ollamaProvider = ProviderConfiguration(
@@ -143,6 +212,12 @@ struct LocalEmbeddingServiceTests {
             endpoint: "https://generativelanguage.googleapis.com/v1beta/openai",
             modelIdentifier: "gemini-embedding-2"
         )
+        let perplexityProvider = ProviderConfiguration(
+            kind: .perplexity,
+            displayName: "Perplexity API",
+            endpoint: "https://api.perplexity.ai",
+            modelIdentifier: "pplx-embed-v1-4b"
+        )
 
         let ollama = try service.parse(
             data: Data(#"{"model":"nomic-embed-text","embeddings":[[0.1,0.2,0.3]]}"#.utf8),
@@ -159,11 +234,18 @@ struct LocalEmbeddingServiceTests {
             provider: geminiProvider,
             modelIdentifier: "gemini-embedding-2"
         )
+        let perplexity = try service.parse(
+            data: Data(#"{"model":"pplx-embed-v1-4b","data":[{"object":"embedding","index":1,"embedding":"AH+B"},{"object":"embedding","index":0,"embedding":"Af+A"}]}"#.utf8),
+            provider: perplexityProvider,
+            modelIdentifier: "fallback"
+        )
 
         #expect(ollama.modelIdentifier == "nomic-embed-text")
         #expect(ollama.vectorDimension == 3)
         #expect(compatible.vectors == [[0.1, 0.2], [0.4, 0.5]])
         #expect(gemini.vectors == [[0.6, 0.7], [0.8, 0.9]])
+        #expect(perplexity.modelIdentifier == "pplx-embed-v1-4b")
+        #expect(perplexity.vectors == [[1.0, -1.0, -128.0], [0.0, 127.0, -127.0]])
     }
 
     @MainActor
