@@ -104,6 +104,29 @@ struct ProviderSetupServiceTests {
         #expect(report.diagnostics.contains(where: { $0.code == .missingKeychainReference }))
     }
 
+    @Test("Reserved Anthropic-compatible providers are blocked until transport exists")
+    func anthropicCompatibleProviderModeIsBlockedUntilTransportExists() {
+        let provider = ProviderConfiguration(
+            kind: .customOpenAICompatible,
+            accessMode: .anthropicCompatible,
+            privacyScope: .externalAPI,
+            displayName: "Custom Anthropic-compatible",
+            endpoint: "https://router.example.com/v1/messages",
+            modelIdentifier: "router-claude",
+            secretReference: "flannel.ai.keys:provider/customopenaicompatible/router-example-com",
+            capabilities: [.chat, .streaming, .anthropicCompatible]
+        )
+        let preferences = WorkspacePreferences(
+            allowCloudProviders: true,
+            localOnlyMode: false
+        )
+
+        let report = service.report(for: provider, preferences: preferences)
+
+        #expect(report.hasBlockingIssues)
+        #expect(report.diagnostics.contains(where: { $0.code == .unsupportedProviderMode }))
+    }
+
     @Test("Loopback OpenAI-compatible endpoints stay eligible under local-only routing")
     func loopbackOpenAICompatibleEndpointIsTreatedAsLocalBoundary() {
         let provider = ProviderConfiguration(

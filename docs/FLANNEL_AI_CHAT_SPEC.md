@@ -53,7 +53,7 @@ These references keep Flannel's provider and macOS architecture vocabulary align
 - `ProviderAccessMode.openAICompatible`
   - Used for OpenAI-compatible hosted/custom endpoints.
 - `ProviderAccessMode.anthropicCompatible`
-  - Used for Anthropic-compatible messaging endpoints.
+  - Reserved for legacy/imported data. It is not user-selectable for chat templates and setup blocks it until a dedicated custom Anthropic-compatible endpoint transport is implemented.
 - `ProviderAccessMode.aiSDKBridge`
   - Optional local TypeScript/Node bridge path for Vercel AI SDK-style provider routing.
   - Flannel validates the bridge by probing a local health endpoint and sends chat through the bridge stream contract when ready.
@@ -378,7 +378,7 @@ These references keep Flannel's provider and macOS architecture vocabulary align
   - local memories
   - workspace preferences
 - `WorkspaceSnapshotService.importWorkspace(from:importedAt:)` rejects unsupported schema versions and returns a local `Item` copy with a fresh workspace ID, import timestamps, restored selections when their referenced records exist, and `preferences.lastOpenedAt` set to the import time.
-- Secret values are intentionally out of scope. Provider and tool configurations can retain `secretReference` strings, but actual API keys, connector tokens, and other Keychain secret values are never serialized into the snapshot. A restored workspace must use matching local Keychain entries or save replacement credentials before keyed provider/tool routes become runnable.
+- Secret values are intentionally out of scope. Actual API keys, connector tokens, and other Keychain secret values are never serialized into the snapshot. Import clears provider/tool `secretReference` strings, disables imported tool permissions and automations, forces local-only privacy, and requires replacement credentials plus explicit local re-enable before keyed provider/tool routes become runnable.
 - Workspace snapshot import/export is separate from current-thread JSON chat import/export. Chat JSON import still creates fresh local thread/message IDs and clears old workspace/project/folder references; workspace snapshot import restores a whole workspace backup as a new local workspace copy.
 
 ### 13.3 Local workspace data deletion

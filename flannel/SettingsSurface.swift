@@ -1441,7 +1441,7 @@ struct SettingsSurface: View {
                         ChatTemplateSettingsRow(
                             template: $store.chatTemplates[index],
                             providerKinds: LLMProviderKind.allCases,
-                            accessModes: ProviderAccessMode.allCases,
+                            accessModes: ProviderAccessMode.chatTemplateSelectableCases,
                             toolKinds: AIToolKind.allCases,
                             knowledgeSources: store.knowledgeSources,
                             delete: {
@@ -4132,6 +4132,13 @@ private struct ProviderSettingsRow: View {
             )
         case .blockedByLocalOnlyMode, .blockedByCloudPreference:
             return defaultNextStep
+        case .unsupportedProviderMode:
+            return ProviderSettingsNextStep(
+                title: "Choose a supported route",
+                detail: "Use Anthropic API key, Claude Code CLI, or an OpenAI-compatible endpoint until this reserved transport is implemented.",
+                systemImage: "exclamationmark.triangle",
+                tone: .warning
+            )
         case .providerUnavailable, .providerReturnedNoModels:
             return ProviderSettingsNextStep(
                 title: "Start the provider and refresh",

@@ -28,6 +28,7 @@ nonisolated enum ProviderSetupDiagnosticCode: String, Hashable, Sendable {
     case cliSmokeProbeFailed
     case blockedByLocalOnlyMode
     case blockedByCloudPreference
+    case unsupportedProviderMode
     case providerUnavailable
     case providerReturnedNoModels
     case modelUnavailable
@@ -131,6 +132,17 @@ nonisolated struct ProviderSetupService: Sendable {
         let runtimePolicy = provider.runtimePolicy
 
         var diagnostics: [ProviderSetupDiagnostic] = []
+
+        if provider.accessMode == .anthropicCompatible {
+            diagnostics.append(
+                ProviderSetupDiagnostic(
+                    code: .unsupportedProviderMode,
+                    severity: .error,
+                    field: "accessMode",
+                    message: "Anthropic-compatible custom endpoint mode is not wired for chat yet. Use Anthropic API key, Claude Code CLI, or an OpenAI-compatible endpoint until this transport is implemented."
+                )
+            )
+        }
 
         if runtimePolicy.requiresEndpoint {
             if normalizedEndpoint == nil {

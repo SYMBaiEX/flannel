@@ -68,10 +68,12 @@ Flannel is released under the MIT License. See [LICENSE](LICENSE).
   - Streaming: OpenAI-compatible chat stream
   - Secret: required
   - Status: implemented when endpoint/model are valid
-- **Anthropic (`apiKey` / `anthropicCompatible`)**
-  - Streaming: Messages SSE via Anthropic-compatible endpoint
-  - Secret: required
+- **Anthropic (`apiKey`)**
+  - Streaming: Messages SSE via the official Anthropic API
+  - Secret: required for API-key routes
   - Status: implemented
+- **Custom Anthropic-compatible endpoints (`anthropicCompatible`)**
+  - Status: reserved and blocked in setup until a dedicated custom transport is implemented. Use Anthropic API key, Claude Code CLI, or an OpenAI-compatible endpoint today.
 - **ChatGPT/Codex CLI (`subscriptionCLI`)**
   - Recommended CLI contract: `codex exec --json -`.
   - Flannel executes the command as direct argv, sends the rendered chat prompt through stdin, and decodes Codex JSONL assistant events into chat text.
@@ -179,9 +181,9 @@ Flannel is released under the MIT License. See [LICENSE](LICENSE).
 
 - Per-chat exports remain available for single-thread handoff in Markdown, JSON, HTML, and PDF.
 - Workspace-wide backup export/import is implemented by `WorkspaceSnapshotService` as a schema-versioned JSON payload (`schemaVersion: 1`) with stable `.flannelworkspace.json` filenames.
-- Snapshot exports include the local workspace state needed for shareable backups: provider configurations, assistant threads, chat folders, prompt profiles, chat templates, model presets, knowledge sources and manifests, tool configurations and execution results, model comparison runs, pinned messages, archived thread IDs, local memories, and preferences.
-- Imported snapshots reject unsupported schema versions and create a fresh local workspace identity while restoring the exported selections and workspace content.
-- API key and connector secret values are not exported. Snapshots only preserve Keychain secret reference strings, so imported workspaces need matching local Keychain entries or newly saved credentials before keyed providers/tools can run.
+- Snapshot exports include the local workspace state needed for backups: provider configurations, assistant threads, chat folders, prompt profiles, chat templates, model presets, knowledge sources and manifests, tool configurations and execution results, model comparison runs, pinned messages, archived thread IDs, local memories, and preferences.
+- Imported snapshots reject unsupported schema versions and create a fresh local workspace identity while restoring exported content.
+- Secret values are never exported. Imported snapshots also clear provider/tool Keychain references, disable imported automations, reset tool enablement to off, force local-only privacy, and require credentials plus network/tool permissions to be re-enabled on this Mac before keyed routes or tools can run.
 
 ## Local data deletion
 

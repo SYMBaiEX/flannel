@@ -9,6 +9,14 @@ import Testing
 @testable import flannel
 
 struct AIChatProviderRegistryTests {
+    @Test("Reserved Anthropic-compatible mode is hidden from chat template selections")
+    func reservedAnthropicCompatibleModeIsHiddenFromTemplateSelections() {
+        #expect(ProviderAccessMode.chatTemplateSelectableCases.contains(.anthropicCompatible) == false)
+        #expect(ProviderAccessMode.chatTemplateSelectableCases.contains(.apiKey))
+        #expect(ProviderAccessMode.chatTemplateSelectableCases.contains(.subscriptionCLI))
+        #expect(ProviderAccessMode.chatTemplateSelectableCases.contains(.openAICompatible))
+    }
+
     @MainActor
     @Test("Active provider prefers the explicitly preferred enabled provider")
     func activeProviderRespectsEnabledPreferredProvider() throws {

@@ -17,6 +17,10 @@ enum ProviderAccessMode: String, Codable, CaseIterable, Identifiable, Hashable, 
 
     var id: String { rawValue }
 
+    nonisolated static var chatTemplateSelectableCases: [ProviderAccessMode] {
+        allCases.filter { $0 != .anthropicCompatible }
+    }
+
     nonisolated var title: String {
         switch self {
         case .localServer:
@@ -28,7 +32,7 @@ enum ProviderAccessMode: String, Codable, CaseIterable, Identifiable, Hashable, 
         case .openAICompatible:
             "OpenAI Compatible"
         case .anthropicCompatible:
-            "Anthropic Compatible"
+            "Anthropic Compatible (Reserved)"
         case .aiSDKBridge:
             "AI SDK Bridge"
         }
@@ -45,7 +49,7 @@ enum ProviderAccessMode: String, Codable, CaseIterable, Identifiable, Hashable, 
         case .openAICompatible:
             "Uses a custom endpoint that implements OpenAI-compatible routes."
         case .anthropicCompatible:
-            "Uses a custom endpoint that implements Anthropic-compatible messages routes."
+            "Reserved for a future custom Anthropic-compatible endpoint transport."
         case .aiSDKBridge:
             "Uses an optional local TypeScript bridge for Vercel AI SDK workflows."
         }
