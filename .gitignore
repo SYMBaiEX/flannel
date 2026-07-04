@@ -10,8 +10,12 @@ Icon?
 .cursor/
 .vscode/
 .idea/
+.local/
 *.swp
 *.swo
+*.tmp
+*.bak
+*.orig
 
 # Swift Package Manager / build output
 .build/
@@ -29,6 +33,7 @@ xcuserdata/
 *.xcdebugger/
 *.xcuserstate
 *.xcscmblueprint
+*.xccheckout
 *.moved-aside
 *.xcresult
 *.xcarchive
@@ -46,6 +51,11 @@ xcuserdata/
 *.cer
 *.crt
 *.csr
+*.gpg
+*.asc
+*.age
+*.keychain
+*.keychain-db
 *.jks
 *.keystore
 *.developerprofile
@@ -69,18 +79,27 @@ Containers/
 # Flannel private exports and local handoff artifacts
 .flannel/
 *.flannelworkspace.json
+*.flannelbackup
+*.flannel-snapshot.json
+*-workspace-export.json
+*-workspace-snapshot.json
+flannel-workspace-*
 *-chat-export.json
 *-chat-export.md
 *-chat-export.html
 *-chat-export.pdf
 flannel-chat-export.*
+*.chat.jsonl
+*.transcript.jsonl
 Flannel-Exports/
 Exports/
 
 # Environment files and plaintext credential material
 .env
 .env.*
+.env.*.local
 .envrc
+.xcode.env
 *.env
 *.pem
 *.key
@@ -88,11 +107,17 @@ Exports/
 *.apikey
 *.private
 *.secret
+*.secrets
+*.api-keys
+*.apikeys
 *.auth.json
 *.credentials.json
 credentials.json
 service-account*.json
 *service-account*.json
+.npmrc
+.yarnrc
+.yarnrc.yml
 .netrc
 secrets/
 private/
@@ -102,6 +127,8 @@ local-secrets/
 *.local
 *.local.json
 *.xcconfig.local
+*.xcconfig.private
 Local.xcconfig
+Private.xcconfig
 Secrets.xcconfig
 Config.local.xcconfig
